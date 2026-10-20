@@ -373,3 +373,39 @@ T.Case("one analysis summary in chat, with the count after item data arrives", f
     T.Ok(last:find("analysis done: 1 opportunities", 1, true) ~= nil, last)
   end)
 end)
+
+T.Case("buy all button: start, one click per purchase, summary in chat", function()
+  withClient(function(ns, globals, clock, ah, eventFrame)
+    globals.GetMoney = function() return 9676 end
+    _G.GetMoney = globals.GetMoney
+    ah.commodityItems[101] = true
+    ns.UI.Commands.Handle("")
+    eventFrame.scripts.OnEvent(eventFrame, "AUCTION_HOUSE_SHOW")
+    ns.UI.Commands.Handle("scan")
+    ah.delivered = true
+    eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(60)
+    local button = ns.UI.Main.frame.batchButton
+    T.Eq(button:GetText(), "Buy all (max 50s 0c)")
+    T.Ok(button.enabled)
+    button.scripts.OnClick()
+    T.Ok(ns.printed[#ns.printed]:find("Buy all: 1 offers, up to 50s 0c", 1, true) ~= nil, ns.printed[#ns.printed])
+    T.Eq(button:GetText(), "Preparing 1/1...")
+    T.NotOk(button.enabled)
+    T.Eq(ns.UI.Main.frame.hint:GetText(), ns.L.HINT_BATCH)
+    eventFrame.scripts.OnEvent(eventFrame, "COMMODITY_PRICE_UPDATED", 35, 700)
+    T.Eq(button:GetText(), "Buy 1/1: spend 7s 0c")
+    T.Ok(button.enabled)
+    T.Eq(ah.spendCalls, 0)
+    button.scripts.OnClick()
+    T.Eq(ah.spendCalls, 1)
+    eventFrame.scripts.OnEvent(eventFrame, "COMMODITY_PURCHASE_SUCCEEDED")
+    local found = false
+    for _, line in ipairs(ns.printed) do
+      if line:find("Buy all finished (no more offers): 1 purchases, spent 7s 0c", 1, true) then found = true end
+    end
+    T.Ok(found, "summary printed")
+    T.Eq(button:GetText(), "Buy all (max 50s 0c)")
+    _G.GetMoney = nil
+  end)
+end)

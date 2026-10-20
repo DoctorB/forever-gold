@@ -269,6 +269,7 @@ function Purchases:Finish(status)
     sellPrice = plan.sellPrice, remaining = plan.quantity, sold = 0, revenue = 0,
   }
   current.ledgerIndex = #ledger
+  current.paid = paid
   set(self, status)
 end
 

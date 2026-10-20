@@ -28,6 +28,9 @@ all'asta e non cancella aste.
   spendi X" si abilita solo se il preventivo rientra nel piano, nel tetto per
   acquisto e nel tuo oro. Dopo la vendita al mercante ForeverGold confronta
   l'oro incassato col previsto.
+- **Compra tutto**: mette in coda le offerte vendor entro il limite di spesa
+  e prepara da solo ogni acquisto; tu premi lo stesso pulsante una volta per
+  ogni acquisto (il gioco richiede un clic per ogni spesa).
 - Disenchant, crafting e conversioni: calcoli pronti, ranking **disattivato**
   finché non esistono dati verificati per Forever.
 
@@ -49,7 +52,7 @@ ripristina il file.
 | `/fg scan` | scansione in sola lettura; richiede l'AH aperta |
 | `/fg cancel` | annulla la scansione |
 | `/fg diagnostics` | report delle capacità del client, salvato nei SavedVariables |
-| `/fg demo` | dati fittizi etichettati DEMO |
+| `/fg demo` | dati fittizi etichettati DEMO (il pulsante della finestra è ora "Compra tutto") |
 | `/fg reset` | apre lo Storico per un azzeramento con conferma |
 
 La tabella mostra sempre i denominatori (opportunità / candidati / chiavi

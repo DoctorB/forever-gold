@@ -44,6 +44,11 @@ Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
   le opportunità vendor complete risultano "VERIFICATO".
 - Dettaglio più corto; rimossi i pulsanti "Prepara" e "Aggiorna quotazione";
   un solo riepilogo in chat, con il conteggio finale.
+- "Compra tutto" al posto di "Demo" (che resta in `/fg demo`): mette in coda
+  le offerte vendor dalla più redditizia, prepara da solo preventivi e
+  ricerche, salta le offerte sparite o rincarate e si ferma al limite di
+  spesa o a un esito incerto. Ogni acquisto resta un clic sullo stesso
+  pulsante, come richiede il gioco.
 - Scheda Portafoglio: guadagno realizzato, speso e incassato, oggetti ancora
   da vendere al mercante con il loro valore, esiti incerti, elenco degli
   acquisti dal più recente.

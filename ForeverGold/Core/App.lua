@@ -62,6 +62,8 @@ function App:Load(saved)
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, bus = self.bus, store = self.store,
     trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
   })
+  self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock })
+  self.bus:Subscribe("purchase.state", function(current) self.batch:OnPurchase(current) end)
   self.vendorCheck = ns.Services.VendorCheck.New({
     client = self.client, store = self.store, clock = clock,
     printer = function(report) self.bus:Publish("vendor.check", report) end,

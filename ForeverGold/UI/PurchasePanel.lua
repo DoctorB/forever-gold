@@ -151,11 +151,71 @@ function PurchasePanel.Primary()
   app.purchases:Prepare()
 end
 
+-- "Buy all" button: starts a batch, then becomes the spending button of
+-- each prepared purchase (one click per purchase, as the game requires).
+function PurchasePanel.BuildBatchButton(parent)
+  return W.Button(parent, L("BATCH_IDLE"), 220, function() if ns.app.batch.ready then ns.app.purchases:Confirm() else PurchasePanel.BatchStart() end end)
+end
+
+-- Label and enabled state of the batch button. Pure.
+function PurchasePanel.BatchModel(batch, offers, cap, canStart)
+  if batch.active then
+    local total = #batch.queue
+    if batch.ready then
+      return string.format(L("BATCH_READY"), batch.index, total, fmt(batch.amount)), true
+    end
+    local current = ns.app and ns.app.purchases.current
+    if current and current.state == "confirming" then
+      return string.format(L("BATCH_BUYING"), batch.index, total), false
+    end
+    return string.format(L("BATCH_PREPARING"), batch.index, total), false
+  end
+  return string.format(L("BATCH_IDLE"), fmt(cap)), canStart and offers > 0
+end
+
+function PurchasePanel.UpdateBatchButton()
+  local frame = ns.UI.Main.frame
+  local button = frame and frame.batchButton
+  if not button then return end
+  local app = ns.app
+  local Main = ns.UI.Main
+  local offers = #ns.Services.Batch.Queue(Main.Visible(Main.Results(), Main.filters))
+  local canStart = app.ah:IsOpen() and not app.scanner:IsActive() and not Main.demoResults
+  local text, enabled = PurchasePanel.BatchModel(app.batch, offers, app.store:Settings().maxPurchase, canStart)
+  button:SetText(text)
+  button:SetEnabled(enabled)
+end
+
+function PurchasePanel.BatchStart()
+  local app = ns.app
+  local Main = ns.UI.Main
+  local settings = app.store:Settings()
+  if Main.demoResults then
+    ns.Print(L("BATCH_REFUSED_demo"))
+    return
+  end
+  settings.assistedBuy = true
+  local list = Main.Visible(Main.Results(), Main.filters)
+  local count = #ns.Services.Batch.Queue(list)
+  local ok, reason = app.batch:Start(list, settings.maxPurchase)
+  if ok then
+    ns.Print(string.format(L("BATCH_START_CHAT"), count, fmt(settings.maxPurchase)))
+  else
+    ns.Print(L("BATCH_REFUSED_" .. tostring(reason)))
+  end
+  PurchasePanel.UpdateBatchButton()
+end
+
 -- A new opportunity in the details window: plan it (spends nothing).
 function PurchasePanel.Show(opportunity)
   local app = ns.app
   local settings = app.store:Settings()
   PurchasePanel.beginError = nil
+  if app.batch.active then
+    -- The batch owns the purchase in progress: only show it.
+    PurchasePanel.Update()
+    return
+  end
   local current = app.purchases.current
   local sameItem = current and current.plan.itemKey == opportunity.itemKey
   local busy = current and (current.state == "confirming" or current.state == "done" or current.state == "uncertain")
@@ -184,6 +244,15 @@ function PurchasePanel.Attach(app)
     elseif current and current.state == "rejected" and PurchasePanel.STALE_REASONS[current.reason] then
       app.opportunities:MarkStale(current.plan.itemID)
       app:EvaluateChunked()
+    end
+  end)
+  app.bus:Subscribe("batch.state", function(batch)
+    PurchasePanel.UpdateBatchButton()
+    ns.UI.Main.RefreshTable()
+    if not batch.active and batch.stopReason and batch.stopReason ~= "reported" then
+      ns.Print(string.format(L("BATCH_DONE"), L("BATCH_STOP_" .. batch.stopReason), batch.bought, fmt(batch.spent),
+        fmt(batch.expected), fmt(batch.expected - batch.spent)))
+      batch.stopReason = "reported"
     end
   end)
   app.bus:Subscribe("vendor.check", function(report)

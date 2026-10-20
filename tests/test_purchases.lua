@@ -3,6 +3,8 @@
 local ITEMS = {
   [101] = { name = "Linen", sellPrice = 50 },
   [201] = { name = "Green Sword", sellPrice = 300, classID = 2 },
+  [102] = { name = "Ore", sellPrice = 40 },
+  [103] = { name = "Eye", sellPrice = 20 },
 }
 
 local function setup(options)
@@ -17,6 +19,8 @@ local function setup(options)
   local app, ns, clock, ah = Fakes.App({ rows = rows, items = ITEMS, wallet = wallet, bags = bags })
   ah.commodityItems[101] = options.commodity101 ~= false and true or false
   ah.commodityItems[201] = false
+  ah.commodityItems[102] = true
+  ah.commodityItems[103] = true
   app.store:Settings().assistedBuy = true
   app:OnEvent("AUCTION_HOUSE_SHOW")
   app.scanner:Start()
@@ -359,4 +363,89 @@ T.Case("portfolio tab shows the real gain after a purchase and a merchant visit"
   T.Ok(text:find("^Realized gain: |c%x+%+4s 0c|r") ~= nil, text)
   T.Ok(text:find("Nothing left to sell.", 1, true) ~= nil, text)
   T.Ok(text:find("sold 30 for 15s 0c", 1, true) ~= nil, text)
+end)
+
+local BATCH_ROWS = {
+  { itemID = 101, count = 20, buyout = 700 }, -- Linen: profit 300
+  { itemID = 102, count = 10, buyout = 300 }, -- Ore: profit 100
+  { itemID = 103, count = 30, buyout = 450 }, -- Eye: profit 150
+}
+
+local function quoteAndClick(s, unit, total)
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", unit, total)
+  T.Ok(s.app.batch.ready, "ready after the quote")
+  T.Ok(s.app.purchases:Confirm(), "click")
+  s.wallet.money = s.wallet.money - total
+  s.app:OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
+end
+
+T.Case("batch queue: vendor offers only, best profit first", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local queue = s.ns.Services.Batch.Queue(s.app.opportunities.results.list)
+  T.Eq(#queue, 3)
+  T.Eq(queue[1].itemID, 101)
+  T.Eq(queue[2].itemID, 103)
+  T.Eq(queue[3].itemID, 102)
+end)
+
+T.Case("buy all: prepares each purchase by itself, spends only on clicks", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  T.Ok(batch:Start(s.app.opportunities.results.list, 5000))
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 1, "first quote requested automatically")
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 101)
+  s.clock.advance(5)
+  T.Eq(s.ah.spendCalls, 0, "nothing spent without a click")
+  quoteAndClick(s, 35, 700)
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 2, "next quote requested automatically")
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
+  quoteAndClick(s, 15, 450)
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 102)
+  quoteAndClick(s, 30, 300)
+  T.NotOk(batch.active)
+  T.Eq(batch.stopReason, "done")
+  T.Eq(batch.bought, 3)
+  T.Eq(batch.spent, 1450)
+  T.Eq(batch.expected, 1000 + 600 + 400)
+  T.Eq(s.ah.spendCalls, 3, "exactly one spending call per click")
+  T.Eq(#s.app.store.db.ledger, 3)
+end)
+
+T.Case("buy all: the total limit caps the run", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 1000)
+  quoteAndClick(s, 35, 700) -- Linen 700, 300 left
+  -- Eye: 30 x 15 = 450 does not fit: the plan shrinks to 20 units (300).
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
+  T.Eq(s.ah.args.StartCommoditiesPurchase[2], 20)
+  quoteAndClick(s, 15, 300)
+  T.NotOk(batch.active)
+  T.Eq(batch.stopReason, "cap")
+  T.Eq(batch.spent, 1000)
+end)
+
+T.Case("buy all: a dearer offer is skipped, an uncertain outcome stops everything", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 5000)
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 40, 800) -- Linen dearer than planned
+  T.Eq(batch.skipped, 1)
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103, "moved on to the next offer")
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 15, 450)
+  s.app.purchases:Confirm()
+  s.clock.advance(60) -- no answer from the server
+  T.NotOk(batch.active)
+  T.Eq(batch.stopReason, "uncertain")
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 2, "no further quote after an uncertain outcome")
+  T.Eq(s.ah.spendCalls, 1)
+end)
+
+T.Case("buy all: closing the AH stops the run", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 5000)
+  s.app:OnEvent("AUCTION_HOUSE_CLOSED")
+  T.NotOk(batch.active)
+  T.Eq(s.ah.spendCalls, 0)
 end)

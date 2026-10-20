@@ -98,6 +98,7 @@ end
 -- What to do next, in one sentence.
 function Main.Hint(app, results, visible)
   if results and results.demo then return L("HINT_DEMO") end
+  if app and app.batch and app.batch.active then return L("HINT_BATCH") end
   local wait = app and app.scanner and app.scanner:Cooldown().remaining or 0
   if not results or results.counts.itemKeys == 0 then
     if wait > 0 then return string.format(L("HINT_WAIT"), Main.Wait(wait)) end
@@ -196,6 +197,7 @@ function Main.UpdateProgress()
     frame.scanButton:SetText(L("BTN_SCAN"))
   end
   frame.status:SetText(Main.StatusLine(app, Main.Results()))
+  ns.UI.PurchasePanel.UpdateBatchButton()
 end
 
 Main.CLASS_COLORS = { vendor_confirmed = W.EMERALD, prudent = W.GOLD, speculative = W.MUTED }
@@ -401,21 +403,20 @@ local function buildOpportunities(panel)
   scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -44)
   frame.scanButton = scan
   local cancel = W.Button(panel, L("BTN_CANCEL"), 90, function()
-    ns.app.scanner:Cancel("user")
-    Main.RefreshTable()
-  end)
-  cancel:SetPoint("LEFT", scan, "RIGHT", 4, 0)
-  local demo = W.Button(panel, L("BTN_DEMO"), 90, function()
-    if Main.demoResults then
-      Main.demoResults = nil
+    if ns.app.batch.active then
+      ns.app.batch:Cancel()
     else
-      Main.demoResults = ns.app:Demo()
+      ns.app.scanner:Cancel("user")
     end
     Main.RefreshTable()
   end)
-  demo:SetPoint("LEFT", cancel, "RIGHT", 4, 0)
+  cancel:SetPoint("LEFT", scan, "RIGHT", 4, 0)
+  -- Demo stays available with /fg demo; this slot is the "Buy all" button.
+  local batch = ns.UI.PurchasePanel.BuildBatchButton(panel)
+  batch:SetPoint("LEFT", cancel, "RIGHT", 4, 0)
+  frame.batchButton = batch
   local vendor = W.Check(panel, L("FILTER_VENDOR"), function(value) Main.filters.vendor = value Main.RefreshTable() end)
-  vendor:SetPoint("LEFT", demo, "RIGHT", 10, 0)
+  vendor:SetPoint("LEFT", batch, "RIGHT", 10, 0)
   vendor:SetChecked(true)
   local resale = W.Check(panel, L("FILTER_RESALE"), function(value) Main.filters.resale = value Main.RefreshTable() end)
   resale:SetPoint("LEFT", vendor, "RIGHT", 70, 0)

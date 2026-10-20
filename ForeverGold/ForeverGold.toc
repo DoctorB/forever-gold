@@ -43,6 +43,7 @@ Services\Diagnostics.lua
 Services\Purchases.lua
 Services\VendorCheck.lua
 Services\Portfolio.lua
+Services\Batch.lua
 Core\App.lua
 UI\Widgets.lua
 UI\Main.lua
