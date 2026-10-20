@@ -4,7 +4,8 @@ local _, ns = ...
 
 local W = ns.UI.Widgets
 local Money = ns.Economy.Money
-local Main = { tab = "opportunities", offset = 0, rows = {}, filters = { vendor = true, resale = true, allocated = false } }
+local Main = { tab = "opportunities", offset = 0, rows = {},
+  filters = { vendor = true, resale = true, allocated = false, verified = false } }
 ns.UI.Main = Main
 
 Main.TABS = { "opportunities", "history", "professions", "portfolio", "settings" }
@@ -48,7 +49,8 @@ function Main.Visible(results, filters)
     local strategyOk = (opportunity.strategy == "vendor" and filters.vendor)
       or (opportunity.strategy == "resale" and filters.resale)
     local budgetOk = not filters.allocated or opportunity.allocation == "allocated"
-    if strategyOk and budgetOk then list[#list + 1] = opportunity end
+    local verifiedOk = not filters.verified or opportunity.class == "vendor_confirmed"
+    if strategyOk and budgetOk and verifiedOk then list[#list + 1] = opportunity end
   end
   return list
 end
@@ -132,6 +134,49 @@ function Main.UpdateProgress()
   frame.status:SetText(Main.StatusLine(app, Main.Results()))
 end
 
+Main.CLASS_COLORS = { vendor_confirmed = W.EMERALD, prudent = W.GOLD, speculative = W.MUTED }
+
+-- Whether the player can pay for at least part of an opportunity.
+function Main.Affordable(opportunity, money)
+  if not money then return true end
+  if opportunity.commodity == true then
+    local cheapest
+    for _, lot in ipairs(opportunity.lots or {}) do
+      local unit = lot.listing and lot.listing.unitPrice
+      if unit and (not cheapest or unit < cheapest) then cheapest = unit end
+    end
+    return cheapest ~= nil and cheapest <= money
+  end
+  for _, lot in ipairs(opportunity.lots or {}) do
+    if lot.cost <= money then return true end
+  end
+  return false
+end
+
+-- Headline that tells at a glance whether a real gain is available.
+-- Returns text, colour.
+function Main.Banner(results, money)
+  local totals = {}
+  for _, opportunity in ipairs(results and results.list or {}) do
+    local t = totals[opportunity.class] or { n = 0, profit = 0, capital = 0, affordable = 0 }
+    t.n, t.profit, t.capital = t.n + 1, t.profit + opportunity.profit, t.capital + (opportunity.capital or 0)
+    if Main.Affordable(opportunity, money) then t.affordable = t.affordable + 1 end
+    totals[opportunity.class] = t
+  end
+  local suffix = money and string.format(L("BANNER_MONEY"), Money.Format(money)) or ""
+  local confirmed, prudent = totals.vendor_confirmed, totals.prudent
+  if confirmed then
+    return string.format(L("BANNER_VERIFIED"), Money.Format(confirmed.profit), confirmed.n, confirmed.affordable) .. suffix,
+      W.EMERALD
+  elseif prudent then
+    return string.format(L("BANNER_PROBABLE"), Money.Format(prudent.profit), prudent.n, prudent.affordable) .. suffix,
+      W.GOLD
+  elseif totals.speculative then
+    return L("BANNER_SPECULATIVE") .. suffix, W.MUTED
+  end
+  return L("BANNER_NONE") .. suffix, W.MUTED
+end
+
 function Main.Results()
   if Main.demoResults then return Main.demoResults end
   local app = ns.app
@@ -205,13 +250,24 @@ function Main.RefreshTable()
   local maxOffset = math.max(0, #list - (Main.visibleRows or 1))
   if Main.offset > maxOffset then Main.offset = maxOffset end
   local now = app and app.clock and app.clock()
+  local money = app and app.client and app.client:Money()
+  local bannerText, bannerColor = Main.Banner(results, money)
+  frame.banner:SetText(bannerText)
+  frame.banner:SetTextColor(bannerColor[1], bannerColor[2], bannerColor[3])
   for index = 1, (Main.visibleRows or 0) do
     local row = Main.rows[index]
     local opportunity = list[index + Main.offset]
     row.opportunity = opportunity
     if opportunity then
+      local color = Main.CLASS_COLORS[opportunity.class] or W.MUTED
+      if not Main.Affordable(opportunity, money) then color = W.MUTED end
       for column, spec in ipairs(Main.COLUMNS) do
-        row.cells[column]:SetText(Main.Cell(opportunity, spec.key, now))
+        local cell = row.cells[column]
+        cell:SetText(Main.Cell(opportunity, spec.key, now))
+        local c = color
+        if spec.key == "profit" and opportunity.profit > 0 and color ~= W.MUTED then c = W.EMERALD end
+        if spec.key ~= "item" and spec.key ~= "profit" and spec.key ~= "risk" then c = { 0.9, 0.9, 0.9 } end
+        cell:SetTextColor(c[1], c[2], c[3])
       end
       row:Show()
     else
@@ -256,7 +312,10 @@ local function buildOpportunities(panel)
     ns.UI.Feedback.StartScan(ns.app)
     Main.RefreshTable()
   end)
-  scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  frame.banner = W.Text(panel, "GameFontNormalLarge")
+  frame.banner:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  frame.banner:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -24)
   frame.scanButton = scan
   local cancel = W.Button(panel, L("BTN_CANCEL"), 90, function()
     ns.app.scanner:Cancel("user")
@@ -280,9 +339,11 @@ local function buildOpportunities(panel)
   resale:SetChecked(true)
   local allocated = W.Check(panel, L("FILTER_BUDGET"), function(value) Main.filters.allocated = value Main.RefreshTable() end)
   allocated:SetPoint("LEFT", resale, "RIGHT", 80, 0)
+  local verified = W.Check(panel, L("FILTER_VERIFIED"), function(value) Main.filters.verified = value Main.RefreshTable() end)
+  verified:SetPoint("LEFT", allocated, "RIGHT", 90, 0)
 
   local bar = CreateFrame("StatusBar", nil, panel)
-  bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -28)
+  bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -52)
   bar:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
   bar:SetHeight(14)
   bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -298,7 +359,7 @@ local function buildOpportunities(panel)
   frame.progressBar = bar
 
   local tableFrame = CreateFrame("Frame", nil, panel)
-  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -46)
+  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -70)
   tableFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 18)
   tableFrame:EnableMouseWheel(true)
   tableFrame:SetScript("OnMouseWheel", function(_, delta)
@@ -329,16 +390,16 @@ function Main.Ensure()
   Main.frame = frame
   -- New frames start shown: hide until Toggle/Open decides.
   frame:Hide()
-  frame:SetSize(820, 460)
+  frame:SetSize(900, 500)
   frame:SetPoint("CENTER")
   frame:SetFrameStrata("HIGH")
   frame:SetClampedToScreen(true)
   frame:SetMovable(true)
   frame:SetResizable(true)
   if frame.SetResizeBounds then
-    frame:SetResizeBounds(640, 320, 1600, 1000)
+    frame:SetResizeBounds(820, 360, 1600, 1000)
   elseif frame.SetMinResize then
-    frame:SetMinResize(640, 320)
+    frame:SetMinResize(820, 360)
   end
   frame:EnableMouse(true)
   frame:RegisterForDrag("LeftButton")

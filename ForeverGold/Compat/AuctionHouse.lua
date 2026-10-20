@@ -5,7 +5,8 @@
 --
 -- Callbacks set by the scanner (all optional):
 --   onShow(), onClose(), onReplicateUpdate(), onThrottleReady(), onThrottleDropped(),
---   onCommodityResults(itemID), onItemResults(itemKeyTable)
+--   onCommodityResults(itemID), onItemResults(itemKeyTable), onItemKeyInfo(itemID),
+--   onPurchase(event, ...) for quote and purchase outcome events
 local _, ns = ...
 
 local Capabilities = ns.Core.Capabilities
@@ -13,8 +14,16 @@ local AuctionHouse = {}
 ns.Compat.AuctionHouse = AuctionHouse
 
 function AuctionHouse.New(client)
-  return setmetatable({ client = client, open = false, callbacks = {}, indexBase = nil }, { __index = AuctionHouse })
+  return setmetatable({ client = client, open = false, callbacks = {}, indexBase = nil, commodity = {} },
+    { __index = AuctionHouse })
 end
+
+-- Client events about quotes and purchases, forwarded to onPurchase.
+AuctionHouse.PURCHASE_EVENTS = {
+  COMMODITY_PRICE_UPDATED = true, COMMODITY_PRICE_UNAVAILABLE = true, COMMODITY_PURCHASE_SUCCEEDED = true,
+  COMMODITY_PURCHASE_FAILED = true, COMMODITY_PURCHASED = true, ITEM_PURCHASED = true,
+  AUCTION_HOUSE_PURCHASE_COMPLETED = true, AUCTION_HOUSE_SHOW_ERROR = true,
+}
 
 function AuctionHouse:SetCallbacks(callbacks)
   self.callbacks = callbacks or {}
@@ -45,6 +54,14 @@ function AuctionHouse:OnEvent(event, ...)
     fire(self, "onThrottleReady")
   elseif event == "AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED" then
     fire(self, "onThrottleDropped")
+  elseif event == "ITEM_KEY_ITEM_INFO_RECEIVED" then
+    local itemID = ...
+    if type(itemID) == "number" and self.commodity[itemID] == "pending" then
+      self.commodity[itemID] = nil
+      fire(self, "onItemKeyInfo", itemID)
+    end
+  elseif AuctionHouse.PURCHASE_EVENTS[event] then
+    fire(self, "onPurchase", event, ...)
   end
 end
 
@@ -166,6 +183,24 @@ function AuctionHouse:SendSearch(itemID, suffix)
   local ok, err = c:Call("C_AuctionHouse", "SendSearchQuery", key, {}, true)
   if not ok then return false, tostring(err) end
   return true, key
+end
+
+-- Whether an item trades as a commodity (partial purchase at a unit price):
+-- true/false, or nil while the client loads the item key information
+-- (ITEM_KEY_ITEM_INFO_RECEIVED then fires onItemKeyInfo). Cached.
+function AuctionHouse:IsCommodity(itemID)
+  local cached = self.commodity[itemID]
+  if cached == true or cached == false then return cached end
+  local c = self.client
+  local okKey, key = c:Call("C_AuctionHouse", "MakeItemKey", itemID, 0, 0, 0)
+  if not okKey or type(key) ~= "table" then return nil end
+  local ok, info = c:Call("C_AuctionHouse", "GetItemKeyInfo", key)
+  if ok and type(info) == "table" and type(info.isCommodity) == "boolean" then
+    self.commodity[itemID] = info.isCommodity
+    return info.isCommodity
+  end
+  if ok then self.commodity[itemID] = "pending" end
+  return nil
 end
 
 -- Deposit for posting one item, or nil (needs the item in bags; optional).

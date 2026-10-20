@@ -28,6 +28,9 @@ end
 function App:Load(saved)
   local clock = self.clock
   self.store = ns.Data.Store.New(saved, { now = clock() })
+  -- Evidence the addon gathered itself on this client (e.g. vendor check).
+  self.store.db.verifiedRuntime = self.store.db.verifiedRuntime or {}
+  ns.Core.Capabilities.runtime = self.store.db.verifiedRuntime
   self.client:Detect(self.capabilities)
   self.scheduler = ns.Core.Scheduler.New(self.schedulerEnv)
   self.work = ns.Core.Scheduler.New(self.schedulerEnv) -- history and evaluation steps
@@ -51,8 +54,20 @@ function App:Load(saved)
   }, { budgetMs = settings.frameBudgetMs })
   self.opportunities = ns.Services.Opportunities.New({
     store = self.store, history = self.history, items = self.items, clock = clock, bus = self.bus,
+    commodity = function(itemID) return self.ah:IsCommodity(itemID) end,
   })
   self.transactions = ns.Services.Transactions.New(clock)
+  self.purchases = ns.Services.Purchases.New({
+    purchase = ns.Compat.Purchase.New(self.client), client = self.client, scanner = self.scanner,
+    scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, bus = self.bus, store = self.store,
+  })
+  self.vendorCheck = ns.Services.VendorCheck.New({
+    client = self.client, store = self.store, clock = clock,
+    printer = function(report) self.bus:Publish("vendor.check", report) end,
+  })
+  -- Callbacks beyond the scanner's own: commodity info and purchase events.
+  self.ah.callbacks.onItemKeyInfo = function(itemID) self.bus:Publish("items.resolved", itemID) end
+  self.ah.callbacks.onPurchase = function(event, ...) self.purchases:OnEvent(event, ...) end
   self:Subscribe()
   self.loaded = true
   return self.store:Persisted(saved)
@@ -90,6 +105,7 @@ function App:Subscribe()
   end)
   bus:Subscribe("quotes.invalidate", function(reason)
     self.transactions:Invalidate(reason)
+    self.purchases:Cancel(reason)
   end)
 end
 
@@ -150,6 +166,10 @@ function App:OnEvent(event, ...)
     self.items:OnItemInfo(...)
   elseif event == "PLAYER_LOGOUT" then
     self.history:Prune(self.clock(), nil)
+  elseif event == "MERCHANT_SHOW" then
+    self.vendorCheck:OnMerchantShow()
+  elseif event == "MERCHANT_CLOSED" then
+    self.vendorCheck:OnMerchantClosed()
   else
     if event == "AUCTION_HOUSE_SHOW" then self.marketKeyCache = nil end
     self.ah:OnEvent(event, ...)

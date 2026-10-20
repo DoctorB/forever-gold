@@ -17,6 +17,20 @@ function Details.Text(o)
   local lines = {}
   local function add(text) lines[#lines + 1] = text end
   add((o.name or o.itemKey) .. "  [" .. L("STRAT_" .. o.strategy) .. "]  " .. L("CLASS_" .. o.class))
+  local gain = string.format(L("DETAIL_GAIN"), "+" .. fmt(o.profit))
+  add(o.class == "speculative" and gain or W.Color(gain, o.class == "vendor_confirmed" and W.EMERALD or W.GOLD))
+  add(L("DETAIL_CLASS_" .. o.class))
+  if o.pending then add(W.Color(L("DETAIL_PENDING_" .. o.pending), W.GOLD)) end
+  add(L("DETAIL_HOWTO"))
+  if o.strategy == "vendor" then
+    add(string.format(L("DETAIL_STEP_BUY"), o.quantity, o.name or o.itemKey, fmt(o.cost)))
+    add(string.format(L("DETAIL_STEP_VENDOR"), fmt(o.revenuePrudent)))
+  else
+    add(string.format(L("DETAIL_STEP_BUY"), o.quantity, o.name or o.itemKey, fmt(o.cost)))
+    add(string.format(L("DETAIL_STEP_RELIST"), fmt(o.formula and o.formula.unitPrice)))
+  end
+  if o.commodity == true then add(L("DETAIL_COMMODITY")) end
+  add("")
   local c = o.confidence or {}
   local reasons = {}
   for _, reason in ipairs(c.reasons or {}) do reasons[#reasons + 1] = L("RISK_" .. reason) end
@@ -62,7 +76,7 @@ function Details.Ensure()
   local parent = ns.UI.Main.Ensure()
   local frame = CreateFrame("Frame", nil, parent, "BasicFrameTemplateWithInset")
   Details.frame = frame
-  frame:SetSize(420, 420)
+  frame:SetSize(440, 560)
   frame:SetPoint("TOPLEFT", parent, "TOPRIGHT", 4, 0)
   frame:EnableMouse(true)
   frame.title = W.Text(frame, "GameFontNormal")
@@ -70,7 +84,8 @@ function Details.Ensure()
   frame.title:SetText(L("DETAIL_TITLE"))
   frame.body = W.ScrollText(frame, false)
   frame.body:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -30)
-  frame.body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 64)
+  frame.body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 212)
+  ns.UI.PurchasePanel.Build(frame)
   frame.result = W.Text(frame, "GameFontHighlightSmall")
   frame.result:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 40)
   frame.result:SetPoint("RIGHT", frame, "RIGHT", -12, 0)
@@ -90,6 +105,7 @@ function Details.Show(opportunity)
   frame.prepare:SetEnabled(not demo)
   frame.refresh:SetEnabled(not demo)
   frame:Show()
+  ns.UI.PurchasePanel.Show(opportunity)
 end
 
 function Details.Prepare()

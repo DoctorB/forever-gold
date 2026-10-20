@@ -11,13 +11,31 @@ local Capabilities = ns.Core.Capabilities
 local Opportunities = {}
 ns.Services.Opportunities = Opportunities
 
--- deps: { store, history, items (ItemProvider), clock, bus }
+-- deps: { store, history, items (ItemProvider), clock, bus, commodity?(itemID) -> true/false/nil }
 function Opportunities.New(deps)
   local self = setmetatable({
     store = deps.store, history = deps.history, items = deps.items, clock = deps.clock, bus = deps.bus,
-    latest = {}, marketKey = nil, results = nil, lastNotify = 0,
+    commodity = deps.commodity, latest = {}, marketKey = nil, results = nil, lastNotify = 0,
   }, { __index = Opportunities })
   return self
+end
+
+-- Commodity rows of the replicate become divisible levels: a commodity can
+-- be bought in part at its unit price. Only exact totals are converted
+-- (verified in game: replicate buyouts are unit price x count).
+function Opportunities.CommodityLevels(listings)
+  local levels = {}
+  for _, listing in ipairs(listings) do
+    if listing.buyable and not listing.divisible and listing.buyoutTotal % listing.quantity == 0 then
+      local copy = {}
+      for key, value in pairs(listing) do copy[key] = value end
+      copy.divisible, copy.unitPrice = true, listing.buyoutTotal / listing.quantity
+      levels[#levels + 1] = copy
+    else
+      levels[#levels + 1] = listing
+    end
+  end
+  return levels
 end
 
 local function semanticsVerified(source)
@@ -100,8 +118,17 @@ function Opportunities:EvaluateStep(job, index)
     -- Arrival is announced by the provider (App publishes "items.resolved").
     self.items:Resolve(itemID, function() end)
   end
+  local commodity
+  if view.source == "search_commodity" then
+    commodity = true
+  elseif self.commodity and itemID then
+    commodity = self.commodity(itemID)
+    if commodity == nil then results.counts.commodityPending = (results.counts.commodityPending or 0) + 1 end
+  end
+  local listings = view.listings
+  if commodity == true and view.source == "replicate" then listings = Opportunities.CommodityLevels(listings) end
   local entry = {
-    listings = view.listings, info = info,
+    listings = listings, info = info, commodity = commodity,
     estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp }),
   }
   local context = {
@@ -110,7 +137,9 @@ function Opportunities:EvaluateStep(job, index)
       ageSeconds = view.seen and (now - view.seen) or nil, partial = view.coverage ~= "full_verified",
       mode = view.mode, id = view.scanId, finished = view.seen,
     },
-    semantics = { buyoutVerified = semanticsVerified(view.source) },
+    semantics = {
+      buyoutVerified = semanticsVerified(view.source), sellPriceVerified = Capabilities.IsVerified("sellPrice"),
+    },
   }
   for _, strategy in ipairs(job.strategies) do
     local found, excluded, scenarios = strategy.Evaluate(context)
@@ -119,6 +148,9 @@ function Opportunities:EvaluateStep(job, index)
     for _, opportunity in ipairs(found) do
       opportunity.coverage = view.coverage
       opportunity.category = info and info.classID
+      opportunity.commodity = commodity
+      opportunity.itemID = itemID
+      opportunity.sellPrice = info and info.sellPrice
       results.list[#results.list + 1] = opportunity
     end
   end
@@ -139,6 +171,49 @@ function Opportunities:Evaluate()
   local job = self:BeginEvaluate()
   for index = 1, #job.keys do self:EvaluateStep(job, index) end
   return self:FinishEvaluate(job)
+end
+
+-- Removes what an assisted purchase bought from the latest view, so the
+-- opportunity does not reappear before the next scan.
+function Opportunities:Consume(plan, auction)
+  local view = self.latest[plan.itemKey]
+  if not view then return end
+  local listings = view.listings
+  if plan.kind == "commodity" then
+    local order = {}
+    for index, listing in ipairs(listings) do
+      if listing.buyable then order[#order + 1] = index end
+    end
+    table.sort(order, function(a, b)
+      local la, lb = listings[a], listings[b]
+      return la.buyoutTotal * lb.quantity < lb.buyoutTotal * la.quantity
+    end)
+    local left = plan.quantity
+    for _, index in ipairs(order) do
+      if left <= 0 then break end
+      local listing = listings[index]
+      local unit = listing.buyoutTotal / listing.quantity
+      local take = math.min(left, listing.quantity)
+      listing.quantity = listing.quantity - take
+      listing.buyoutTotal = unit * listing.quantity
+      listing.unitPrice = listing.quantity > 0 and Money.DivCeil(listing.buyoutTotal, listing.quantity) or nil
+      listing.buyable = listing.quantity > 0
+      left = left - take
+    end
+  else
+    for index, listing in ipairs(listings) do
+      if listing.buyable and listing.quantity == plan.lot.quantity
+        and listing.buyoutTotal <= (auction and auction.amount or plan.lot.buyoutTotal) then
+        table.remove(listings, index)
+        break
+      end
+    end
+  end
+  local kept = {}
+  for _, listing in ipairs(listings) do
+    if listing.quantity > 0 then kept[#kept + 1] = listing end
+  end
+  view.listings = kept
 end
 
 -- Class first (confirmed vendor, prudent, speculative), then prudent profit.

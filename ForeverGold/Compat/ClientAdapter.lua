@@ -24,6 +24,9 @@ ClientAdapter.SYMBOLS = {
   { "C_AuctionHouse.IsThrottledMessageSystemReady", "C_AuctionHouse", "IsThrottledMessageSystemReady" },
   { "C_AuctionHouse.MakeItemKey", "C_AuctionHouse", "MakeItemKey" },
   { "C_AuctionHouse.SupportsCopperValues", "C_AuctionHouse", "SupportsCopperValues" },
+  { "C_AuctionHouse.GetItemKeyInfo", "C_AuctionHouse", "GetItemKeyInfo" },
+  { "C_AuctionHouse.GetQuoteDurationRemaining", "C_AuctionHouse", "GetQuoteDurationRemaining" },
+  { "C_AuctionHouse.CancelCommoditiesPurchase", "C_AuctionHouse", "CancelCommoditiesPurchase" },
   { "C_AuctionHouse.PlaceBid", "C_AuctionHouse", "PlaceBid" },
   { "C_AuctionHouse.StartCommoditiesPurchase", "C_AuctionHouse", "StartCommoditiesPurchase" },
   { "C_AuctionHouse.ConfirmCommoditiesPurchase", "C_AuctionHouse", "ConfirmCommoditiesPurchase" },
@@ -35,6 +38,8 @@ ClientAdapter.SYMBOLS = {
   { "C_TradeSkillUI.GetRecipeSchematic", "C_TradeSkillUI", "GetRecipeSchematic" },
   { "C_EventUtils.IsEventValid", "C_EventUtils", "IsEventValid" },
   { "issecretvalue", nil, "issecretvalue" },
+  { "GetMoney", nil, "GetMoney" },
+  { "GetItemCount", nil, "GetItemCount" },
 }
 
 -- Candidate events (spec 3); registered only when the client validates them.
@@ -42,7 +47,10 @@ ClientAdapter.EVENTS = {
   "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "REPLICATE_ITEM_LIST_UPDATE",
   "ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_SEARCH_RESULTS_UPDATED",
   "AUCTION_HOUSE_THROTTLED_SYSTEM_READY", "AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED",
-  "GET_ITEM_INFO_RECEIVED",
+  "GET_ITEM_INFO_RECEIVED", "ITEM_KEY_ITEM_INFO_RECEIVED",
+  "COMMODITY_PRICE_UPDATED", "COMMODITY_PRICE_UNAVAILABLE", "COMMODITY_PURCHASE_SUCCEEDED",
+  "COMMODITY_PURCHASE_FAILED", "COMMODITY_PURCHASED", "ITEM_PURCHASED", "AUCTION_HOUSE_PURCHASE_COMPLETED",
+  "AUCTION_HOUSE_SHOW_ERROR", "MERCHANT_SHOW", "MERCHANT_CLOSED",
 }
 
 function ClientAdapter.New(env)
@@ -138,6 +146,21 @@ function ClientAdapter:RegisterEvents(frame, events)
     end
   end
   return registered, rejected
+end
+
+-- Player money in copper, or nil.
+function ClientAdapter:Money()
+  local ok, money = self:Call(nil, "GetMoney")
+  if ok and type(money) == "number" and not self:IsSecret(money) then return money end
+  return nil
+end
+
+-- Count of an item in the bags, or nil.
+function ClientAdapter:ItemCount(itemID)
+  local ok, count = self:Call(nil, "GetItemCount", itemID)
+  if not ok then ok, count = self:Call("C_Item", "GetItemCount", itemID) end
+  if ok and type(count) == "number" and not self:IsSecret(count) then return count end
+  return nil
 end
 
 -- Clock and timer environment for Core/Scheduler.

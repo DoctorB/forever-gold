@@ -4,7 +4,7 @@
 local addonName, ns = ...
 
 ns.ADDON_NAME = addonName or "ForeverGold"
-ns.VERSION = "0.1.0-alpha.1"
+ns.VERSION = "0.1.0-alpha.2"
 
 -- Session-wide placeholders filled by later files in TOC order.
 ns.Core = ns.Core or {}

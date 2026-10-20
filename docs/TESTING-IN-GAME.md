@@ -56,3 +56,20 @@ solo build, simboli, eventi, conteggi e trace; nessun nome di venditore).
 
 Acquisti, aste, cancellazioni: non implementati. Le verifiche mutative della
 fase 6 useranno un oggetto economico scelto dal proprietario.
+
+## Sessione 3 — acquisto assistito con un budget piccolo
+
+Richiede `0.1.0-alpha.2`. Spende oro vero, ma solo con un tuo clic.
+
+| # | Azione | Esito atteso | Da registrare |
+| --- | --- | --- | --- |
+| 3.1 | Impostazioni: spunta "Acquisti assistiti", tetto per acquisto 20 (silver), Salva | — | — |
+| 3.2 | AH aperta, scansione (se il cooldown lo consente) | banner "GUADAGNO PROBABILE" se ci sono margini vendor | testo del banner |
+| 3.3 | Clic sulla riga vendor più economica | dettaglio con "Come fare" e "Piano: compra N x … per …" | screenshot |
+| 3.4 | "1. Preventivo" (commodity) o "1. Trova l'asta" | preventivo entro il piano, pulsante "2. Compra: spendi X" attivo; se il prezzo è salito: "Interrotto" e nulla speso | testo |
+| 3.5 | "2. Compra: spendi X" | in chat "comprati N x …"; oggetti in borsa | oro prima/dopo |
+| 3.6 | Vai da un mercante qualsiasi, vendi **solo** quegli oggetti, chiudi la finestra del mercante | in chat "mercante: incassati …" e "Coincide: guadagno realizzato …"; la prima volta "Prezzo vendor ora verificato" | testo |
+| 3.7 | Riapri `/fg` | le opportunità vendor passano a "VERIFICATO" e il banner diventa verde | screenshot |
+
+Non vendere altro nella stessa visita al mercante e non riparare: il
+confronto dell'oro deve essere esatto.

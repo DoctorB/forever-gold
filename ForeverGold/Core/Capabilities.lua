@@ -61,6 +61,15 @@ function Capabilities:List()
   return list
 end
 
+-- Evidence gathered by the addon itself on this client (for example the
+-- vendor check after a real sale). Persisted in ForeverGoldDB.verifiedRuntime
+-- by Core/App; a flag counts as verified with either kind of evidence.
+Capabilities.runtime = {}
+
 function Capabilities.IsVerified(flag)
-  return Capabilities.VERIFIED[flag] == true
+  return Capabilities.VERIFIED[flag] == true or Capabilities.runtime[flag] ~= nil
+end
+
+function Capabilities.RecordRuntime(flag, evidence)
+  Capabilities.runtime[flag] = evidence
 end

@@ -215,3 +215,63 @@ T.Case("with the measured cooldown a scan too early is refused before sending", 
     T.Eq(ah.replicateCalls, 2, "allowed once the proven bound has passed")
   end)
 end)
+
+T.Case("banner says clearly whether a real gain is available", function()
+  withClient(function(ns)
+    local Main = ns.UI.Main
+    local function o(class, profit, capital) return { class = class, profit = profit, capital = capital, lots = { { cost = capital } } } end
+    local text = Main.Banner({ list = { o("vendor_confirmed", 300, 700), o("prudent", 50, 100) } }, 9676)
+    T.Ok(text:find("VERIFIED GAIN: +3s 0c from 1 opportunities (1 affordable)", 1, true) ~= nil, text)
+    T.Ok(text:find("your gold: 96s 76c", 1, true) ~= nil, text)
+    text = Main.Banner({ list = { o("prudent", 400, 1100) } }, 500)
+    T.Ok(text:find("PROBABLE GAIN: +4s 0c from 1 vendor opportunities (0 affordable)", 1, true) ~= nil, text)
+    T.Ok(Main.Banner({ list = { o("speculative", 1, 1) } }, nil):find("speculative", 1, true) ~= nil)
+    T.Eq(Main.Banner({ list = {} }, nil), ns.L.BANNER_NONE)
+  end)
+end)
+
+T.Case("purchase panel explains why it cannot buy", function()
+  withClient(function(ns)
+    local Model = ns.UI.PurchasePanel.Model
+    T.Eq(Model({ enabled = false }).text, ns.L.PB_DISABLED)
+    T.Eq(Model({ enabled = true, demo = true }).text, ns.L.PB_DEMO)
+    T.Eq(Model({ enabled = true, ahOpen = false }).text, ns.L.PB_AH_CLOSED)
+    local m = Model({ enabled = true, ahOpen = true, beginError = "unaffordable" })
+    T.Ok(m.text:find(ns.L.PR_unaffordable, 1, true) ~= nil)
+    T.NotOk(m.buy)
+  end)
+end)
+
+T.Case("full assisted purchase from the window: plan, quote, click, done", function()
+  withClient(function(ns, globals, clock, ah, eventFrame)
+    globals.GetMoney = function() return 9676 end
+    _G.GetMoney = globals.GetMoney
+    ah.commodityItems[101] = true
+    ns.app.store:Settings().assistedBuy = true
+    ns.UI.Commands.Handle("")
+    eventFrame.scripts.OnEvent(eventFrame, "AUCTION_HOUSE_SHOW")
+    ns.UI.Commands.Handle("scan")
+    ah.delivered = true
+    eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(60)
+    local frame = ns.UI.Main.frame
+    T.Ok(frame.banner:GetText():find("PROBABLE GAIN: +3s 0c", 1, true) ~= nil, frame.banner:GetText())
+    ns.UI.Main.rows[1].scripts.OnClick()
+    local section = ns.UI.Details.frame.purchase
+    T.Ok(section.text:GetText():find("Plan: buy 20 x Linen for 7s 0c", 1, true) ~= nil, section.text:GetText())
+    T.Ok(section.quote.enabled)
+    T.NotOk(section.buy.enabled, "no spending before a quote")
+    section.quote.scripts.OnClick()
+    T.Eq(ah.calls.StartCommoditiesPurchase, 1)
+    eventFrame.scripts.OnEvent(eventFrame, "COMMODITY_PRICE_UPDATED", 35, 700)
+    T.Ok(section.buy.enabled)
+    T.Eq(section.buy:GetText(), "2. Buy: spend 7s 0c")
+    T.Eq(ah.spendCalls, 0)
+    section.buy.scripts.OnClick()
+    T.Eq(ah.spendCalls, 1)
+    eventFrame.scripts.OnEvent(eventFrame, "COMMODITY_PURCHASE_SUCCEEDED")
+    T.Ok(ns.printed[#ns.printed]:find("bought 20 x Linen", 1, true) ~= nil, ns.printed[#ns.printed])
+    T.Ok(section.text:GetText():find("Now sell to a merchant", 1, true) ~= nil)
+    _G.GetMoney = nil
+  end)
+end)

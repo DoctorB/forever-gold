@@ -3,12 +3,13 @@
 Addon di **analisi** della casa d'aste per **World of Warcraft: Forever**.
 Individua occasioni economiche e spiega perché potrebbero convenire: prezzo
 effettivo, quantità acquistabile, capitale, costi, profitto prudente,
-freschezza dei dati, confidenza e vincoli. **Non compra, non mette all'asta e
-non cancella nulla al posto tuo.**
+freschezza dei dati, confidenza e vincoli. **Non compra mai da solo**: l'acquisto
+assistito, opzionale, richiede un tuo clic per ogni acquisto. Non mette
+all'asta e non cancella aste.
 
-> Stato: `0.1.0-alpha.1`, **alpha non verificata in gioco**. Le semantiche dei
-> dati del client sono documentate in `docs/API-AUDIT.md` e restano marcate
-> "non verificate" finché le prove di `docs/TESTING-IN-GAME.md` non sono fatte.
+> Stato: `0.1.0-alpha.2`, alpha provata in parte in gioco sulla build
+> 1.60.1.70450 (persistenza, replica, indice, buyout, cooldown). Il dettaglio
+> di cosa è verificato è in `docs/API-AUDIT.md`.
 
 ## Cosa fa
 
@@ -22,6 +23,11 @@ non cancella nulla al posto tuo.**
 - **Storico locale** per mercato e variante: un campione al giorno, finestre
   7/30 giorni; prezzi richiesti e profondità, mai "volume venduto".
 - **Diagnostica** (`/fg diagnostics`): build, simboli API, eventi, persistenza.
+- **Acquisto assistito** (sperimentale, da Impostazioni): dal dettaglio
+  "1. Preventivo" chiede il prezzo al server senza spendere; "2. Compra:
+  spendi X" si abilita solo se il preventivo rientra nel piano, nel tetto per
+  acquisto e nel tuo oro. Dopo la vendita al mercante ForeverGold confronta
+  l'oro incassato col previsto.
 - Disenchant, crafting e conversioni: calcoli pronti, ranking **disattivato**
   finché non esistono dati verificati per Forever.
 
@@ -53,13 +59,13 @@ Un prezzo basso non garantisce una vendita futura.
 
 ## Limiti noti
 
-- Nessuna voce API è ancora verificata su ForeverGold in gioco.
-- La scansione completa usa `C_AuctionHouse.ReplicateItems`; il cooldown e la
-  completezza non sono ancora misurati, quindi l'esito è sempre "osservazione
-  parziale".
-- Il buyout della replica è assunto come totale dello stack (da verificare).
-- Commissione AH e depositi sono scenari dichiarati.
-- Nessuna azione assistita (acquisto/vendita): fase successiva.
+- La scansione completa usa `C_AuctionHouse.ReplicateItems`, disponibile
+  circa ogni 15 minuti (misurato fra 13 min 34 s e 16 min); la completezza
+  non è dichiarata, quindi l'esito resta "osservazione parziale".
+- Commissione AH e depositi sono scenari dichiarati: la rivendita resta
+  speculativa.
+- L'acquisto assistito è sperimentale; vendita al mercante e rimessa
+  all'asta restano manuali.
 
 ## Sviluppo
 

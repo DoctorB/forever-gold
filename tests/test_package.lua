@@ -68,7 +68,11 @@ T.Case("no dynamic code, system libraries or file access", function()
   end
 end)
 
-T.Case("no spending, posting or cancelling call anywhere", function()
+-- Assisted buying may use exactly these, and only in Compat/Purchase.lua.
+local PURCHASE_NAMES = { StartCommoditiesPurchase = true, ConfirmCommoditiesPurchase = true, CancelCommoditiesPurchase = true,
+  PlaceBid = true }
+
+T.Case("spending calls live only in Compat/Purchase.lua; posting and cancelling nowhere", function()
   local names = { "PlaceBid", "StartCommoditiesPurchase", "ConfirmCommoditiesPurchase", "PostItem", "PostCommodity",
     "ConfirmPostItem", "ConfirmPostCommodity", "CancelAuction", "CancelSell", "CancelCommoditiesPurchase",
     "UseContainerItem", "PickupContainerItem" }
@@ -81,7 +85,8 @@ T.Case("no spending, posting or cancelling call anywhere", function()
         local line = body:sub(lineStart, (body:find("\n", position, true) or #body + 1) - 1)
         local presenceRow = path == "Compat/ClientAdapter.lua"
           and line:match('^%s*{ "[%w_.]+", "C_AuctionHouse", "[%w_]+" },%s*$') ~= nil
-        T.Ok(presenceRow, path .. " mentions " .. name .. " outside the presence list")
+        local purchaseAdapter = path == "Compat/Purchase.lua" and PURCHASE_NAMES[name]
+        T.Ok(presenceRow or purchaseAdapter, path .. " mentions " .. name .. " outside the allowed places")
       end
     end
   end
@@ -132,6 +137,24 @@ T.Case("verified flags match docs/API-AUDIT.md", function()
     T.Eq(documented[flag], value, "flag " .. flag)
   end
   for flag in pairs(documented) do T.Ok(ns.Core.Capabilities.VERIFIED[flag] ~= nil, "unknown flag " .. flag) end
+end)
+
+T.Case("the spending step is reached only from a button click", function()
+  for path, source in pairs(sources) do
+    local body = code(source)
+    if path ~= "Compat/Purchase.lua" and path ~= "Services/Purchases.lua" then
+      T.NotOk(body:find("ConfirmCommodity", 1, true), path .. " reaches ConfirmCommodity")
+      T.NotOk(body:find(":Buyout(", 1, true), path .. " reaches Buyout")
+    end
+    for line in (body .. "\n"):gmatch("([^\n]*)\n") do
+      if line:find("purchases:Confirm(", 1, true) then
+        T.Eq(path, "UI/PurchasePanel.lua", "Confirm called outside the purchase panel")
+        T.Ok(line:find("W.Button(", 1, true), "Confirm only inside a button OnClick: " .. line)
+      end
+    end
+  end
+  local scanner = code(sources["Services/Scanner.lua"])
+  T.NotOk(scanner:find("purchase", 1, true), "scanner never touches purchases")
 end)
 
 T.Case("transaction controller has no path to a client call", function()

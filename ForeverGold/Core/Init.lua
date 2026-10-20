@@ -23,6 +23,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
     ns.UI.Commands.Register(env)
     ns.UI.Tooltips.Install(env)
     ns.UI.Feedback.Attach(app)
+    ns.UI.PurchasePanel.Attach(app)
     app.bus:Subscribe("opportunities.updated", function() ns.UI.Main.RefreshTable() end)
     return
   end

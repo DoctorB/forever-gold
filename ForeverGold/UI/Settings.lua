@@ -22,6 +22,7 @@ Settings.FIELDS = {
   { key = "minProfit", label = "SET_MIN_PROFIT", unit = "silver", min = 0, max = 10000000 },
   { key = "feeBp", label = "SET_FEE", unit = "percent", min = 0, max = 50 },
   { key = "bufferBp", label = "SET_BUFFER", unit = "percent", min = 0, max = 50 },
+  { key = "maxPurchase", label = "SET_MAX_PURCHASE", unit = "silver", min = 0, max = 10000000 },
 }
 
 local function toDisplay(field, value)
@@ -78,6 +79,9 @@ function Settings.Build(panel)
   panel.notify:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y)
   panel.session = W.Check(panel, L("SET_SESSION"), function(value) ns.app.store:Settings().sessionOnly = value end)
   panel.session:SetPoint("TOPLEFT", panel, "TOPLEFT", 380, y)
+  y = y - 26
+  panel.assisted = W.Check(panel, L("SET_ASSISTED"), function(value) ns.app.store:Settings().assistedBuy = value end)
+  panel.assisted:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y)
   y = y - 30
   local save = W.Button(panel, L("BTN_SAVE"), 110, function()
     local values = {}
@@ -117,4 +121,5 @@ function Settings.Refresh(panel)
   end
   panel.notify:SetChecked(settings.notify and true or false)
   panel.session:SetChecked(settings.sessionOnly and true or false)
+  panel.assisted:SetChecked(settings.assistedBuy and true or false)
 end

@@ -53,7 +53,10 @@ function Vendor.Evaluate(context)
       end
     end
     if #lots > 0 then
-      local verified = context.semantics and context.semantics.buyoutVerified == true
+      -- "Confirmed" needs both client meanings proven in game: the buyout
+      -- (stack total) and the vendor price.
+      local semantics = context.semantics or {}
+      local verified = semantics.buyoutVerified == true and semantics.sellPriceVerified == true
       local scan = context.scan or {}
       local confidence = Risk.Confidence({
         ageSeconds = scan.ageSeconds, partial = scan.partial, semanticsVerified = verified,
@@ -74,6 +77,7 @@ function Vendor.Evaluate(context)
         lots = lots,
         confidence = confidence,
         constraints = { "manual_vendor_sale", "bag_space", "listing_may_vanish" },
+        pending = (not verified) and (semantics.buyoutVerified and "sellPrice" or "buyout") or nil,
         formula = { kind = "vendor", sellPrice = sellPrice, units = units, B = cost },
         provenance = { source = scan.mode, scanId = scan.id, seen = scan.finished },
       }

@@ -1,6 +1,6 @@
 # ForeverGold — stato
 
-Aggiornato: 2026-10-20 · versione `0.1.0-alpha.1` · **alpha non verificata in gioco**
+Aggiornato: 2026-10-20 · versione `0.1.0-alpha.2` · **alpha provata in parte in gioco**
 
 ## Fase corrente
 
@@ -9,7 +9,8 @@ Aggiornato: 2026-10-20 · versione `0.1.0-alpha.1` · **alpha non verificata in 
 | 0 — Scoperta | fatta (offline) | audit in `docs/API-AUDIT.md`, decisioni in `docs/DECISIONS.md`; nessuna API inventata. Le voci restano `documented` finché `/fg diagnostics` non gira sul client |
 | 1 — Fondamenta | fatta | test economici e migrazioni verdi |
 | 2 — Scanner | fatta su fake | replay robusti verdi; completezza dichiarata "non verificata" |
-| 3 — MVP | **alpha pronta, in attesa delle prove in gioco** | ZIP alpha costruito; dati spiegabili; zero spese (verificato da test statico) |
+| 3 — MVP | alpha provata in gioco (scansione, storico, UI) | dati spiegabili; nessuna spesa automatica (test statico) |
+| 6 — Assistenza | **anticipata, sperimentale** (alpha.2) | acquisto assistito un clic alla volta; da provare in gioco con budget piccolo |
 | 4–7 | non iniziate | contratti e funzioni pure predisposti per DE, crafting, conversioni |
 
 Sessioni in gioco del 2026-10-20 (build 1.60.1.70450): caricamento,
@@ -21,7 +22,12 @@ diagnostica (26/26 simboli, 8/8 eventi), UI e demo, **persistenza verificata**
 dello stack (verificato), AH moderna a commodity. Dettagli in
 `docs/API-AUDIT.md`.
 
-Prossimo gate: una scansione con lo scanner aggiornato per leggere dal file
+Alpha.2: acquisto assistito sperimentale (un clic per acquisto, tetto e
+controllo del preventivo), registro e controllo al mercante, commodity
+riconosciute, banner del guadagno. Prossima prova: sessione 3 di
+`docs/TESTING-IN-GAME.md` con un budget piccolo.
+
+Gate precedente: una scansione con lo scanner aggiornato per leggere dal file
 base dell'indice, conteggi, campioni di stack e link grezzi; confronto di 2–3
 campioni con la finestra AH; misura del cooldown.
 
@@ -54,7 +60,7 @@ campioni con la finestra AH; misura del cooldown.
 
 ## Prove eseguite (2026-10-20, Windows, Lua 5.1.5)
 
-- `lua5.1 tests/runner.lua` → **109 passed, 0 failed**: casi deterministici
+- `lua5.1 tests/runner.lua` → **126 passed, 0 failed**: casi deterministici
   della §13 (vendor 300, unitario 500, profondità 600, esempio §8 900/11.053,
   prezzo assente, deposito, DE 100/50%, crafting 2 craft/4 output, storico non
   condiviso, ciclo di conversione, import malformato/oversize), proprietà
@@ -70,8 +76,8 @@ campioni con la finestra AH; misura del cooldown.
   chiavi → eseguite a passi con budget 2 ms/frame; storico stimato 11,8 MB
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
-- `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.1.zip`, 47 file,
-  SHA-256 `15b222b6c5501958767cee01d5bef94766efd07ccb5bd5953a41f0fd4bb012ce`.
+- `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 51 file,
+  SHA-256 `fe1b49d2320ac18e422624227279cd87980a5ea53a30dee9d37726898e0de740`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.

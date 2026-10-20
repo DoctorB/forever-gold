@@ -96,6 +96,7 @@ local SUITES = {
   "test_history",
   "test_scanner",
   "test_app",
+  "test_purchases",
   "test_ui",
   "test_locales",
   "test_package",

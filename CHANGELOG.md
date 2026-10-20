@@ -2,6 +2,36 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni SemVer.
 
+## [0.1.0-alpha.2] - 2026-10-20
+
+Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
+
+### Aggiunto
+
+- Acquisto assistito sperimentale (disattivato di default, Impostazioni):
+  preventivo del server per le commodity o ricerca dell'asta, poi un clic
+  "Compra: spendi X" abilitato solo se il prezzo non supera piano, tetto per
+  acquisto (default 50 silver) e oro disponibile. Nessun timer, nessun retry,
+  esito incerto registrato da verificare.
+- Registro degli acquisti e controllo al mercante: l'oro incassato viene
+  confrontato con le unità vendute; se coincide, il prezzo vendor risulta
+  verificato su questo client.
+- Commodity riconosciute (`GetItemKeyInfo`): acquisto parziale al prezzo
+  unitario, costo esatto sul book.
+- Banner del guadagno (verificato / probabile / speculativo), righe colorate
+  per classe, oro insufficiente in grigio, filtro "Solo verificati",
+  dettaglio con "Come fare".
+- Feedback della scansione in chat e barra di avanzamento.
+- Evidenze salvate con ogni scansione (conteggi, base indice, campioni di
+  stack, link grezzi, voti sul buyout).
+
+### Modificato
+
+- Chiave oggetto con bonus ID: su Forever le varianti arrivano così.
+- Replica: nessun nuovo tentativo automatico; cooldown misurato (13 min 34 s
+  – 16 min) usato per non inviare richieste inutili.
+- "Verificato" richiede buyout e prezzo vendor provati in gioco.
+
 ## [0.1.0-alpha.1] - 2026-10-20
 
 Prima alpha di sola analisi, **non verificata in gioco**.

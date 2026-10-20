@@ -68,7 +68,12 @@ riga è scartata con motivo (`Money.Normalize`), mai convertita con perdita.
 | `C_AuctionHouse.GetItemSearchResultInfo` | `(itemKey, index: luaIndex) → ItemSearchResultInfo?` (quantity, buyoutAmount?, auctionID…) | osservazione passiva e quotazione | documented | `buyoutAmount` totale o unitario per quantity > 1 | righe con quantity > 1 non acquistabili finché non verificato |
 | `HasFull{Commodity,Item}SearchResults` | `(key) → bool` | completezza per oggetto | documented | — | nil → osservazione parziale |
 | `CalculateItemDeposit` / `CalculateCommodityDeposit` | `(…, duration, quantity) → depositCost?` | non usate nel MVP (richiedono l'oggetto) | documented | durata, rimborso | deposito sconosciuto → escluso dal profitto e segnalato |
-| `PlaceBid`, `StartCommoditiesPurchase`, `ConfirmCommoditiesPurchase` | — | **mai chiamate**: solo controllo di presenza | documented | in fase 6, con oggetto economico scelto dall'utente | — |
+| `StartCommoditiesPurchase(itemID, quantity)` | preventivo → `COMMODITY_PRICE_UPDATED(unit, total)` / `COMMODITY_PRICE_UNAVAILABLE` | acquisto assistito, passo 1 (non spende) | present | evento e valori del preventivo | preventivo assente in 10 s → interrotto |
+| `ConfirmCommoditiesPurchase(itemID, quantity)` | → `COMMODITY_PURCHASE_SUCCEEDED` / `_FAILED` | acquisto assistito, passo 2, solo da clic | present | richiede evento hardware? esito | nessuna risposta in 20 s → "incerto", mai ritentato |
+| `PlaceBid(auctionID, bidAmount)` | → `AUCTION_HOUSE_PURCHASE_COMPLETED(auctionID)` / `ITEM_PURCHASED(itemID)` | acquisto assistito di un'asta individuale, solo da clic, al buyout | present | esito ed errori | idem |
+| `CancelCommoditiesPurchase`, `GetQuoteDurationRemaining` | — | annulla un preventivo rifiutato; scadenza del preventivo | present (da diagnostica alpha.2) | durata del preventivo | preventivo scaduto → nuovo preventivo |
+| `GetItemKeyInfo(itemKey)` | → `ItemKeyInfo.isCommodity`; può arrivare dopo `ITEM_KEY_ITEM_INFO_RECEIVED` | riconoscimento commodity | da verificare | valore per un materiale noto | ignoto → righe trattate come lotti interi |
+| `GetMoney`, `GetItemCount` | — | oro e borse per tetto e controllo al mercante | da verificare | — | ignoto → acquisto non pianificato |
 | `C_AuctionHouse.SupportsCopperValues` | `() → bool` | registrato in diagnostica | documented | significato su Forever | — |
 | `C_Item.GetItemInfo` | 18 valori, `sellPrice` all'11ª posizione | prezzo vendor, nome, classe | documented | `sellPrice` coincide col vendor reale? cache fredda | nil → "prezzo vendor sconosciuto", nessuna opportunità |
 | `C_Item.RequestLoadItemDataByID` + `GET_ITEM_INFO_RECEIVED` | — | caricamento asincrono | documented | evento e argomenti | timeout 5 s, coda limitata a 200 |

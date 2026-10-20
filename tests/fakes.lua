@@ -48,6 +48,7 @@ function Fakes.AuctionHouse(rows)
   local ah = {
     rows = rows or {}, delivered = false, ready = true, replicateCalls = 0, searchCalls = 0,
     spendCalls = 0, commodity = {}, items = {}, fullCommodity = true,
+    commodityItems = {}, calls = {}, args = {},
   }
   local api = {}
   ah.api = api
@@ -86,10 +87,23 @@ function Fakes.AuctionHouse(rows)
       containsSocketedItem = false }
   end
   function api.HasFullItemSearchResults() return true end
-  -- Spending symbols exist (like the real client) and count every call.
-  for _, name in ipairs({ "PlaceBid", "StartCommoditiesPurchase", "ConfirmCommoditiesPurchase", "PostItem",
-    "PostCommodity", "CancelAuction" }) do
-    api[name] = function() ah.spendCalls = ah.spendCalls + 1 end
+  function api.GetItemKeyInfo(itemKey)
+    local status = ah.commodityItems[itemKey.itemID]
+    if status == nil then return nil end
+    return { itemID = itemKey.itemID, isCommodity = status }
+  end
+  function api.GetQuoteDurationRemaining() return ah.quoteLeft or 30 end
+  -- Purchase symbols exist (like the real client) and record every call;
+  -- spendCalls counts only the calls that spend, post or cancel auctions.
+  local spending = { PlaceBid = true, ConfirmCommoditiesPurchase = true, PostItem = true, PostCommodity = true,
+    CancelAuction = true }
+  for _, name in ipairs({ "PlaceBid", "StartCommoditiesPurchase", "ConfirmCommoditiesPurchase", "CancelCommoditiesPurchase",
+    "PostItem", "PostCommodity", "CancelAuction" }) do
+    api[name] = function(...)
+      ah.calls[name] = (ah.calls[name] or 0) + 1
+      ah.args[name] = { ... }
+      if spending[name] then ah.spendCalls = ah.spendCalls + 1 end
+    end
   end
   return ah
 end
@@ -115,6 +129,8 @@ function Fakes.Env(clock, ah, extra)
     C_EventUtils = { IsEventValid = function(event) return not (extra and extra.invalidEvents and extra.invalidEvents[event]) end },
     C_Timer = { After = function(delay, fn) clock.after(delay, fn) end },
     time = function() return clock.t end,
+    GetMoney = function() return extra and extra.wallet and extra.wallet.money or nil end,
+    GetItemCount = function(itemID) return extra and extra.bags and extra.bags[itemID] or 0 end,
     debugprofilestop = function() return clock.preciseMs() end,
     math = { random = function() return 0.5 end },
   }

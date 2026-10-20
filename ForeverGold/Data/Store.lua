@@ -23,6 +23,8 @@ Store.DEFAULT_SETTINGS = {
   notify = true,
   notifyCooldown = 300,
   sessionOnly = false,
+  assistedBuy = false, -- experimental: buy from the details window, one click per purchase
+  maxPurchase = 5000, -- spending cap per assisted purchase (50 silver)
 }
 
 Store.RETENTION = {
