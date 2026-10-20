@@ -113,5 +113,7 @@ function Schema.NewSnapshot(fields)
     coverage = "unknown", -- "full_verified" | "full_unverified" | "partial"
     counts = { rows = 0, valid = 0, discarded = 0, incomplete = 0, itemKeys = 0, units = 0 },
     discardReasons = {},
+    samples = {}, -- evidence: multi-unit rows (itemID, count, buyout)
+    links = {}, -- evidence: raw item strings
   }
 end

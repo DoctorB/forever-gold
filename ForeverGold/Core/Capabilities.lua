@@ -21,7 +21,7 @@ Capabilities.VERIFIED = {
   itemSearch = false,
   itemSearchBuyoutIsTotal = false, -- buyoutAmount of a multi-unit item auction
   sellPrice = false, -- C_Item.GetItemInfo sellPrice matches the vendor
-  persistence = false, -- SavedVariables re-read after /reload, relog, restart
+  persistence = true, -- 2026-10-20, build 70450: re-read after /reload, relog and restart
   fee = false, -- AH cut measured on a real sale
   deposit = false,
 }

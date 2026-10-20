@@ -168,3 +168,21 @@ T.Case("item info arrives later: opportunities re-evaluate once", function()
   clock.advance(2)
   T.Eq(#app.opportunities.results.list, 1)
 end)
+
+T.Case("snapshot evidence and counts are saved with the market", function()
+  local rowsList = {}
+  for index = 1, 12 do rowsList[index] = { itemID = 200 + index, count = 3, buyout = 300 } end
+  local app, _, clock, ah = Fakes.App({ rows = rowsList })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(60)
+  local saved = app.store:Market(app:MarketKey()).snapshots[1]
+  T.Eq(saved.counts.rows, 12)
+  T.Eq(saved.counts.valid, 12)
+  T.Eq(saved.indexBase, 0)
+  T.Eq(saved.reason, "completeness_unverified")
+  T.Eq(#saved.samples, 8)
+  T.Ok(#saved.links > 0)
+end)

@@ -26,7 +26,10 @@ Scanner.DEFAULTS = {
   maxRetries = 2,
   backoffBase = 5,
   backoffCap = 60,
-  infoWait = 3, -- one bounded wait for rows still missing item data
+  infoWait = 3, -- wait before re-reading rows still missing item data
+  infoRounds = 4, -- bounded number of such re-reads
+  samples = 8, -- multi-unit rows kept as evidence of the buyout meaning
+  links = 6, -- item strings kept as evidence of the link format
   searchTimeout = 10,
   observeDedupe = 60, -- identical observation of one item ignored this long
   budgetMs = 2,
@@ -90,6 +93,8 @@ local function finish(self, task, state, reason)
   local snapshot = self.snapshot
   snapshot.finished = self.clock()
   snapshot.status = state == "COMPLETE" and "complete" or (state == "PARTIAL" and "partial" or "failed")
+  snapshot.reason = reason
+  snapshot.updates, snapshot.lateUpdates, snapshot.rounds = task.updates, task.lateUpdates, task.rounds
   local listings = {}
   if task.byIndex then
     local indexes = {}
@@ -165,7 +170,7 @@ function Scanner:Start(request)
   if request.mode ~= "replicate" then return false, "unsupported_mode" end
   if not self.adapter:GetCapabilities().replicate then return false, "unsupported" end
   self.scheduler:Invalidate()
-  local task = { mode = "replicate", attempts = 0, updates = 0, byIndex = {} }
+  local task = { mode = "replicate", attempts = 0, updates = 0, lateUpdates = 0, rounds = 0, byIndex = {} }
   self.task = task
   self.snapshot = newSnapshot(self, "replicate", "all")
   attempt(self, task)
@@ -199,6 +204,14 @@ local function readRow(self, task, index)
     return
   end
   local suffix = Schema.SuffixFromLink(row.link)
+  -- Evidence for docs/API-AUDIT.md: a few stacks and raw item strings.
+  if row.count and row.count > 1 and row.buyout and #snapshot.samples < self.opts.samples then
+    snapshot.samples[#snapshot.samples + 1] = { itemID = row.itemID, count = row.count, buyout = row.buyout, minBid = row.minBid }
+  end
+  local itemString = row.link and row.link:match("item:[%-%d:]+")
+  if itemString and #snapshot.links < self.opts.links and (suffix ~= 0 or #snapshot.links < self.opts.links / 2) then
+    snapshot.links[#snapshot.links + 1] = itemString
+  end
   local itemKey = Schema.ItemKey(row.itemID, suffix, suffix == nil)
   local buyout = row.buyout
   if buyout == 0 then buyout = nil end
@@ -249,26 +262,42 @@ local function beginNormalize(self, task)
         coverage == "full_verified" and nil or "completeness_unverified")
       return
     end
-    -- One bounded wait for item data, then a single re-read of those rows.
-    self.scheduler:After(self.opts.infoWait, function()
-      if not current(self, task) then return end
-      task.incomplete = {}
-      readIndexes(self, task, pending, function(again)
-        if not again or not current(self, task) then return end
-        task.incompleteLeft = #task.incomplete
-        snapshot.coverage = coverageOf(task, snapshot)
-        finish(self, task, snapshot.coverage == "full_verified" and "COMPLETE" or "PARTIAL",
-          task.incompleteLeft > 0 and "rows_incomplete" or "completeness_unverified")
+    -- Item data keeps arriving (the client sends many updates meanwhile):
+    -- re-read only the incomplete rows, a bounded number of times.
+    local function round(rows)
+      self.scheduler:After(self.opts.infoWait, function()
+        if not current(self, task) then return end
+        task.rounds = task.rounds + 1
+        task.incomplete = {}
+        readIndexes(self, task, rows, function(again)
+          if not again or not current(self, task) then return end
+          task.incompleteLeft = #task.incomplete
+          if task.incompleteLeft > 0 and task.rounds < self.opts.infoRounds then
+            round(task.incomplete)
+            return
+          end
+          snapshot.coverage = coverageOf(task, snapshot)
+          finish(self, task, snapshot.coverage == "full_verified" and "COMPLETE" or "PARTIAL",
+            task.incompleteLeft > 0 and "rows_incomplete" or "completeness_unverified")
+        end)
       end)
-    end)
+    end
+    round(pending)
   end)
 end
 
 function Scanner:OnReplicateUpdate()
   local task = self.task
   if not task or task.mode ~= "replicate" or (self.state ~= "REQUESTED" and self.state ~= "RECEIVING") then
-    -- Late or foreign update: nothing is appended.
-    self:Trace("replicate_update_ignored", { state = self.state })
+    -- Late or foreign update: nothing is appended. The client sends these
+    -- by the hundred while item data loads, so they are counted, and only
+    -- traced at 1, 10, 100... to keep the bounded trace useful.
+    if task and task.mode == "replicate" then task.lateUpdates = task.lateUpdates + 1 end
+    self.ignoredUpdates = (self.ignoredUpdates or 0) + 1
+    local n = self.ignoredUpdates
+    if n == 1 or n == 10 or n == 100 or n == 1000 or n == 10000 then
+      self:Trace("replicate_update_ignored", { state = self.state, count = n })
+    end
     return
   end
   task.updates = task.updates + 1

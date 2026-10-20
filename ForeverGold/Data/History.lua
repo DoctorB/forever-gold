@@ -82,8 +82,17 @@ function History.FinishRecord(job)
   local market, snapshot = job.market, job.snapshot
   market.snapshots[#market.snapshots + 1] = {
     id = snapshot.id, t = job.now, mode = snapshot.mode, coverage = snapshot.coverage, items = job.updated,
+    started = snapshot.started, status = snapshot.status, reason = snapshot.reason, indexBase = snapshot.indexBase,
+    counts = snapshot.counts, discardReasons = snapshot.discardReasons, updates = snapshot.updates,
+    lateUpdates = snapshot.lateUpdates, rounds = snapshot.rounds,
+    samples = snapshot.samples and #snapshot.samples > 0 and snapshot.samples or nil,
+    links = snapshot.links and #snapshot.links > 0 and snapshot.links or nil,
   }
   while #market.snapshots > 50 do table.remove(market.snapshots, 1) end
+  -- Evidence lists are only needed on the most recent snapshots.
+  for index = 1, #market.snapshots - 5 do
+    market.snapshots[index].samples, market.snapshots[index].links = nil, nil
+  end
   return job.updated
 end
 

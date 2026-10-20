@@ -4,7 +4,7 @@ Stato al 2026-10-20, dopo la sessione 1. Tutti i simboli della matrice sono
 `present` sulla build 70450; nessuna semantica è ancora `runtime_verified`
 (servono le prove AH di `docs/TESTING-IN-GAME.md`).
 
-<!-- verified: replicate=false replicateBuyoutIsTotal=false replicateIndexBase=false commoditySearch=false itemSearch=false itemSearchBuyoutIsTotal=false sellPrice=false persistence=false fee=false deposit=false -->
+<!-- verified: replicate=false replicateBuyoutIsTotal=false replicateIndexBase=false commoditySearch=false itemSearch=false itemSearchBuyoutIsTotal=false sellPrice=false persistence=true fee=false deposit=false -->
 
 Il commento sopra è letto da `tests/test_package.lua`: ogni flag deve
 coincidere con `Capabilities.VERIFIED` in `ForeverGold/Core/Capabilities.lua`
@@ -21,6 +21,8 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 | --- | --- | --- | --- |
 | 2026-10-20 (1) | 1.60.1.70450 (`GetBuildInfo`, compilata il 15 ottobre 2026) | ForeverGold 0.1.0-alpha.1, `/fg diagnostics`, realm `ClassicBetaPvE`, fazione Alliance; file `ForeverGold.lua` scritto dal client alle 12:51 | addon caricato con `Interface 16001`; 26/26 simboli presenti; 8/8 eventi accettati da `C_EventUtils.IsEventValid` e registrati; `SupportsCopperValues()` → `true`; `GetCurrentRegion()` → 110; SavedVariables **scritte** (rilettura non ancora provata: `loads = 1`) |
 | 2026-10-20 (2) | 1.60.1.70450 | `/reload` + `/fg diagnostics`; file riscritto alle 12:53 | `loads = 2`, `previousLoad` = primo caricamento (12:47:54), `created` invariato: dati **riletti dopo `/reload`** e non azzerati. Mancano logout/login e riavvio completo |
+| 2026-10-20 (3) | 1.60.1.70450 | relog e riavvio completo del client | `loads` 3 (relog 12:53:12), 4 (12:54:16), 5 dopo il riavvio (12:56:55, `previousLoad` = 12:54:16): **persistenza verificata** nei tre passaggi |
+| 2026-10-20 (4) | 1.60.1.70450 | AH aperta, `/fg scan` alle 12:57:19, secondo `/fg scan` alle 12:58:09, AH chiusa alle 12:59:25 | prima replica letta in ~31 s: 2.081 chiavi oggetto, 29.449 aste acquistabili, 204.636 unità; esito parziale `rows_incomplete`. Durante la lettura il client ha inviato **centinaia di `REPLICATE_ITEM_LIST_UPDATE`** (≥ 190 in ~1 s). La seconda richiesta, 19 s dopo la fine della prima, **non ha ricevuto risposta per 76 s** (retry incluso): cooldown della replica > 76 s, durata ignota. Nessuna chiave con suffisso diverso da 0 su 2.081. Base dell'indice e conteggio righe persi perché il trace era saturato |
 
 ## Client target
 
@@ -32,7 +34,7 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 | Mercato | product `p18`, region `110`, realm `ClassicBetaPvE`, faction `Alliance` | osservato | diagnostica; la regione 110 non è uno dei codici Retail 1–5: resta solo parte della chiave |
 | Runtime Lua | 5.1 (niente `goto`, `//`, bitwise) | verificato su 70374 (stessa fonte) | idem |
 | Template UI usati | `UIPanelButtonTemplate`, `UICheckButtonTemplate`, `InputBoxTemplate`, `BasicFrameTemplateWithInset` | verificati su 70374 (stessa fonte) | idem |
-| SavedVariables | scritte dal client in `WTF\Account\<account>\SavedVariables\` | scrittura e rilettura dopo `/reload` verificate; logout/login e riavvio da provare (flag `persistence` resta `false` fino ai tre passaggi) | `ForeverGold.lua`: `loads` 1 → 2 il 2026-10-20 |
+| SavedVariables | scritte dal client in `WTF\Account\<account>\SavedVariables\` | **verificata** (flag `persistence`) | `ForeverGold.lua`: `loads` 1 → 5 dopo `/reload`, relog e riavvio, 2026-10-20 |
 
 ## Fonti documentali
 
@@ -86,9 +88,10 @@ finiscono in `ForeverGoldDB.diagnostics.report.events`.
 
 ## Domande aperte (bloccano la promozione a "verificato")
 
-1. Indice di `GetReplicateItemInfo`: 0 o 1? (rilevato a runtime; serve conferma nel trace)
-2. `buyoutPrice` della replica: totale dello stack o per unità? → `/fg` Impostazioni → "Campiona prezzi stack" e confronto con la finestra AH.
-3. Quanti `REPLICATE_ITEM_LIST_UPDATE` arrivano e dopo quanto? Esiste un cooldown osservabile?
+1. Indice di `GetReplicateItemInfo`: 0 o 1? Dalla 2ª scansione il valore è salvato con lo snapshot (`indexBase`).
+2. `buyoutPrice` della replica: totale dello stack o per unità? Ogni scansione salva ora 8 righe multi-unità (`samples`) da confrontare con la finestra AH.
+3. Cooldown della replica: > 76 s osservato; durata esatta da misurare (ritentare dopo 5, 10, 15 minuti). Gli aggiornamenti durante la lettura sono ora contati (`lateUpdates`) e le righe incomplete rilette fino a 4 volte.
+9. Formato dei link: nessun suffisso su 2.081 chiavi. Ogni scansione salva ora fino a 6 item string grezzi (`links`) per verificare se gli oggetti "of the …" hanno un suffisso e in quale campo.
 4. Il client Forever usa commodity (ricerca per itemID) o solo aste individuali?
 5. AH condivisa fra fazioni/realm? (finché ignoto la fazione resta nella `MarketKey`)
 6. Commissione AH e depositi effettivi su una vendita reale (oggi scenario 5%).

@@ -38,7 +38,7 @@ solo build, simboli, eventi, conteggi e trace; nessun nome di venditore).
 | 2.1 | Apri l'AH, `/fg scan` | stato: richiesta → ricezione → lettura → "osservazione parziale (completezza non ancora verificata)" | tempo totale, righe, chiavi, unità mostrate nella barra di stato |
 | 2.2 | Durante la scansione | nessun blocco del gioco percepibile | FPS prima/durante (anche approssimativo) |
 | 2.3 | `/fg scan` subito dopo | rifiuto o `no_response`: indica se esiste un cooldown | messaggio e tempo trascorso |
-| 2.4 | Impostazioni → "Campiona prezzi stack" | "N righe multi-unità salvate" | poi `/reload` e invia il file: confronta 2–3 righe con la finestra AH (prezzo totale o unitario?) → flag `replicateBuyoutIsTotal` |
+| 2.4 | Dopo la scansione, `/reload` | ogni scansione salva 8 righe multi-unità e 6 item string grezzi con lo snapshot | confronta 2–3 righe (che ti indico io dal file) con la finestra AH: prezzo totale o unitario? → flag `replicateBuyoutIsTotal` |
 | 2.5 | Cerca a mano un materiale nell'AH nativa | la scheda Opportunità aggiorna l'oggetto (osservazione passiva) | se l'oggetto è commodity o asta individuale |
 | 2.6 | Chiudi l'AH durante una scansione | stato annullato o parziale "AH chiusa", nessun errore | screenshot |
 | 2.7 | Dettaglio di un'opportunità vendor | formula espansa; confronta il prezzo vendor con quello reale del mercante | prezzo reale → flag `sellPrice` |

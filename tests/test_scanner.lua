@@ -268,3 +268,56 @@ T.Case("user cancel invalidates timers and the generation", function()
   s.clock.advance(100)
   T.Eq(#s.snapshots, 0)
 end)
+
+T.Case("hundreds of late updates while reading are counted, not appended", function()
+  local traced = {}
+  local s = setup(rows(200), { budgetMs = 2 })
+  s.scanner.trace = function(kind, data) traced[#traced + 1] = kind end
+  s.event("AUCTION_HOUSE_SHOW")
+  s.scanner:Start()
+  s.deliver()
+  s.clock.advance(2.1) -- reading started
+  for _ = 1, 300 do s.event("REPLICATE_ITEM_LIST_UPDATE") end
+  s.clock.advance(30)
+  local snap = s.snapshots[1].snapshot
+  T.Eq(#s.snapshots[1].listings, 200)
+  T.Eq(snap.lateUpdates, 300)
+  local ignored = 0
+  for _, kind in ipairs(traced) do if kind == "replicate_update_ignored" then ignored = ignored + 1 end end
+  T.Eq(ignored, 3, "traced at 1, 10 and 100 only")
+end)
+
+T.Case("item data arriving in a later round completes the rows", function()
+  local list = rows(3)
+  list[2].hasAllInfo = false
+  local s = setup(list, { infoWait = 3, infoRounds = 4 })
+  s.event("AUCTION_HOUSE_SHOW")
+  s.scanner:Start()
+  s.deliver()
+  s.clock.advance(6) -- first pass and first re-read: still missing
+  list[2].hasAllInfo = nil
+  s.clock.advance(30)
+  T.Eq(s.scanner.reason, "completeness_unverified")
+  T.Eq(s.snapshots[1].snapshot.coverage, "full_unverified")
+  T.Ok(s.snapshots[1].snapshot.rounds >= 2)
+end)
+
+T.Case("stack samples and raw item strings are kept as evidence", function()
+  local list = rows(10)
+  list[4].suffix = 1179
+  local s = setup(list)
+  s.event("AUCTION_HOUSE_SHOW")
+  s.scanner:Start()
+  s.deliver()
+  s.clock.advance(30)
+  local snap = s.snapshots[1].snapshot
+  T.Eq(#snap.samples, 8)
+  T.Ok(snap.samples[1].count > 1 and snap.samples[1].buyout ~= nil)
+  local withSuffix = false
+  for _, link in ipairs(snap.links) do
+    T.Ok(link:match("^item:[%-%d:]+$"), "item string only: " .. link)
+    if link:find(":1179:", 1, true) then withSuffix = true end
+  end
+  T.Ok(withSuffix, "suffix links are preferred")
+  T.Ok(#snap.links <= 6)
+end)

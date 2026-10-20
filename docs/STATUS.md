@@ -12,8 +12,15 @@ Aggiornato: 2026-10-20 · versione `0.1.0-alpha.1` · **alpha non verificata in 
 | 3 — MVP | **alpha pronta, in attesa delle prove in gioco** | ZIP alpha costruito; dati spiegabili; zero spese (verificato da test statico) |
 | 4–7 | non iniziate | contratti e funzioni pure predisposti per DE, crafting, conversioni |
 
-Prossimo gate: sessioni 1 e 2 di `docs/TESTING-IN-GAME.md` sul client
-1.60.1.70450.
+Sessioni in gioco del 2026-10-20 (build 1.60.1.70450): caricamento,
+diagnostica (26/26 simboli, 8/8 eventi), UI e demo, **persistenza verificata**
+(`/reload`, relog, riavvio), prima replica reale (2.081 chiavi, 29.449 aste,
+204.636 unità in ~31 s), cooldown della replica > 76 s. Dettagli in
+`docs/API-AUDIT.md`.
+
+Prossimo gate: una scansione con lo scanner aggiornato per leggere dal file
+base dell'indice, conteggi, campioni di stack e link grezzi; confronto di 2–3
+campioni con la finestra AH; misura del cooldown.
 
 ## Implementato
 
@@ -72,7 +79,6 @@ comportamento del server.
   `false`): esito delle scansioni sempre "osservazione parziale"; vendor mai
   "confermato"; rivendita sempre "speculativa" (commissione scenario).
 - Buyout della replica assunto come totale dello stack.
-- Persistenza dei SavedVariables non ancora provata per ForeverGold.
 - Nessuna azione assistita; "Prepara" produce solo un riepilogo.
 - Grafico storico non ancora presente (la scheda Storico è testuale).
 - Icona TGA generata ma non referenziata dal TOC.
@@ -83,10 +89,10 @@ comportamento del server.
 
 | Blocker | Dato o prova minima |
 | --- | --- |
-| Semantica `buyoutPrice` della replica | 2–3 righe di "Campiona prezzi stack" confrontate con la finestra AH |
+| Semantica `buyoutPrice` della replica | 2–3 dei `samples` salvati con la scansione confrontati con la finestra AH |
 | Indice e completezza della replica | trace di `/fg scan` (in `ForeverGold.lua` dopo `/reload`) con righe lette vs mostrate dall'AH |
-| Cooldown della replica | esito di due `/fg scan` ravvicinati con i tempi |
+| Cooldown della replica | > 76 s osservato; ritentare `/fg scan` dopo 5, 10, 15 minuti |
+| Suffissi degli oggetti | i `links` salvati con la scansione (nessun suffisso visto su 2.081 chiavi) |
 | Commodity su Forever | una ricerca manuale di un materiale con l'addon attivo |
-| Persistenza | contatore caricamenti dopo `/reload`, relog, riavvio |
 | `sellPrice` | prezzo pagato dal mercante per un oggetto proposto |
 | Commissione AH | una vendita reale qualsiasi del proprietario (importo e incasso) |
