@@ -187,7 +187,7 @@ T.Case("waiting shows elapsed time; silence explains the cooldown; refusal says 
     T.Ok(last:find("no answer up to 8 min 40 s", 1, true) ~= nil, last)
     ns.UI.Commands.Handle("scan")
     last = ns.printed[#ns.printed]
-    T.Ok(last:find("next attempt possible in 3 min 55 s", 1, true) ~= nil, last)
+    T.Ok(last:find("next attempt possible in 25 s", 1, true) ~= nil, last)
     T.Eq(ah.replicateCalls, 2)
   end)
 end)

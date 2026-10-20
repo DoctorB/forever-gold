@@ -343,7 +343,7 @@ T.Case("replicate cooldown is measured, not assumed; silent requests are not rep
   local ok, reason, left = s.scanner:Start()
   T.NotOk(ok)
   T.Eq(reason, "cooldown")
-  T.Eq(left, 300 - 61)
+  T.Eq(left, 90 - 61)
   T.Eq(s.ah.replicateCalls, 2)
   -- Past it a request goes out; an answer gives the upper bound.
   s.clock.advance(left + 300)

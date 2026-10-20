@@ -34,7 +34,10 @@ Scanner.DEFAULTS = {
   -- silent replicate meant cooldown, and re-requesting may extend it.
   maxRetries = 0,
   maxThrottleWaits = 3, -- waits for the throttle system before giving up
-  silentPause = 300, -- pacing after an unanswered replicate request (not a cooldown claim)
+  -- Pacing after an unanswered replicate request (not a cooldown claim). In
+  -- game an answer came 2 min 26 s after a silent request, so silent requests
+  -- do not restart the cooldown and a short pause is enough.
+  silentPause = 90,
   backoffBase = 5,
   backoffCap = 60,
   infoWait = 3, -- wait before re-reading rows still missing item data
