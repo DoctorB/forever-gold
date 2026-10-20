@@ -83,6 +83,12 @@ function Main.Results()
   return app and app.opportunities and app.opportunities.results
 end
 
+-- Left padding of a column: left-aligned text after a right-aligned column
+-- gets a wider gap so headers such as "ROI" and "Class/score" stay apart.
+function Main.Pad(spec)
+  return spec.right and 2 or 12
+end
+
 local function layoutRows()
   local frame = Main.frame
   local tableFrame = frame.table
@@ -113,8 +119,8 @@ local function layoutRows()
         for column, spec in ipairs(Main.COLUMNS) do
           local cell = row.cells[column]
           cell:ClearAllPoints()
-          cell:SetPoint("LEFT", row, "LEFT", x + 2, 0)
-          cell:SetWidth(width * spec.width - 4)
+          cell:SetPoint("LEFT", row, "LEFT", x + Main.Pad(spec), 0)
+          cell:SetWidth(width * spec.width - Main.Pad(spec) - 4)
           x = x + width * spec.width
         end
       else
@@ -127,8 +133,8 @@ local function layoutRows()
   for column, spec in ipairs(Main.COLUMNS) do
     local header = frame.headers[column]
     header:ClearAllPoints()
-    header:SetPoint("TOPLEFT", tableFrame, "TOPLEFT", x + 2, 0)
-    header:SetWidth(width * spec.width - 4)
+    header:SetPoint("TOPLEFT", tableFrame, "TOPLEFT", x + Main.Pad(spec), 0)
+    header:SetWidth(width * spec.width - Main.Pad(spec) - 4)
     x = x + width * spec.width
   end
 end
