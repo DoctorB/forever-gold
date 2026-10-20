@@ -20,6 +20,7 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 | Data | Build | Metodo | Esito |
 | --- | --- | --- | --- |
 | 2026-10-20 (1) | 1.60.1.70450 (`GetBuildInfo`, compilata il 15 ottobre 2026) | ForeverGold 0.1.0-alpha.1, `/fg diagnostics`, realm `ClassicBetaPvE`, fazione Alliance; file `ForeverGold.lua` scritto dal client alle 12:51 | addon caricato con `Interface 16001`; 26/26 simboli presenti; 8/8 eventi accettati da `C_EventUtils.IsEventValid` e registrati; `SupportsCopperValues()` → `true`; `GetCurrentRegion()` → 110; SavedVariables **scritte** (rilettura non ancora provata: `loads = 1`) |
+| 2026-10-20 (2) | 1.60.1.70450 | `/reload` + `/fg diagnostics`; file riscritto alle 12:53 | `loads = 2`, `previousLoad` = primo caricamento (12:47:54), `created` invariato: dati **riletti dopo `/reload`** e non azzerati. Mancano logout/login e riavvio completo |
 
 ## Client target
 
@@ -31,7 +32,7 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 | Mercato | product `p18`, region `110`, realm `ClassicBetaPvE`, faction `Alliance` | osservato | diagnostica; la regione 110 non è uno dei codici Retail 1–5: resta solo parte della chiave |
 | Runtime Lua | 5.1 (niente `goto`, `//`, bitwise) | verificato su 70374 (stessa fonte) | idem |
 | Template UI usati | `UIPanelButtonTemplate`, `UICheckButtonTemplate`, `InputBoxTemplate`, `BasicFrameTemplateWithInset` | verificati su 70374 (stessa fonte) | idem |
-| SavedVariables | scritte dal client in `WTF\Account\<account>\SavedVariables\` | **scrittura** verificata per ForeverGold; rilettura da provare | `ForeverGold.lua` scritto il 2026-10-20 alle 12:51 con `loads = 1` |
+| SavedVariables | scritte dal client in `WTF\Account\<account>\SavedVariables\` | scrittura e rilettura dopo `/reload` verificate; logout/login e riavvio da provare (flag `persistence` resta `false` fino ai tre passaggi) | `ForeverGold.lua`: `loads` 1 → 2 il 2026-10-20 |
 
 ## Fonti documentali
 
