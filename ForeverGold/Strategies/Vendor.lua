@@ -28,7 +28,9 @@ end
 -- Returns opportunities, exclusion tally.
 function Vendor.Evaluate(context)
   local settings = context.settings or {}
-  local minProfit = settings.minVendorProfit or 1
+  -- Per lot only "positive"; totals are filtered after variants are merged
+  -- (Services/Opportunities.MergeVendor).
+  local minProfit = 1
   local opportunities, excluded = {}, {}
   for itemKey, entry in pairs(context.items or {}) do
     local info = entry.info

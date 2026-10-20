@@ -30,6 +30,15 @@ function Commands.Handle(input)
   elseif command == "demo" then
     ns.UI.Main.demoResults = app:Demo()
     ns.UI.Main.Open("opportunities")
+  elseif command == "lang" then
+    local code = ({ it = "itIT", itit = "itIT", en = "enUS", enus = "enUS", auto = "auto" })[rest]
+    if not code then
+      ns.Print(L("LANG_USAGE"))
+      return
+    end
+    app.store:Settings().locale = code
+    ns.ApplyLocale(code)
+    ns.Print(L("LANG_SET"))
   elseif command == "reset" then
     ns.UI.Main.Open("history")
     ns.Print(L("RESET_HINT"))

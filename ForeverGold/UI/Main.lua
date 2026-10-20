@@ -11,10 +11,10 @@ ns.UI.Main = Main
 Main.TABS = { "opportunities", "history", "professions", "portfolio", "settings" }
 Main.ROW_HEIGHT = 18
 Main.COLUMNS = {
-  { key = "item", width = 0.24 }, { key = "strategy", width = 0.10 }, { key = "qty", width = 0.06, right = true },
-  { key = "cost", width = 0.11, right = true }, { key = "revenue", width = 0.11, right = true },
-  { key = "profit", width = 0.11, right = true }, { key = "roi", width = 0.07, right = true },
-  { key = "risk", width = 0.11 }, { key = "age", width = 0.09, right = true },
+  { key = "item", width = 0.24 }, { key = "strategy", width = 0.19 }, { key = "qty", width = 0.05, right = true },
+  { key = "cost", width = 0.10, right = true }, { key = "revenue", width = 0.10, right = true },
+  { key = "profit", width = 0.10, right = true }, { key = "roi", width = 0.06, right = true },
+  { key = "risk", width = 0.11 }, { key = "age", width = 0.05, right = true },
 }
 
 local function L(key) return ns.L[key] or key end
@@ -22,16 +22,13 @@ local function L(key) return ns.L[key] or key end
 -- Text of one cell for an opportunity.
 function Main.Cell(opportunity, key, now)
   if key == "item" then return opportunity.name or opportunity.itemKey end
-  if key == "strategy" then return L("STRAT_" .. opportunity.strategy) end
+  if key == "strategy" then return L("ACTION_" .. opportunity.strategy) end
   if key == "qty" then return tostring(opportunity.quantity) end
   if key == "cost" then return Money.Format(opportunity.cost) end
   if key == "revenue" then return Money.Format(opportunity.revenuePrudent) end
-  if key == "profit" then return Money.Format(opportunity.profit) end
+  if key == "profit" then return "+" .. Money.Format(opportunity.profit) end
   if key == "roi" then return opportunity.roi and string.format("%.0f%%", opportunity.roi * 100) or "?" end
-  if key == "risk" then
-    local c = opportunity.confidence
-    return L("CLASS_" .. opportunity.class) .. " " .. (c and c.score or "?")
-  end
+  if key == "risk" then return L("CLASS_" .. opportunity.class) end
   if key == "age" then
     local seen = opportunity.provenance and opportunity.provenance.seen
     if not seen or not now then return "?" end
@@ -63,22 +60,65 @@ function Main.EmptyReason(app, results)
   return L("EMPTY_NO_DEALS")
 end
 
+-- "3 min", "2 h".
+function Main.Age(seconds)
+  if not seconds then return "?" end
+  local minutes = math.floor(seconds / 60)
+  if minutes < 60 then return minutes .. " min" end
+  return math.floor(minutes / 60) .. " h"
+end
+
+-- One plain line: what the scanner is doing or when the data was read.
+-- Technical details (coverage, denominators) live in the History tab.
 function Main.StatusLine(app, results)
-  local parts = {}
-  if results and results.demo then parts[#parts + 1] = W.Color(L("DEMO_BANNER"), W.WARN) end
+  if results and results.demo then return W.Color(L("DEMO_BANNER"), W.WARN) end
+  if Main.progress then return Main.ProgressText(Main.progress) end
   local scanner = app and app.scanner
-  if Main.progress then
-    parts[#parts + 1] = Main.ProgressText(Main.progress)
-  elseif scanner then
-    parts[#parts + 1] = L("SCAN_STATE") .. " " .. L("STATE_" .. scanner.state)
-    if scanner.reason then parts[#parts + 1] = "(" .. (ns.L["REASON_" .. scanner.reason] or scanner.reason) .. ")" end
-  end
-  if results then
+  local parts = {}
+  if results and results.snapshot and results.snapshot.finished and app and app.clock then
     local c = results.counts
-    parts[#parts + 1] = string.format(L("COUNTS"), c.opportunities, c.candidates, c.itemKeys, c.listings, c.units)
-    parts[#parts + 1] = L("COVERAGE") .. " " .. L("COVERAGE_" .. tostring(results.coverage))
+    parts[#parts + 1] = string.format(L("STATUS_LAST"), Main.Age(app.clock() - results.snapshot.finished), c.listings,
+      c.itemKeys)
+  else
+    parts[#parts + 1] = L("STATUS_NEVER")
   end
-  return table.concat(parts, "  ")
+  if scanner and (scanner.state == "FAILED" or scanner.state == "CANCELLED") and scanner.reason then
+    parts[#parts + 1] = L("STATE_" .. scanner.state) .. ": " .. (ns.L["REASON_" .. scanner.reason] or scanner.reason)
+  end
+  return table.concat(parts, "  ·  ")
+end
+
+-- What to do next, in one sentence.
+function Main.Hint(app, results, visible)
+  if results and results.demo then return L("HINT_DEMO") end
+  if not results or results.counts.itemKeys == 0 then return L("HINT_SCAN") end
+  if #visible == 0 then return L("HINT_NONE") end
+  if app and app.store and app.store:Settings().assistedBuy then return L("HINT_CLICK_BUY") end
+  return L("HINT_CLICK")
+end
+
+-- Short, plain footer about what is hidden and why.
+function Main.FooterText(results)
+  local parts = {}
+  local excluded = results and results.excluded or {}
+  if (excluded.below_threshold or 0) > 0 then
+    parts[#parts + 1] = string.format(L("FOOTER_SMALL"), excluded.below_threshold)
+  end
+  if (excluded.insufficient_history or 0) > 0 then
+    parts[#parts + 1] = string.format(L("FOOTER_HISTORY"), excluded.insufficient_history)
+  end
+  return table.concat(parts, "  ·  ")
+end
+
+-- Lines of the row tooltip.
+function Main.RowTooltip(o)
+  local lines = { o.name or o.itemKey }
+  local key = o.strategy == "vendor" and "TIP_ROW_VENDOR" or "TIP_ROW_RESALE"
+  lines[#lines + 1] = string.format(L(key), o.quantity, Money.Format(o.cost), Money.Format(o.revenuePrudent))
+  lines[#lines + 1] = string.format(L("TIP_ROW_GAIN"), Money.Format(o.profit))
+  lines[#lines + 1] = L("DETAIL_CLASS_" .. o.class)
+  lines[#lines + 1] = L("TIP_ROW_CLICK")
+  return lines
 end
 
 -- Progress of the running scan pipeline: { phase, done?, total? } or nil.
@@ -166,11 +206,9 @@ function Main.Banner(results, money)
   local suffix = money and string.format(L("BANNER_MONEY"), Money.Format(money)) or ""
   local confirmed, prudent = totals.vendor_confirmed, totals.prudent
   if confirmed then
-    return string.format(L("BANNER_VERIFIED"), Money.Format(confirmed.profit), confirmed.n, confirmed.affordable) .. suffix,
-      W.EMERALD
+    return string.format(L("BANNER_VERIFIED"), Money.Format(confirmed.profit), confirmed.n) .. suffix, W.EMERALD
   elseif prudent then
-    return string.format(L("BANNER_PROBABLE"), Money.Format(prudent.profit), prudent.n, prudent.affordable) .. suffix,
-      W.GOLD
+    return string.format(L("BANNER_PROBABLE"), Money.Format(prudent.profit), prudent.n) .. suffix, W.GOLD
   elseif totals.speculative then
     return L("BANNER_SPECULATIVE") .. suffix, W.MUTED
   end
@@ -208,6 +246,15 @@ local function layoutRows()
       highlight:SetAllPoints()
       highlight:SetColorTexture(1, 0.82, 0.2, 0.12)
       row:SetScript("OnClick", function() if row.opportunity then ns.UI.Details.Show(row.opportunity) end end)
+      row:SetScript("OnEnter", function()
+        if not row.opportunity or type(GameTooltip) ~= "table" then return end
+        GameTooltip:SetOwner(row, "ANCHOR_CURSOR")
+        for index, line in ipairs(Main.RowTooltip(row.opportunity)) do
+          if index == 1 then GameTooltip:SetText(line) else GameTooltip:AddLine(line, 0.9, 0.9, 0.9, true) end
+        end
+        GameTooltip:Show()
+      end)
+      row:SetScript("OnLeave", function() if type(GameTooltip) == "table" then GameTooltip:Hide() end end)
       Main.rows[index] = row
     end
     if row then
@@ -275,7 +322,8 @@ function Main.RefreshTable()
     end
   end
   frame.empty:SetText(#list == 0 and Main.EmptyReason(app, results) or "")
-  frame.denominator:SetText(results and string.format(L("EXCLUDED"), Main.ExcludedText(results)) or "")
+  frame.denominator:SetText(Main.FooterText(results))
+  frame.hint:SetText(Main.Hint(app, results, list))
   Main.UpdateProgress()
 end
 
@@ -315,7 +363,10 @@ local function buildOpportunities(panel)
   frame.banner = W.Text(panel, "GameFontNormalLarge")
   frame.banner:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
   frame.banner:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
-  scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -24)
+  frame.hint = W.Text(panel, "GameFontHighlight")
+  frame.hint:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -22)
+  frame.hint:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -44)
   frame.scanButton = scan
   local cancel = W.Button(panel, L("BTN_CANCEL"), 90, function()
     ns.app.scanner:Cancel("user")
@@ -343,7 +394,7 @@ local function buildOpportunities(panel)
   verified:SetPoint("LEFT", allocated, "RIGHT", 90, 0)
 
   local bar = CreateFrame("StatusBar", nil, panel)
-  bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -52)
+  bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -72)
   bar:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
   bar:SetHeight(14)
   bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -359,7 +410,7 @@ local function buildOpportunities(panel)
   frame.progressBar = bar
 
   local tableFrame = CreateFrame("Frame", nil, panel)
-  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -70)
+  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -90)
   tableFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 18)
   tableFrame:EnableMouseWheel(true)
   tableFrame:SetScript("OnMouseWheel", function(_, delta)

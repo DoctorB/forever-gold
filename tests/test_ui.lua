@@ -28,7 +28,7 @@ T.Case("loads like the client and registers commands and events", function()
   withClient(function(ns, globals, _, _, eventFrame)
     T.Ok(ns.app.loaded)
     T.Eq(type(_G.ForeverGoldDB), "table")
-    T.Eq(_G.ForeverGoldDB.schema, 1)
+    T.Eq(_G.ForeverGoldDB.schema, ns.Data.Migrations.CURRENT)
     T.Eq(globals.SlashCmdList.FOREVERGOLD, ns.UI.Commands.Handle)
     T.Eq(_G.SLASH_FOREVERGOLD1, "/fg")
     T.Ok(eventFrame.events.AUCTION_HOUSE_SHOW)
@@ -96,7 +96,9 @@ T.Case("a scan through the client event frame updates the open window", function
     clock.advance(30)
     local first = ns.UI.Main.rows[1]
     T.Ok(first.opportunity and first.opportunity.strategy == "vendor")
-    T.Ok(ns.UI.Main.frame.status:GetText():find(ns.L.STATE_PARTIAL, 1, true) ~= nil)
+    T.Ok(ns.UI.Main.frame.status:GetText():find("Last scan 0 min ago · 1 auctions read · 1 items", 1, true) ~= nil,
+      ns.UI.Main.frame.status:GetText())
+    T.Eq(ns.UI.Main.frame.hint:GetText(), ns.L.HINT_CLICK)
     T.Eq(ah.spendCalls, 0)
   end)
 end)
@@ -221,10 +223,9 @@ T.Case("banner says clearly whether a real gain is available", function()
     local Main = ns.UI.Main
     local function o(class, profit, capital) return { class = class, profit = profit, capital = capital, lots = { { cost = capital } } } end
     local text = Main.Banner({ list = { o("vendor_confirmed", 300, 700), o("prudent", 50, 100) } }, 9676)
-    T.Ok(text:find("VERIFIED GAIN: +3s 0c from 1 opportunities (1 affordable)", 1, true) ~= nil, text)
-    T.Ok(text:find("your gold: 96s 76c", 1, true) ~= nil, text)
+    T.Eq(text, "Verified gain available: +3s 0c (1 offers)  ·  your gold 96s 76c")
     text = Main.Banner({ list = { o("prudent", 400, 1100) } }, 500)
-    T.Ok(text:find("PROBABLE GAIN: +4s 0c from 1 vendor opportunities (0 affordable)", 1, true) ~= nil, text)
+    T.Eq(text, "Probable gain: +4s 0c (1 offers)  ·  your gold 5s 0c")
     T.Ok(Main.Banner({ list = { o("speculative", 1, 1) } }, nil):find("speculative", 1, true) ~= nil)
     T.Eq(Main.Banner({ list = {} }, nil), ns.L.BANNER_NONE)
   end)
@@ -255,7 +256,8 @@ T.Case("full assisted purchase from the window: plan, quote, click, done", funct
     eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
     clock.advance(60)
     local frame = ns.UI.Main.frame
-    T.Ok(frame.banner:GetText():find("PROBABLE GAIN: +3s 0c", 1, true) ~= nil, frame.banner:GetText())
+    T.Ok(frame.banner:GetText():find("Probable gain: +3s 0c", 1, true) ~= nil, frame.banner:GetText())
+    T.Eq(frame.hint:GetText(), ns.L.HINT_CLICK_BUY)
     ns.UI.Main.rows[1].scripts.OnClick()
     local section = ns.UI.Details.frame.purchase
     T.Ok(section.text:GetText():find("Plan: buy 20 x Linen for 7s 0c", 1, true) ~= nil, section.text:GetText())
@@ -273,5 +275,48 @@ T.Case("full assisted purchase from the window: plan, quote, click, done", funct
     T.Ok(ns.printed[#ns.printed]:find("bought 20 x Linen", 1, true) ~= nil, ns.printed[#ns.printed])
     T.Ok(section.text:GetText():find("Now sell to a merchant", 1, true) ~= nil)
     _G.GetMoney = nil
+  end)
+end)
+
+T.Case("plain-language hint, footer and row tooltip", function()
+  withClient(function(ns)
+    local Main = ns.UI.Main
+    T.Eq(Main.Hint(ns.app, nil, {}), ns.L.HINT_SCAN)
+    local results = { counts = { itemKeys = 5 }, excluded = { below_threshold = 3, insufficient_history = 40 } }
+    T.Eq(Main.Hint(ns.app, results, {}), ns.L.HINT_NONE)
+    T.Eq(Main.FooterText(results), "3 small margins hidden (Settings > vendor minimum gain)  ·  Resale: 40 items need at least 3 days of prices")
+    local lines = Main.RowTooltip({ name = "Linen", strategy = "vendor", quantity = 20, cost = 700, revenuePrudent = 1000,
+      profit = 300, class = "prudent" })
+    T.Eq(lines[2], "Buy 20 for 7s 0c and sell to any merchant for 10s 0c.")
+    T.Eq(lines[3], "Gain: +3s 0c")
+    T.Eq(Main.Cell({ strategy = "vendor" }, "strategy"), ns.L.ACTION_vendor)
+  end)
+end)
+
+T.Case("the purchase panel can enable assisted buying itself", function()
+  withClient(function(ns, _, clock, ah, eventFrame)
+    ns.UI.Commands.Handle("")
+    eventFrame.scripts.OnEvent(eventFrame, "AUCTION_HOUSE_SHOW")
+    ns.UI.Commands.Handle("scan")
+    ah.delivered = true
+    eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(60)
+    ns.UI.Main.rows[1].scripts.OnClick()
+    local section = ns.UI.Details.frame.purchase
+    T.Eq(section.quote:GetText(), ns.L.PB_ENABLE)
+    T.NotOk(ns.app.store:Settings().assistedBuy)
+    section.quote.scripts.OnClick()
+    T.Ok(ns.app.store:Settings().assistedBuy)
+    T.Eq(ah.calls.StartCommoditiesPurchase, nil, "enabling spends nothing and asks nothing")
+  end)
+end)
+
+T.Case("language can be switched to Italian from a command", function()
+  withClient(function(ns)
+    ns.UI.Commands.Handle("lang it")
+    T.Eq(ns.L.TAB_history, "Storico")
+    T.Eq(ns.app.store:Settings().locale, "itIT")
+    ns.UI.Commands.Handle("lang en")
+    T.Eq(ns.L.TAB_history, "History")
   end)
 end)

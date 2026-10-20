@@ -15,7 +15,8 @@ Store.DEFAULT_SETTINGS = {
   maxCategoryBp = 2500, -- at most 25% on one category
   minRoiBp = 1500, -- resale filter: 15% ROI (product choice, configurable)
   minProfit = 1000, -- resale filter: 10 silver net (product choice)
-  minVendorProfit = 1, -- vendor filter in copper
+  minVendorProfit = 25, -- vendor: hide margins below 25 copper (product choice)
+  minVendorRoiBp = 500, -- vendor: hide margins below 5% of the price paid
   feeBp = 500, -- AH sale fee SCENARIO until verified in game
   feeVerified = false,
   bufferBp = 500, -- prudent resale buffer
@@ -25,6 +26,7 @@ Store.DEFAULT_SETTINGS = {
   sessionOnly = false,
   assistedBuy = false, -- experimental: buy from the details window, one click per purchase
   maxPurchase = 5000, -- spending cap per assisted purchase (50 silver)
+  locale = "auto", -- "auto" (client language), "itIT" or "enUS"
 }
 
 Store.RETENTION = {

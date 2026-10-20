@@ -18,6 +18,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
     if ... ~= addonName then return end
     frame:UnregisterEvent("ADDON_LOADED")
     env.ForeverGoldDB = app:Load(env.ForeverGoldDB)
+    ns.ApplyLocale(app.store:Settings().locale)
     local registered, rejected = app.client:RegisterEvents(frame, ns.Compat.ClientAdapter.EVENTS)
     app.events.registered, app.events.rejected = registered, rejected
     ns.UI.Commands.Register(env)

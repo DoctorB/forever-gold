@@ -23,12 +23,15 @@ Settings.FIELDS = {
   { key = "feeBp", label = "SET_FEE", unit = "percent", min = 0, max = 50 },
   { key = "bufferBp", label = "SET_BUFFER", unit = "percent", min = 0, max = 50 },
   { key = "maxPurchase", label = "SET_MAX_PURCHASE", unit = "silver", min = 0, max = 10000000 },
+  { key = "minVendorProfit", label = "SET_MIN_VENDOR_PROFIT", unit = "copper", min = 1, max = 10000000 },
+  { key = "minVendorRoiBp", label = "SET_MIN_VENDOR_ROI", unit = "percent", min = 0, max = 1000 },
 }
 
 local function toDisplay(field, value)
   if value == nil then return "" end
   if field.unit == "gold" then return tostring(value / Money.COPPER_PER_GOLD) end
   if field.unit == "silver" then return tostring(value / Money.COPPER_PER_SILVER) end
+  if field.unit == "copper" then return tostring(value) end
   return tostring(value / 100)
 end
 
@@ -42,6 +45,7 @@ local function fromDisplay(field, text)
   if not number or number ~= number or number < field.min or number > field.max then return nil, false end
   if field.unit == "gold" then return math.floor(number * Money.COPPER_PER_GOLD + 0.5), true end
   if field.unit == "silver" then return math.floor(number * Money.COPPER_PER_SILVER + 0.5), true end
+  if field.unit == "copper" then return math.floor(number + 0.5), true end
   return math.floor(number * 100 + 0.5), true
 end
 
@@ -82,6 +86,13 @@ function Settings.Build(panel)
   y = y - 26
   panel.assisted = W.Check(panel, L("SET_ASSISTED"), function(value) ns.app.store:Settings().assistedBuy = value end)
   panel.assisted:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y)
+  panel.italian = W.Check(panel, L("SET_ITALIAN"), function(value)
+    local code = value and "itIT" or "enUS"
+    ns.app.store:Settings().locale = code
+    ns.ApplyLocale(code)
+    ns.Print(L("LANG_SET"))
+  end)
+  panel.italian:SetPoint("TOPLEFT", panel, "TOPLEFT", 380, y)
   y = y - 30
   local save = W.Button(panel, L("BTN_SAVE"), 110, function()
     local values = {}
@@ -122,4 +133,5 @@ function Settings.Refresh(panel)
   panel.notify:SetChecked(settings.notify and true or false)
   panel.session:SetChecked(settings.sessionOnly and true or false)
   panel.assisted:SetChecked(settings.assistedBuy and true or false)
+  panel.italian:SetChecked(ns.L == ns.Locales.itIT)
 end

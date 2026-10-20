@@ -31,6 +31,13 @@ Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
 - Replica: nessun nuovo tentativo automatico; cooldown misurato (13 min 34 s
   – 16 min) usato per non inviare richieste inutili.
 - "Verificato" richiede buyout e prezzo vendor provati in gioco.
+- Interfaccia in linguaggio semplice: colonne "Cosa fare / Paghi / Ricevi /
+  Guadagno / Affidabilità", una riga di istruzioni che dice cosa fare,
+  barra di stato e footer senza gergo, tooltip sulle righe, pulsante
+  "Attiva" degli acquisti assistiti direttamente nel dettaglio.
+- Varianti dello stesso oggetto unite in una riga vendor; margini vendor
+  sotto 25 rame o sotto il 5% nascosti (configurabili; migrazione schema 2).
+- Lingua selezionabile: `/fg lang it|en|auto` o Impostazioni.
 
 ## [0.1.0-alpha.1] - 2026-10-20
 

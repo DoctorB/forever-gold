@@ -24,6 +24,7 @@ function PurchasePanel.Model(view)
   local model = { quote = false, buy = false, cancel = false, quoteLabel = L("PB_QUOTE") }
   if not view.enabled then
     model.text = L("PB_DISABLED")
+    model.quote, model.quoteLabel, model.enable = true, L("PB_ENABLE"), true
     return model
   end
   if view.demo then
@@ -100,7 +101,7 @@ function PurchasePanel.Build(frame)
   text:SetPoint("RIGHT", section, "RIGHT", 0, 0)
   text:SetHeight(84)
   section.text = text
-  section.quote = W.Button(section, L("PB_QUOTE"), 130, function() ns.app.purchases:Prepare() end)
+  section.quote = W.Button(section, L("PB_QUOTE"), 130, function() PurchasePanel.Primary() end)
   section.quote:SetPoint("BOTTOMLEFT", section, "BOTTOMLEFT", 0, 0)
   section.buy = W.Button(section, L("PB_QUOTE"), 170, function() ns.app.purchases:Confirm() end)
   section.buy:SetPoint("LEFT", section.quote, "RIGHT", 6, 0)
@@ -134,6 +135,20 @@ function PurchasePanel.Update()
   section.buy:SetText(model.buyLabel or L("PB_QUOTE"))
   section.buy:SetEnabled(model.buy)
   section.cancel:SetEnabled(model.cancel)
+end
+
+-- First button: enables assisted purchases when off, otherwise step 1
+-- (quote or locate). Never spends.
+function PurchasePanel.Primary()
+  local app = ns.app
+  local settings = app.store:Settings()
+  if not settings.assistedBuy then
+    settings.assistedBuy = true
+    if ns.UI.Details.current then PurchasePanel.Show(ns.UI.Details.current) end
+    ns.UI.Main.RefreshTable()
+    return
+  end
+  app.purchases:Prepare()
 end
 
 -- A new opportunity in the details window: plan it (spends nothing).

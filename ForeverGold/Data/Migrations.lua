@@ -6,7 +6,7 @@ local _, ns = ...
 local Migrations = {}
 ns.Data.Migrations = Migrations
 
-Migrations.CURRENT = 1
+Migrations.CURRENT = 2
 
 -- steps[n] upgrades a table at version n - 1 to version n.
 Migrations.steps = {
@@ -21,6 +21,10 @@ Migrations.steps = {
     for key in pairs(old) do db[key] = nil end
     if any then db.recovered = { fromVersion = 0, data = old } end
     db.schema = 1
+  end,
+  [2] = function(db)
+    -- 0.1.0-alpha.2 showed vendor margins of 1 copper: raise the old default.
+    if type(db.settings) == "table" and db.settings.minVendorProfit == 1 then db.settings.minVendorProfit = 25 end
   end,
 }
 

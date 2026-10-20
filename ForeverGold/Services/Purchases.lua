@@ -62,6 +62,8 @@ function Purchases.Plan(opportunity, money, cap)
     for _, lot in ipairs(lots) do
       if lot.cost <= budget then
         plan.lot = { quantity = lot.quantity, buyoutTotal = lot.cost }
+        -- Merged variants: the lot's own item key identifies the auction.
+        if lot.listing and lot.listing.itemKey then plan.itemKey = lot.listing.itemKey end
         plan.quantity, plan.expectedTotal = lot.quantity, lot.cost
         break
       end

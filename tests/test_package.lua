@@ -99,6 +99,7 @@ local ALLOWED_GETS = {
   setmetatable = true, pcall = true, error = true, next = true, rawget = true, print = true, unpack = true,
   string = true, table = true, math = true,
   CreateFrame = true, UIParent = true, UISpecialFrames = true, DEFAULT_CHAT_FRAME = true, GetLocale = true,
+  GameTooltip = true,
 }
 
 T.Case("bytecode lint: no global writes, only allowed global reads", function()

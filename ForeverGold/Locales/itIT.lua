@@ -16,8 +16,8 @@ L.DEMO_BANNER = "DATI DEMO - oggetti fittizi"
 L.TAB_opportunities, L.TAB_history, L.TAB_professions = "Opportunità", "Storico", "Professioni"
 L.TAB_portfolio, L.TAB_settings = "Portafoglio", "Impostazioni"
 
-L.COL_item, L.COL_strategy, L.COL_qty, L.COL_cost, L.COL_revenue = "Oggetto", "Strategia", "Qtà", "Costo", "Ricavo prud."
-L.COL_profit, L.COL_roi, L.COL_risk, L.COL_age = "Profitto prud.", "ROI", "Classe/punt.", "Età dati"
+L.COL_item, L.COL_strategy, L.COL_qty, L.COL_cost, L.COL_revenue = "Oggetto", "Cosa fare", "Qtà", "Paghi", "Ricevi"
+L.COL_profit, L.COL_roi, L.COL_risk, L.COL_age = "Guadagno", "%", "Affidabilità", "Età"
 
 L.STRAT_vendor, L.STRAT_resale, L.STRAT_disenchant = "Vendor", "Rivendita AH", "Disenchant"
 L.STRAT_crafting, L.STRAT_conversion = "Crafting", "Conversione"
@@ -168,11 +168,11 @@ L.DIAG_VERIFIED = "Semantiche verificate in gioco: %d"
 L.DIAG_SAVED = "Report salvato in ForeverGoldDB.diagnostics (scritto al /reload o al logout)."
 
 L.FILTER_VERIFIED = "Solo verificati"
-L.BANNER_VERIFIED = "GUADAGNO VERIFICATO: +%s da %d opportunità (%d alla tua portata)"
-L.BANNER_PROBABLE = "GUADAGNO PROBABILE: +%s da %d opportunità vendor (%d alla tua portata) - un acquisto di prova conferma il prezzo vendor"
+L.BANNER_VERIFIED = "Guadagno verificato disponibile: +%s (%d offerte)"
+L.BANNER_PROBABLE = "Guadagno probabile: +%s (%d offerte)"
 L.BANNER_SPECULATIVE = "Ora solo rivendite speculative: nessun guadagno garantito"
 L.BANNER_NONE = "Nessun guadagno disponibile in questo momento"
-L.BANNER_MONEY = "  ·  il tuo oro: %s"
+L.BANNER_MONEY = "  ·  il tuo oro %s"
 L.DETAIL_GAIN = "GUADAGNO PREVISTO: %s"
 L.DETAIL_CLASS_vendor_confirmed = "Verificato: prezzi d'asta e prezzo vendor provati su questo client. Rischio residuo: l'asta può sparire."
 L.DETAIL_CLASS_prudent = "Probabile: i numeri vengono dal client, resta da provare in gioco un significato."
@@ -187,7 +187,7 @@ L.DETAIL_COMMODITY = "Commodity: si può comprare anche in parte, al prezzo unit
 L.SET_MAX_PURCHASE = "Tetto acquisto assistito (argento)"
 L.SET_ASSISTED = "Acquisti assistiti (sperimentale, un clic per acquisto)"
 L.PB_TITLE = "Acquisto assistito"
-L.PB_DISABLED = "Disattivato. Abilitalo in Impostazioni > Acquisti assistiti. Ogni acquisto richiederà comunque il tuo clic."
+L.PB_DISABLED = "Disattivato. Premi Attiva per comprare da qui: ForeverGold non spende mai senza il tuo clic su 2. Compra."
 L.PB_DEMO = "Non disponibile sui dati demo."
 L.PB_AH_CLOSED = "Apri la casa d'aste per comprare."
 L.PB_CANNOT = "Impossibile pianificare l'acquisto:"
@@ -230,16 +230,43 @@ L.VC_MATCH = "Coincide: guadagno realizzato %s."
 L.VC_VERIFIED = "Prezzo vendor ora verificato su questo client."
 L.VC_MISMATCH = "Non coincide esattamente (altre vendite, acquisti o riparazioni nella stessa visita?)."
 
+L.ACTION_vendor = "Compra -> vendi al mercante"
+L.ACTION_resale = "Compra -> rimetti in asta"
+L.STATUS_LAST = "Ultima scansione %s fa · %d aste lette · %d oggetti"
+L.STATUS_NEVER = "Nessuna scansione ancora"
+L.HINT_SCAN = "Apri la casa d'aste e premi Scansiona AH (disponibile circa ogni 15 minuti)."
+L.HINT_DEMO = "Dati demo: premi di nuovo Demo per tornare ai dati reali."
+L.HINT_NONE = "Ora non c'è niente che valga la pena comprare. Riprova dopo la prossima scansione."
+L.HINT_CLICK = "Clicca una riga per vedere come ottenere il guadagno. Passa il mouse su una riga per un riassunto."
+L.HINT_CLICK_BUY = "Clicca una riga, poi premi 1. Preventivo e 2. Compra. Vendi gli oggetti a un mercante per incassare il guadagno."
+L.FOOTER_SMALL = "%d margini piccoli nascosti (Impostazioni > guadagno minimo vendor)"
+L.FOOTER_HISTORY = "Rivendita: %d oggetti hanno bisogno di almeno 3 giorni di prezzi"
+L.TIP_ROW_VENDOR = "Compra %d per %s e vendi a un mercante qualsiasi per %s."
+L.TIP_ROW_RESALE = "Compra %d per %s e rimetti in asta a circa %s (non garantito)."
+L.TIP_ROW_GAIN = "Guadagno: +%s"
+L.TIP_ROW_CLICK = "Clicca per i dettagli e l'acquisto assistito."
+L.SET_MIN_VENDOR_PROFIT = "Vendor: guadagno minimo (rame)"
+L.SET_MIN_VENDOR_ROI = "Vendor: guadagno minimo (% del prezzo)"
+L.SET_ITALIAN = "Interfaccia in italiano"
+L.PB_ENABLE = "Attiva"
+L.LANG_USAGE = "/fg lang it | en | auto"
+L.LANG_SET = "lingua cambiata. Scrivi /reload per aggiornare tutte le scritte."
+
 L.HELP_1 = "/fg - apre o chiude la finestra"
 L.HELP_2 = "/fg scan - scansione AH in sola lettura (AH aperta)"
 L.HELP_3 = "/fg cancel - annulla la scansione"
 L.HELP_4 = "/fg diagnostics - report delle capacità"
 L.HELP_5 = "/fg demo - dati demo etichettati; /fg reset - azzeramento con conferma"
 
--- Locale selection: itIT overrides on top of English.
-local locale = ns.forceLocale
-if not locale and type(GetLocale) == "function" then locale = GetLocale() end
-if locale == "itIT" then
-  setmetatable(L, { __index = ns.Locales.enUS })
-  ns.L = L
+-- Locale selection: itIT overrides on top of English. code: "auto" (client
+-- language), "itIT" or "enUS". Called again by Core/Init with the saved choice.
+setmetatable(L, { __index = ns.Locales.enUS })
+function ns.ApplyLocale(code)
+  if code == nil or code == "auto" then
+    code = ns.forceLocale
+    if not code and type(GetLocale) == "function" then code = GetLocale() end
+  end
+  ns.L = code == "itIT" and ns.Locales.itIT or ns.Locales.enUS
+  return code == "itIT" and "itIT" or "enUS"
 end
+ns.ApplyLocale("auto")

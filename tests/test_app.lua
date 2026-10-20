@@ -226,3 +226,28 @@ T.Case("without the verified buyout meaning a vendor margin is only prudent", fu
   verified.replicateBuyoutIsTotal = true
   if not ok then error(err, 0) end
 end)
+
+T.Case("vendor variants merge into one row; small margins are hidden and counted", function()
+  local rows = {
+    { itemID = 300, count = 1, buyout = 260, suffix = 0, link = "|Hitem:300::::::::20:1486::1:1:11:::::|h[Axe]|h" },
+    { itemID = 300, count = 1, buyout = 260, link = "|Hitem:300::::::::20:1486::1:1:12:::::|h[Axe]|h" },
+    { itemID = 300, count = 1, buyout = 260, link = "|Hitem:300::::::::20:1486::1:1:13:::::|h[Axe]|h" },
+    { itemID = 301, count = 1, buyout = 298 }, -- 2 copper margin: hidden
+  }
+  local items = { [300] = { name = "Axe", sellPrice = 300 }, [301] = { name = "Agate", sellPrice = 300 } }
+  local app, _, clock, ah = Fakes.App({ rows = rows, items = items })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(60)
+  local results = app.opportunities.results
+  T.Eq(#results.list, 1)
+  local o = results.list[1]
+  T.Eq(o.itemID, 300)
+  T.Eq(o.variants, 3)
+  T.Eq(o.quantity, 3)
+  T.Eq(o.profit, 120)
+  T.Eq(#o.lots, 3)
+  T.Eq(results.excluded.below_threshold, 1)
+end)

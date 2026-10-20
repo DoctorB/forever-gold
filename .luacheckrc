@@ -6,7 +6,7 @@ unused_args = false
 
 files["ForeverGold"] = {
   read_globals = {
-    "CreateFrame", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "GetLocale",
+    "CreateFrame", "UIParent", "UISpecialFrames", "DEFAULT_CHAT_FRAME", "GetLocale", "GameTooltip",
   },
 }
 

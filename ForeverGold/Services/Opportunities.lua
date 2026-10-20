@@ -158,6 +158,7 @@ end
 
 function Opportunities:FinishEvaluate(job)
   local results = job.results
+  results.list = Opportunities.MergeVendor(results.list, job.settings, results.excluded)
   Opportunities.Rank(results.list)
   Opportunities.Allocate(results.list, job.settings)
   results.counts.opportunities = #results.list
@@ -214,6 +215,50 @@ function Opportunities:Consume(plan, auction)
     if listing.quantity > 0 then kept[#kept + 1] = listing end
   end
   view.listings = kept
+end
+
+-- One vendor row per item: variants of the same item (bonus IDs) share the
+-- merchant price, so their lots are merged; then the vendor thresholds
+-- apply to the merged totals. Each lot keeps its own listing and item key.
+function Opportunities.MergeVendor(list, settings, excluded)
+  local out, byItem = {}, {}
+  for _, o in ipairs(list) do
+    local merged = o.strategy == "vendor" and o.itemID and byItem[o.itemID]
+    if merged then
+      for _, lot in ipairs(o.lots) do merged.lots[#merged.lots + 1] = lot end
+      merged.quantity = merged.quantity + o.quantity
+      merged.cost = merged.cost + o.cost
+      merged.capital = merged.capital + o.capital
+      merged.revenuePrudent = merged.revenuePrudent + o.revenuePrudent
+      merged.revenueBase = merged.revenueBase + o.revenueBase
+      merged.profit = merged.profit + o.profit
+      merged.variants = merged.variants + 1
+      merged.formula.units, merged.formula.B = merged.quantity, merged.cost
+    else
+      if o.strategy == "vendor" and o.itemID then
+        local lots = {}
+        for index, lot in ipairs(o.lots) do lots[index] = lot end
+        o.lots, o.variants = lots, 1
+        byItem[o.itemID] = o
+      end
+      out[#out + 1] = o
+    end
+  end
+  local kept = {}
+  local minProfit, minRoiBp = settings.minVendorProfit or 1, settings.minVendorRoiBp or 0
+  for _, o in ipairs(out) do
+    if o.strategy == "vendor" then
+      o.roi = o.cost > 0 and o.profit / o.cost or nil
+      if o.profit < minProfit or (o.roi or 0) * Money.BP < minRoiBp then
+        excluded.below_threshold = (excluded.below_threshold or 0) + 1
+      else
+        kept[#kept + 1] = o
+      end
+    else
+      kept[#kept + 1] = o
+    end
+  end
+  return kept
 end
 
 -- Class first (confirmed vendor, prudent, speculative), then prudent profit.
