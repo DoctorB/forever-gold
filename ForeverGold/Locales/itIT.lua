@@ -252,6 +252,11 @@ L.PB_ENABLE = "Attiva"
 L.LANG_USAGE = "/fg lang it | en | auto"
 L.LANG_SET = "lingua cambiata. Scrivi /reload per aggiornare tutte le scritte."
 
+L.BTN_SCAN_WAIT = "Scansiona (tra %s)"
+L.STATUS_OLD = "i prezzi potrebbero essere cambiati: il preventivo li ricontrolla prima di comprare"
+L.HINT_WAIT = "Prossima scansione possibile tra %s. Intanto gli oggetti che cerchi nella finestra AH vengono valutati."
+L.HINT_NONE_WAIT = "Niente da comprare nell'ultima scansione. Prossima scansione possibile tra %s."
+
 L.HELP_1 = "/fg - apre o chiude la finestra"
 L.HELP_2 = "/fg scan - scansione AH in sola lettura (AH aperta)"
 L.HELP_3 = "/fg cancel - annulla la scansione"

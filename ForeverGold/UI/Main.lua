@@ -68,6 +68,12 @@ function Main.Age(seconds)
   return math.floor(minutes / 60) .. " h"
 end
 
+-- Countdown text: "9 min", "40 s".
+function Main.Wait(seconds)
+  if seconds >= 60 then return math.ceil(seconds / 60) .. " min" end
+  return math.ceil(seconds) .. " s"
+end
+
 -- One plain line: what the scanner is doing or when the data was read.
 -- Technical details (coverage, denominators) live in the History tab.
 function Main.StatusLine(app, results)
@@ -77,8 +83,9 @@ function Main.StatusLine(app, results)
   local parts = {}
   if results and results.snapshot and results.snapshot.finished and app and app.clock then
     local c = results.counts
-    parts[#parts + 1] = string.format(L("STATUS_LAST"), Main.Age(app.clock() - results.snapshot.finished), c.listings,
-      c.itemKeys)
+    local age = app.clock() - results.snapshot.finished
+    parts[#parts + 1] = string.format(L("STATUS_LAST"), Main.Age(age), c.listings, c.itemKeys)
+    if age > 600 then parts[#parts + 1] = L("STATUS_OLD") end
   else
     parts[#parts + 1] = L("STATUS_NEVER")
   end
@@ -91,8 +98,15 @@ end
 -- What to do next, in one sentence.
 function Main.Hint(app, results, visible)
   if results and results.demo then return L("HINT_DEMO") end
-  if not results or results.counts.itemKeys == 0 then return L("HINT_SCAN") end
-  if #visible == 0 then return L("HINT_NONE") end
+  local wait = app and app.scanner and app.scanner:Cooldown().remaining or 0
+  if not results or results.counts.itemKeys == 0 then
+    if wait > 0 then return string.format(L("HINT_WAIT"), Main.Wait(wait)) end
+    return L("HINT_SCAN")
+  end
+  if #visible == 0 then
+    if wait > 0 then return string.format(L("HINT_NONE_WAIT"), Main.Wait(wait)) end
+    return L("HINT_NONE")
+  end
   if app and app.store and app.store:Settings().assistedBuy then return L("HINT_CLICK_BUY") end
   return L("HINT_CLICK")
 end
@@ -169,8 +183,15 @@ function Main.UpdateProgress()
   else
     frame.progressBar:Hide()
   end
-  frame.scanButton:SetEnabled(not active)
-  frame.scanButton:SetText(active and L("BTN_SCANNING") or L("BTN_SCAN"))
+  local wait = (not active and app and app.scanner) and app.scanner:Cooldown().remaining or 0
+  frame.scanButton:SetEnabled(not active and wait <= 0)
+  if active then
+    frame.scanButton:SetText(L("BTN_SCANNING"))
+  elseif wait > 0 then
+    frame.scanButton:SetText(string.format(L("BTN_SCAN_WAIT"), Main.Wait(wait)))
+  else
+    frame.scanButton:SetText(L("BTN_SCAN"))
+  end
   frame.status:SetText(Main.StatusLine(app, Main.Results()))
 end
 
@@ -499,6 +520,15 @@ function Main.Ensure()
   version:SetText(L("FOOTER"))
 
   frame:SetScript("OnShow", function() Main.SelectTab(Main.tab) end)
+  -- Once a second while open: countdown on the scan button, data age.
+  local elapsedSince = 0
+  frame:SetScript("OnUpdate", function(_, elapsed)
+    elapsedSince = elapsedSince + (elapsed or 0)
+    if elapsedSince >= 1 then
+      elapsedSince = 0
+      Main.UpdateProgress()
+    end
+  end)
   layoutRows()
   return frame
 end

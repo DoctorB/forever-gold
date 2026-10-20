@@ -251,3 +251,23 @@ T.Case("vendor variants merge into one row; small margins are hidden and counted
   T.Eq(#o.lots, 3)
   T.Eq(results.excluded.below_threshold, 1)
 end)
+
+T.Case("opportunities survive /reload while the replicate cools down", function()
+  local app, _, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(60)
+  T.Eq(#app.opportunities.results.list, 1)
+  local saved = app.store.db
+  T.Ok(saved.lastView and #saved.lastView.listings >= 1)
+  -- /reload: a new App reads the same SavedVariables.
+  local again = Fakes.App({ saved = saved, items = ITEMS, clock = clock })
+  clock.advance(5)
+  local results = again.opportunities.results
+  T.Ok(results and #results.list == 1, "restored without scanning")
+  T.Eq(results.list[1].profit, 300)
+  T.Ok(results.snapshot.restored)
+  T.Eq(again.scanner:Cooldown().remaining > 0, true, "cooldown remembered")
+end)

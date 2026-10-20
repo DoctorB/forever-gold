@@ -70,7 +70,51 @@ function App:Load(saved)
   self.ah.callbacks.onPurchase = function(event, ...) self.purchases:OnEvent(event, ...) end
   self:Subscribe()
   self.loaded = true
+  self:RestoreView()
   return self.store:Persisted(saved)
+end
+
+-- Listing fields kept across /reload (plain data only).
+local VIEW_FIELDS = { "marketKey", "itemKey", "quantity", "buyoutTotal", "unitPrice", "divisible", "auctionID", "source",
+  "scanId", "complete", "buyable", "own", "seen", "id" }
+
+-- Saves the opportunities and the auctions behind them, so the list
+-- survives /reload and relog while the replicate is cooling down.
+function App:SaveView()
+  local results = self.opportunities.results
+  if not results or results.demo or not results.snapshot then return end
+  local keys = {}
+  for _, o in ipairs(results.list) do
+    keys[o.itemKey] = true
+    for _, lot in ipairs(o.lots or {}) do
+      if lot.listing and lot.listing.itemKey then keys[lot.listing.itemKey] = true end
+    end
+  end
+  local listings = {}
+  for itemKey in pairs(keys) do
+    local view = self.opportunities.latest[itemKey]
+    for _, listing in ipairs(view and view.listings or {}) do
+      local copy = {}
+      for _, field in ipairs(VIEW_FIELDS) do copy[field] = listing[field] end
+      listings[#listings + 1] = copy
+    end
+  end
+  local s = results.snapshot
+  self.store.db.lastView = {
+    snapshot = { id = s.id, marketKey = s.marketKey, mode = s.mode, scope = s.scope, coverage = s.coverage,
+      started = s.started, finished = s.finished, counts = s.counts },
+    listings = listings,
+  }
+end
+
+function App:RestoreView()
+  local saved = self.store.db.lastView
+  if type(saved) ~= "table" or type(saved.snapshot) ~= "table" or type(saved.listings) ~= "table" then return false end
+  local snapshot = ns.CopyTable(saved.snapshot)
+  snapshot.restored = true
+  self.opportunities:Ingest(snapshot, ns.CopyTable(saved.listings))
+  self:EvaluateChunked(nil, "restored")
+  return true
 end
 
 -- Persisted scanner measurements (replicate cooldown bounds), seeded with
@@ -154,6 +198,7 @@ function App:EvaluateChunked(after, mode)
     if not done then return end
     self.processing = false
     local results = opportunities:FinishEvaluate(job)
+    self:SaveView()
     self:Progress("done", total, total, mode)
     if after then after(results) end
   end)

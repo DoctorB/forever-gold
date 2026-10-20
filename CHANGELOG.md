@@ -38,6 +38,8 @@ Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
 - Varianti dello stesso oggetto unite in una riga vendor; margini vendor
   sotto 25 rame o sotto il 5% nascosti (configurabili; migrazione schema 2).
 - Lingua selezionabile: `/fg lang it|en|auto` o Impostazioni.
+- L'ultima lista di opportunità sopravvive a `/reload` e relog; conto alla
+  rovescia del cooldown sul pulsante di scansione e nella riga di istruzioni.
 
 ## [0.1.0-alpha.1] - 2026-10-20
 

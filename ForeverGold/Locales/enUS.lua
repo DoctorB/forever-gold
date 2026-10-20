@@ -254,6 +254,11 @@ L.PB_ENABLE = "Enable"
 L.LANG_USAGE = "/fg lang it | en | auto"
 L.LANG_SET = "language changed. Type /reload to update every label."
 
+L.BTN_SCAN_WAIT = "Scan (in %s)"
+L.STATUS_OLD = "prices may have changed: the quote checks them before buying"
+L.HINT_WAIT = "Next scan possible in %s. Meanwhile, items you search in the AH window are evaluated."
+L.HINT_NONE_WAIT = "Nothing worth buying in the last scan. Next scan possible in %s."
+
 L.HELP_1 = "/fg - open or close the window"
 L.HELP_2 = "/fg scan - read-only AH scan (AH must be open)"
 L.HELP_3 = "/fg cancel - cancel the scan"
