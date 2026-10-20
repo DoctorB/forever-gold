@@ -22,7 +22,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
     app.events.registered, app.events.rejected = registered, rejected
     ns.UI.Commands.Register(env)
     ns.UI.Tooltips.Install(env)
-    app.bus:Subscribe("scanner.state", function() ns.UI.Main.RefreshTable() end)
+    ns.UI.Feedback.Attach(app)
     app.bus:Subscribe("opportunities.updated", function() ns.UI.Main.RefreshTable() end)
     return
   end

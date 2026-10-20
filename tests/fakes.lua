@@ -161,6 +161,8 @@ function Fakes.Frame(kind, name)
   function methods.SetChecked(self, value) self.checked = value end
   function methods.GetChecked(self) return self.checked end
   function methods.SetEnabled(self, value) self.enabled = value end
+  function methods.SetValue(self, value) self.value = value end
+  function methods.GetValue(self) return self.value end
   function methods.SetSize(self, w, h) self.width, self.height = w, h end
   function methods.SetWidth(self, w) self.width = w end
   function methods.SetHeight(self, h) self.height = h end

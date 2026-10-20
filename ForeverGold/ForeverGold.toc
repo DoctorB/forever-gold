@@ -46,5 +46,6 @@ UI\Details.lua
 UI\Settings.lua
 UI\Panels.lua
 UI\Tooltips.lua
+UI\Feedback.lua
 UI\Commands.lua
 Core\Init.lua

@@ -82,12 +82,24 @@ end
 
 -- Snapshot pipeline: history, then evaluation, both spread over frames
 -- within the configured budget. A newer snapshot restarts the pipeline.
+-- Bus: "pipeline.progress"(phase, done, total, mode), phase history | evaluate | done.
+local PROGRESS_EVERY = 100
+
+function App:Progress(phase, done, total, mode)
+  self.bus:Publish("pipeline.progress", phase, done, total, mode)
+end
+
 function App:Process(snapshot, listings)
   local work, budget = self.work, self.store:Settings().frameBudgetMs
   work:Invalidate()
   self.processing = true
   local job = self.history:BeginRecord(snapshot, listings)
-  work:Chunk(1, #job.order, budget, function(index) ns.Data.History.RecordStep(job, index) end, function(done)
+  local total = #job.order
+  self:Progress("history", 0, total, snapshot.mode)
+  work:Chunk(1, total, budget, function(index)
+    ns.Data.History.RecordStep(job, index)
+    if index % PROGRESS_EVERY == 0 then self:Progress("history", index, total, snapshot.mode) end
+  end, function(done)
     if not done then return end
     ns.Data.History.FinishRecord(job)
     self.opportunities:Ingest(snapshot, listings)
@@ -95,21 +107,25 @@ function App:Process(snapshot, listings)
       self.opportunities:NotifyIfDue(function(good, counts)
         ns.Print(string.format(ns.L["NOTIFY_FOUND"], good, counts.itemKeys))
       end)
-    end)
+    end, snapshot.mode)
   end)
 end
 
-function App:EvaluateChunked(after)
+function App:EvaluateChunked(after, mode)
   local work, opportunities = self.work, self.opportunities
   self.processing = true
   local job = opportunities:BeginEvaluate()
-  work:Chunk(1, #job.keys, self.store:Settings().frameBudgetMs, function(index)
+  local total = #job.keys
+  self:Progress("evaluate", 0, total, mode)
+  work:Chunk(1, total, self.store:Settings().frameBudgetMs, function(index)
     opportunities:EvaluateStep(job, index)
+    if index % PROGRESS_EVERY == 0 then self:Progress("evaluate", index, total, mode) end
   end, function(done)
     if not done then return end
     self.processing = false
-    opportunities:FinishEvaluate(job)
-    if after then after() end
+    local results = opportunities:FinishEvaluate(job)
+    self:Progress("done", total, total, mode)
+    if after then after(results) end
   end)
 end
 

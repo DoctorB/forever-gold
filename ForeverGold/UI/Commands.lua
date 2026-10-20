@@ -18,11 +18,8 @@ function Commands.Handle(input)
     ns.UI.Main.Toggle()
   elseif command == "scan" then
     local ok, reason = app.scanner:Start({ mode = "replicate" })
-    if ok then
-      ns.Print(L("SCAN_STARTED"))
-    else
-      ns.Print(L("SCAN_REFUSED") .. " " .. (ns.L["REASON_" .. reason] or reason))
-    end
+    -- Progress and outcome are reported by UI/Feedback.
+    if not ok then ns.Print(L("SCAN_REFUSED") .. " " .. (ns.L["REASON_" .. reason] or reason)) end
   elseif command == "cancel" then
     app.scanner:Cancel("user")
     ns.Print(L("SCAN_CANCELLED"))

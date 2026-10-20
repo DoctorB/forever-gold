@@ -53,6 +53,7 @@ T.Case("dynamic keys used by the UI exist", function()
     QUOTE_ = { "valid", "changed", "expired" },
     TAB_ = ns.UI.Main.TABS,
     LABEL_ = { "high", "medium", "low" },
+    PHASE_ = { "waiting", "receiving", "read", "recheck", "history", "evaluate" },
   }
   for prefix, keys in pairs(groups) do
     for _, key in ipairs(keys) do T.Ok(en[prefix .. key], prefix .. key) end

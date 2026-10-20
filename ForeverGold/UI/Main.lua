@@ -65,7 +65,9 @@ function Main.StatusLine(app, results)
   local parts = {}
   if results and results.demo then parts[#parts + 1] = W.Color(L("DEMO_BANNER"), W.WARN) end
   local scanner = app and app.scanner
-  if scanner then
+  if Main.progress then
+    parts[#parts + 1] = Main.ProgressText(Main.progress)
+  elseif scanner then
     parts[#parts + 1] = L("SCAN_STATE") .. " " .. L("STATE_" .. scanner.state)
     if scanner.reason then parts[#parts + 1] = "(" .. (ns.L["REASON_" .. scanner.reason] or scanner.reason) .. ")" end
   end
@@ -75,6 +77,56 @@ function Main.StatusLine(app, results)
     parts[#parts + 1] = L("COVERAGE") .. " " .. L("COVERAGE_" .. tostring(results.coverage))
   end
   return table.concat(parts, "  ")
+end
+
+-- Progress of the running scan pipeline: { phase, done?, total? } or nil.
+-- Phases: waiting, receiving, read, recheck, history, evaluate.
+function Main.ProgressText(progress)
+  if not progress then return nil end
+  local label = L("PHASE_" .. progress.phase)
+  if progress.total and progress.total > 0 then
+    if progress.phase == "recheck" then
+      return string.format("%s %d/%d", label, progress.done or 0, progress.total)
+    end
+    return string.format("%s %d/%d (%d%%)", label, progress.done or 0, progress.total,
+      math.floor((progress.done or 0) * 100 / progress.total))
+  end
+  return label .. "..."
+end
+
+-- Fraction for the progress bar across the whole pipeline: reading counts
+-- for the first 60%, history 20%, analysis 20%.
+function Main.ProgressFraction(progress)
+  if not progress then return 0 end
+  local share = { waiting = { 0, 0 }, receiving = { 0.02, 0 }, read = { 0.02, 0.58 }, recheck = { 0.6, 0 },
+    history = { 0.6, 0.2 }, evaluate = { 0.8, 0.2 } }
+  local s = share[progress.phase] or { 0, 0 }
+  local part = 0
+  if progress.total and progress.total > 0 then part = (progress.done or 0) / progress.total end
+  return s[1] + s[2] * part
+end
+
+function Main.SetProgress(progress)
+  Main.progress = progress
+  Main.UpdateProgress()
+end
+
+function Main.UpdateProgress()
+  local frame = Main.frame
+  if not frame or not frame:IsShown() or not frame.progressBar then return end
+  local progress = Main.progress
+  local app = ns.app
+  local active = progress ~= nil or (app and app.scanner and app.scanner:IsActive())
+  if active then
+    frame.progressBar:SetValue(Main.ProgressFraction(progress))
+    frame.progressText:SetText(Main.ProgressText(progress) or L("PHASE_waiting") .. "...")
+    frame.progressBar:Show()
+  else
+    frame.progressBar:Hide()
+  end
+  frame.scanButton:SetEnabled(not active)
+  frame.scanButton:SetText(active and L("BTN_SCANNING") or L("BTN_SCAN"))
+  frame.status:SetText(Main.StatusLine(app, Main.Results()))
 end
 
 function Main.Results()
@@ -165,6 +217,7 @@ function Main.RefreshTable()
   end
   frame.empty:SetText(#list == 0 and Main.EmptyReason(app, results) or "")
   frame.denominator:SetText(results and string.format(L("EXCLUDED"), Main.ExcludedText(results)) or "")
+  Main.UpdateProgress()
 end
 
 function Main.ExcludedText(results)
@@ -203,6 +256,7 @@ local function buildOpportunities(panel)
     Main.RefreshTable()
   end)
   scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  frame.scanButton = scan
   local cancel = W.Button(panel, L("BTN_CANCEL"), 90, function()
     ns.app.scanner:Cancel("user")
     Main.RefreshTable()
@@ -226,8 +280,24 @@ local function buildOpportunities(panel)
   local allocated = W.Check(panel, L("FILTER_BUDGET"), function(value) Main.filters.allocated = value Main.RefreshTable() end)
   allocated:SetPoint("LEFT", resale, "RIGHT", 80, 0)
 
+  local bar = CreateFrame("StatusBar", nil, panel)
+  bar:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -28)
+  bar:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  bar:SetHeight(14)
+  bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+  bar:SetStatusBarColor(W.GOLD[1], W.GOLD[2], W.GOLD[3])
+  bar:SetMinMaxValues(0, 1)
+  bar:SetValue(0)
+  local back = bar:CreateTexture(nil, "BACKGROUND")
+  back:SetAllPoints()
+  back:SetColorTexture(0, 0, 0, 0.5)
+  frame.progressText = W.Text(bar, "GameFontHighlightSmall", "CENTER")
+  frame.progressText:SetPoint("CENTER", bar, "CENTER", 0, 0)
+  bar:Hide()
+  frame.progressBar = bar
+
   local tableFrame = CreateFrame("Frame", nil, panel)
-  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -30)
+  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -46)
   tableFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 18)
   tableFrame:EnableMouseWheel(true)
   tableFrame:SetScript("OnMouseWheel", function(_, delta)

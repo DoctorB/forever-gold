@@ -10,6 +10,7 @@
 -- compares item keys and state instead. Nothing here can spend money.
 --
 -- Bus events: "scanner.state"(state, reason, snapshot)
+--             "scanner.progress"(phase, done, total, snapshot)  phase: read | recheck
 --             "scanner.snapshot"(snapshot, listings)
 --             "quotes.invalidate"(reason)
 local _, ns = ...
@@ -33,6 +34,7 @@ Scanner.DEFAULTS = {
   searchTimeout = 10,
   observeDedupe = 60, -- identical observation of one item ignored this long
   budgetMs = 2,
+  progressEvery = 250, -- rows between progress events
 }
 
 -- deps: { adapter, scheduler, clock, bus, marketKey(), build(), trace?(kind, data) }
@@ -77,6 +79,10 @@ local function newSnapshot(self, mode, scope)
     id = string.format("%d-%d", now, self.sequence), marketKey = self.marketKey(), mode = mode,
     scope = scope, build = self.build and self.build() or nil, started = now,
   })
+end
+
+local function progress(self, phase, done, total)
+  if self.bus then self.bus:Publish("scanner.progress", phase, done, total, self.snapshot) end
 end
 
 local function discard(snapshot, reason)
@@ -249,8 +255,12 @@ local function beginNormalize(self, task)
   snapshot.indexBase, snapshot.counts.rows = base, count
   task.incomplete = {}
   self:Trace("normalize", { rows = count, base = base, updates = task.updates })
+  local read, every = 0, self.opts.progressEvery
+  progress(self, "read", 0, count)
   self.scheduler:Chunk(base, base + count - 1, self.opts.budgetMs, function(index)
     readRow(self, task, index)
+    read = read + 1
+    if read % every == 0 or read == count then progress(self, "read", read, count) end
   end, function(completed)
     if not completed or not current(self, task) then return end
     local pending = task.incomplete
@@ -268,6 +278,7 @@ local function beginNormalize(self, task)
       self.scheduler:After(self.opts.infoWait, function()
         if not current(self, task) then return end
         task.rounds = task.rounds + 1
+        progress(self, "recheck", task.rounds, self.opts.infoRounds)
         task.incomplete = {}
         readIndexes(self, task, rows, function(again)
           if not again or not current(self, task) then return end
