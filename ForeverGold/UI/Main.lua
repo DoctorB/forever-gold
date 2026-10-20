@@ -360,6 +360,14 @@ function Main.ExcludedText(results)
   return #parts > 0 and table.concat(parts, ", ") or "0"
 end
 
+-- Refreshes a side tab if it is the one on screen.
+function Main.RefreshPanel(tab)
+  local frame = Main.frame
+  if frame and frame:IsShown() and Main.tab == tab and ns.UI.Panels[tab] then
+    ns.UI.Panels[tab].Refresh(frame.panels[tab])
+  end
+end
+
 function Main.SelectTab(tab)
   Main.tab = tab
   local frame = Main.frame

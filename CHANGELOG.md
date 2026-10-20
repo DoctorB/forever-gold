@@ -44,6 +44,9 @@ Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
   le opportunità vendor complete risultano "VERIFICATO".
 - Dettaglio più corto; rimossi i pulsanti "Prepara" e "Aggiorna quotazione";
   un solo riepilogo in chat, con il conteggio finale.
+- Scheda Portafoglio: guadagno realizzato, speso e incassato, oggetti ancora
+  da vendere al mercante con il loro valore, esiti incerti, elenco degli
+  acquisti dal più recente.
 
 ## [0.1.0-alpha.1] - 2026-10-20
 

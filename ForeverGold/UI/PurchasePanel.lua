@@ -178,6 +178,7 @@ function PurchasePanel.Attach(app)
         fmt(app.store.db.ledger[current.ledgerIndex].cost)))
       app.opportunities:Consume(plan, current.auction)
       app:EvaluateChunked()
+      ns.UI.Main.RefreshPanel("portfolio")
     elseif current and current.state == "uncertain" then
       ns.Print(L("PB_UNCERTAIN"))
     elseif current and current.state == "rejected" and PurchasePanel.STALE_REASONS[current.reason] then
@@ -195,5 +196,6 @@ function PurchasePanel.Attach(app)
     end
     ns.Print(line)
     app:EvaluateChunked()
+    ns.UI.Main.RefreshPanel("portfolio")
   end)
 end

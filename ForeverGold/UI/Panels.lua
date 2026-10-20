@@ -117,9 +117,48 @@ end
 local Portfolio = {}
 Panels.portfolio = Portfolio
 
+local function signed(copper)
+  if copper > 0 then return W.Color("+" .. Money.Format(copper), W.EMERALD) end
+  if copper < 0 then return W.Color(Money.Format(copper), W.WARN) end
+  return Money.Format(0)
+end
+
 function Portfolio.Summary(app)
   local settings = app.store:Settings()
   local lines = {}
+  local report = ns.Services.Portfolio.Report(app.store.db.ledger)
+  local t = report.totals
+  lines[#lines + 1] = string.format(L("PORT_GAIN"), signed(t.realized))
+  lines[#lines + 1] = string.format(L("PORT_TOTALS"), t.purchases, Money.Format(t.spent), Money.Format(t.revenue))
+  if t.pendingUnits > 0 then
+    lines[#lines + 1] = W.Color(string.format(L("PORT_PENDING"), t.pendingUnits, Money.Format(t.pendingCost),
+      Money.Format(t.pendingExpected), signed(t.pendingExpected - t.pendingCost)), W.GOLD)
+    lines[#lines + 1] = L("PORT_HOWTO_SELL")
+  else
+    lines[#lines + 1] = L("PORT_NONE_PENDING")
+  end
+  if t.uncertain > 0 then lines[#lines + 1] = W.Color(string.format(L("PORT_UNCERTAIN"), t.uncertain), W.WARN) end
+  lines[#lines + 1] = ""
+  if #report.entries == 0 then
+    lines[#lines + 1] = L("PORT_EMPTY")
+  else
+    lines[#lines + 1] = L("PORT_LIST")
+    for index = 1, math.min(#report.entries, 30) do
+      local e = report.entries[index]
+      lines[#lines + 1] = string.format(L("PORT_ENTRY"), app.client:FormatTime(e.t), e.name, e.quantity, Money.Format(e.cost))
+      if e.status == "uncertain" then
+        lines[#lines + 1] = W.Color(L("PORT_ENTRY_UNCERTAIN"), W.WARN)
+      else
+        if e.sold > 0 then
+          lines[#lines + 1] = string.format(L("PORT_ENTRY_SOLD"), e.sold, Money.Format(e.revenue), signed(e.realized))
+        end
+        if e.remaining > 0 then
+          lines[#lines + 1] = string.format(L("PORT_ENTRY_LEFT"), e.remaining, Money.Format(e.pendingExpected))
+        end
+      end
+    end
+  end
+  lines[#lines + 1] = ""
   if Money.IsCopper(settings.budget) then
     lines[#lines + 1] = string.format(L("PORT_BUDGET"), Money.Format(settings.budget), Money.FormatBp(settings.reserveBp),
       Money.FormatBp(settings.maxItemBp), Money.FormatBp(settings.maxCategoryBp))
@@ -137,8 +176,6 @@ function Portfolio.Summary(app)
     end
     lines[#lines + 1] = string.format(L("PORT_ALLOCATED"), allocated, Money.Format(capital))
   end
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = string.format(L("PORT_LEDGER"), #app.store.db.ledger)
   return table.concat(lines, "\n")
 end
 

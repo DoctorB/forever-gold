@@ -314,3 +314,49 @@ T.Case("an offer found gone leaves the list until fresh data arrives", function(
   T.Eq(s.find(201), nil)
   T.Eq(s.app.opportunities.results.excluded.stale, 1)
 end)
+
+T.Case("portfolio: realized gain counts sold units; the rest is inventory", function()
+  local s = setup()
+  local Portfolio = s.ns.Services.Portfolio
+  local ledger = {
+    { kind = "purchase", status = "done", name = "Pyrite", itemID = 1, quantity = 8, cost = 640, sellPrice = 100,
+      remaining = 0, sold = 8, revenue = 800, t = 1 },
+    { kind = "purchase", status = "done", name = "Linen", itemID = 2, quantity = 30, cost = 1100, sellPrice = 50,
+      remaining = 10, sold = 20, revenue = 1000, t = 2 },
+    { kind = "purchase", status = "uncertain", name = "Axe", itemID = 3, quantity = 1, cost = 200, t = 3 },
+  }
+  local report = Portfolio.Report(ledger)
+  local t = report.totals
+  T.Eq(t.purchases, 2)
+  T.Eq(t.spent, 1740)
+  T.Eq(t.revenue, 1800)
+  T.Eq(t.realized, 160 + (1000 - 733))
+  T.Eq(t.pendingUnits, 10)
+  T.Eq(t.pendingCost, 1100 - 733)
+  T.Eq(t.pendingExpected, 500)
+  T.Eq(t.uncertain, 1)
+  T.Eq(report.entries[1].name, "Axe", "newest first")
+end)
+
+T.Case("portfolio tab shows the real gain after a purchase and a merchant visit", function()
+  local s = setup({ bags = {} })
+  s.ns.Core.Capabilities.VERIFIED.sellPrice = false
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  p:Prepare()
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
+  p:Confirm()
+  s.wallet.money = s.wallet.money - 1100
+  s.bags[101] = 30
+  s.app:OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
+  local text = s.ns.UI.Panels.portfolio.Summary(s.app)
+  T.Ok(text:find("Still to sell: 30 items (paid 11s 0c, a merchant pays 15s 0c", 1, true) ~= nil, text)
+  s.app:OnEvent("MERCHANT_SHOW")
+  s.bags[101] = 0
+  s.wallet.money = s.wallet.money + 1500
+  s.app:OnEvent("MERCHANT_CLOSED")
+  text = s.ns.UI.Panels.portfolio.Summary(s.app)
+  T.Ok(text:find("^Realized gain: |c%x+%+4s 0c|r") ~= nil, text)
+  T.Ok(text:find("Nothing left to sell.", 1, true) ~= nil, text)
+  T.Ok(text:find("sold 30 for 15s 0c", 1, true) ~= nil, text)
+end)

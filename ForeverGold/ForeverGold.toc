@@ -42,6 +42,7 @@ Services\Transactions.lua
 Services\Diagnostics.lua
 Services\Purchases.lua
 Services\VendorCheck.lua
+Services\Portfolio.lua
 Core\App.lua
 UI\Widgets.lua
 UI\Main.lua

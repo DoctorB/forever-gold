@@ -148,6 +148,14 @@ function ClientAdapter:RegisterEvents(frame, events)
   return registered, rejected
 end
 
+-- "20/10 14:00" for a timestamp, or "" when the client offers no date().
+function ClientAdapter:FormatTime(t)
+  if type(t) ~= "number" then return "" end
+  local ok, text = self:Call(nil, "date", "%d/%m %H:%M", t)
+  if ok and type(text) == "string" then return text end
+  return ""
+end
+
 -- Player money in copper, or nil.
 function ClientAdapter:Money()
   local ok, money = self:Call(nil, "GetMoney")

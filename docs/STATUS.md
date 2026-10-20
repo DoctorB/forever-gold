@@ -65,7 +65,7 @@ campioni con la finestra AH; misura del cooldown.
 
 ## Prove eseguite (2026-10-20, Windows, Lua 5.1.5)
 
-- `lua5.1 tests/runner.lua` → **137 passed, 0 failed**: casi deterministici
+- `lua5.1 tests/runner.lua` → **139 passed, 0 failed**: casi deterministici
   della §13 (vendor 300, unitario 500, profondità 600, esempio §8 900/11.053,
   prezzo assente, deposito, DE 100/50%, crafting 2 craft/4 output, storico non
   condiviso, ciclo di conversione, import malformato/oversize), proprietà
@@ -81,8 +81,8 @@ campioni con la finestra AH; misura del cooldown.
   chiavi → eseguite a passi con budget 2 ms/frame; storico stimato 11,8 MB
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
-- `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 51 file,
-  SHA-256 `d040be2ccfaaa12a6d5d665c4b1804484cb6dc4e11b8f9834d73a00488269429`.
+- `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 52 file,
+  SHA-256 `e03e036d7d0c97ea5a5dc759d986ff3c92a2a00010eecd4768e7aff147e5cd5c`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.
