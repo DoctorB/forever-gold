@@ -1,0 +1,430 @@
+-- Scanner: read-only AH observation state machine (spec 6).
+--
+--   IDLE -> REQUESTED -> RECEIVING -> NORMALIZING -> COMPLETE
+--                     \-> THROTTLED -> REQUESTED
+--                     \-> FAILED / CANCELLED / PARTIAL
+--
+-- One AH task in flight. Every task carries a generation; closing the AH or
+-- cancelling invalidates it, so late timers and events from an old task are
+-- ignored. Events carry no request id: the scanner serializes work and
+-- compares item keys and state instead. Nothing here can spend money.
+--
+-- Bus events: "scanner.state"(state, reason, snapshot)
+--             "scanner.snapshot"(snapshot, listings)
+--             "quotes.invalidate"(reason)
+local _, ns = ...
+
+local Schema = ns.Data.Schema
+local Capabilities = ns.Core.Capabilities
+local Scanner = {}
+ns.Services.Scanner = Scanner
+
+Scanner.ACTIVE = { REQUESTED = true, RECEIVING = true, NORMALIZING = true, THROTTLED = true }
+Scanner.DEFAULTS = {
+  timeout = 60, -- seconds without any replicate event before a retry
+  settle = 2, -- seconds without new update events before reading
+  maxRetries = 2,
+  backoffBase = 5,
+  backoffCap = 60,
+  infoWait = 3, -- one bounded wait for rows still missing item data
+  searchTimeout = 10,
+  observeDedupe = 60, -- identical observation of one item ignored this long
+  budgetMs = 2,
+}
+
+-- deps: { adapter, scheduler, clock, bus, marketKey(), build(), trace?(kind, data) }
+function Scanner.New(deps, opts)
+  local self = setmetatable({}, { __index = Scanner })
+  self.adapter, self.scheduler, self.clock, self.bus = deps.adapter, deps.scheduler, deps.clock, deps.bus
+  self.marketKey, self.build, self.trace = deps.marketKey, deps.build, deps.trace
+  self.opts = {}
+  for key, value in pairs(Scanner.DEFAULTS) do self.opts[key] = value end
+  for key, value in pairs(opts or {}) do self.opts[key] = value end
+  self.state, self.sequence, self.lastObserved = "IDLE", 0, {}
+  self.adapter:SetCallbacks({
+    onShow = function() self:Trace("ah_show") end,
+    onClose = function() self:OnClose() end,
+    onReplicateUpdate = function() self:OnReplicateUpdate() end,
+    onThrottleReady = function() self:OnThrottleReady() end,
+    onThrottleDropped = function() self:Trace("throttle_dropped", { state = self.state }) end,
+    onCommodityResults = function(itemID) self:OnCommodityResults(itemID) end,
+    onItemResults = function(itemKey) self:OnItemResults(itemKey) end,
+  })
+  return self
+end
+
+function Scanner:Trace(kind, data)
+  if self.trace then self.trace(kind, data) end
+end
+
+local function setState(self, state, reason)
+  self.state, self.reason = state, reason
+  self:Trace("state", { state = state, reason = reason })
+  if self.bus then self.bus:Publish("scanner.state", state, reason, self.snapshot) end
+end
+
+function Scanner:IsActive()
+  return Scanner.ACTIVE[self.state] == true
+end
+
+local function newSnapshot(self, mode, scope)
+  self.sequence = self.sequence + 1
+  local now = self.clock()
+  return Schema.NewSnapshot({
+    id = string.format("%d-%d", now, self.sequence), marketKey = self.marketKey(), mode = mode,
+    scope = scope, build = self.build and self.build() or nil, started = now,
+  })
+end
+
+local function discard(snapshot, reason)
+  snapshot.counts.discarded = snapshot.counts.discarded + 1
+  snapshot.discardReasons[reason] = (snapshot.discardReasons[reason] or 0) + 1
+end
+
+local function current(self, task)
+  return self.task == task and task ~= nil
+end
+
+local function finish(self, task, state, reason)
+  if not current(self, task) then return end
+  local snapshot = self.snapshot
+  snapshot.finished = self.clock()
+  snapshot.status = state == "COMPLETE" and "complete" or (state == "PARTIAL" and "partial" or "failed")
+  local listings = {}
+  if task.byIndex then
+    local indexes = {}
+    for index in pairs(task.byIndex) do indexes[#indexes + 1] = index end
+    table.sort(indexes)
+    local keys = {}
+    for _, index in ipairs(indexes) do
+      local listing = task.byIndex[index]
+      listings[#listings + 1] = listing
+      if not keys[listing.itemKey] then
+        keys[listing.itemKey] = true
+        snapshot.counts.itemKeys = snapshot.counts.itemKeys + 1
+      end
+      snapshot.counts.units = snapshot.counts.units + listing.quantity
+      if not listing.complete then snapshot.counts.incomplete = snapshot.counts.incomplete + 1 end
+    end
+    snapshot.counts.valid = #listings
+  end
+  self.task = nil
+  setState(self, state, reason)
+  if (state == "COMPLETE" or state == "PARTIAL") and self.bus then
+    self.bus:Publish("scanner.snapshot", snapshot, listings)
+  end
+end
+
+local function fail(self, task, reason)
+  finish(self, task, "FAILED", reason)
+end
+
+-- Replicate --------------------------------------------------------------
+
+local attempt
+
+local function retry(self, task, reason)
+  if task.attempts > self.opts.maxRetries then
+    fail(self, task, reason)
+    return
+  end
+  local delay = self.scheduler:Backoff(task.attempts, self.opts.backoffBase, self.opts.backoffCap)
+  self:Trace("retry", { reason = reason, delay = delay, attempt = task.attempts })
+  task.retryTimer = self.scheduler:After(delay, function()
+    if current(self, task) then attempt(self, task) end
+  end)
+end
+
+attempt = function(self, task)
+  task.attempts = task.attempts + 1
+  local ready = self.adapter:IsReady()
+  if ready == false then
+    setState(self, "THROTTLED", "not_ready")
+    retry(self, task, "throttled")
+    return
+  end
+  local ok, err = self.adapter:RequestReplicate()
+  if not ok then
+    fail(self, task, "request_failed:" .. tostring(err))
+    return
+  end
+  task.requestedAt = self.clock()
+  setState(self, "REQUESTED")
+  task.timeoutTimer = self.scheduler:After(self.opts.timeout, function()
+    if current(self, task) and self.state == "REQUESTED" then
+      retry(self, task, "no_response")
+    end
+  end)
+end
+
+-- request: { mode = "replicate" }. Returns ok, reason.
+function Scanner:Start(request)
+  request = request or { mode = "replicate" }
+  if self:IsActive() then return false, "busy" end
+  if not self.adapter:IsOpen() then return false, "ah_closed" end
+  if request.mode ~= "replicate" then return false, "unsupported_mode" end
+  if not self.adapter:GetCapabilities().replicate then return false, "unsupported" end
+  self.scheduler:Invalidate()
+  local task = { mode = "replicate", attempts = 0, updates = 0, byIndex = {} }
+  self.task = task
+  self.snapshot = newSnapshot(self, "replicate", "all")
+  attempt(self, task)
+  return true
+end
+
+function Scanner:OnThrottleReady()
+  self:Trace("throttle_ready", { state = self.state })
+  local task = self.task
+  if task and self.state == "THROTTLED" then
+    if task.retryTimer then task.retryTimer.Cancel() end
+    attempt(self, task)
+  end
+end
+
+local function coverageOf(task, snapshot)
+  if task.incompleteLeft > 0 or snapshot.counts.discarded > 0 then return "partial" end
+  if Capabilities.IsVerified("replicate") then return "full_verified" end
+  return "full_unverified"
+end
+
+local function readRow(self, task, index)
+  local snapshot = self.snapshot
+  local row, reason = self.adapter:ReadReplicateRow(index)
+  if not row then
+    discard(snapshot, reason or "unreadable")
+    return
+  end
+  if type(row.itemID) ~= "number" or row.itemID <= 0 then
+    discard(snapshot, "item_id")
+    return
+  end
+  local suffix = Schema.SuffixFromLink(row.link)
+  local itemKey = Schema.ItemKey(row.itemID, suffix, suffix == nil)
+  local buyout = row.buyout
+  if buyout == 0 then buyout = nil end
+  local listing, why = Schema.NewListing({
+    marketKey = snapshot.marketKey, itemKey = itemKey, quantity = row.count,
+    -- Assumed whole-stack total until Capabilities.VERIFIED.replicateBuyoutIsTotal.
+    buyoutTotal = buyout, bid = row.bidAmount, divisible = false,
+    seen = self.clock(), source = "replicate", scanId = snapshot.id, index = index,
+    complete = row.hasAllInfo and suffix ~= nil,
+  })
+  if not listing then
+    discard(snapshot, why)
+    return
+  end
+  task.byIndex[index] = listing
+  if not listing.complete then task.incomplete[#task.incomplete + 1] = index end
+end
+
+local function readIndexes(self, task, indexes, done)
+  self.scheduler:Chunk(1, #indexes, self.opts.budgetMs, function(position)
+    readRow(self, task, indexes[position])
+  end, done)
+end
+
+local function beginNormalize(self, task)
+  if not current(self, task) then return end
+  setState(self, "NORMALIZING")
+  local count = self.adapter:NumReplicate()
+  if not count then
+    fail(self, task, "count_unavailable")
+    return
+  end
+  local base = self.adapter:DetectIndexBase(count)
+  local snapshot = self.snapshot
+  snapshot.indexBase, snapshot.counts.rows = base, count
+  task.incomplete = {}
+  self:Trace("normalize", { rows = count, base = base, updates = task.updates })
+  self.scheduler:Chunk(base, base + count - 1, self.opts.budgetMs, function(index)
+    readRow(self, task, index)
+  end, function(completed)
+    if not completed or not current(self, task) then return end
+    local pending = task.incomplete
+    task.incompleteLeft = #pending
+    if #pending == 0 then
+      local coverage = coverageOf(task, snapshot)
+      snapshot.coverage = coverage
+      finish(self, task, coverage == "full_verified" and "COMPLETE" or "PARTIAL",
+        coverage == "full_verified" and nil or "completeness_unverified")
+      return
+    end
+    -- One bounded wait for item data, then a single re-read of those rows.
+    self.scheduler:After(self.opts.infoWait, function()
+      if not current(self, task) then return end
+      task.incomplete = {}
+      readIndexes(self, task, pending, function(again)
+        if not again or not current(self, task) then return end
+        task.incompleteLeft = #task.incomplete
+        snapshot.coverage = coverageOf(task, snapshot)
+        finish(self, task, snapshot.coverage == "full_verified" and "COMPLETE" or "PARTIAL",
+          task.incompleteLeft > 0 and "rows_incomplete" or "completeness_unverified")
+      end)
+    end)
+  end)
+end
+
+function Scanner:OnReplicateUpdate()
+  local task = self.task
+  if not task or task.mode ~= "replicate" or (self.state ~= "REQUESTED" and self.state ~= "RECEIVING") then
+    -- Late or foreign update: nothing is appended.
+    self:Trace("replicate_update_ignored", { state = self.state })
+    return
+  end
+  task.updates = task.updates + 1
+  if task.timeoutTimer then task.timeoutTimer.Cancel() end
+  if task.settleTimer then task.settleTimer.Cancel() end
+  if self.state ~= "RECEIVING" then setState(self, "RECEIVING") end
+  task.settleTimer = self.scheduler:After(self.opts.settle, function() beginNormalize(self, task) end)
+end
+
+-- Cancel and close ---------------------------------------------------------
+
+function Scanner:Cancel(reason)
+  local task = self.task
+  self.scheduler:Invalidate()
+  if task then finish(self, task, "CANCELLED", reason or "user") end
+end
+
+function Scanner:OnClose()
+  self:Trace("ah_closed", { state = self.state })
+  if self.bus then self.bus:Publish("quotes.invalidate", "ah_closed") end
+  local task = self.task
+  if not task then return end
+  self.scheduler:Invalidate()
+  local read = 0
+  for _ in pairs(task.byIndex or {}) do read = read + 1 end
+  if read > 0 then
+    self.snapshot.coverage = "partial"
+    finish(self, task, "PARTIAL", "ah_closed")
+  else
+    finish(self, task, "CANCELLED", "ah_closed")
+  end
+end
+
+-- Search results: targeted refresh or passive observation ----------------
+
+local function signature(listings)
+  local quantity, total = 0, 0
+  for _, listing in ipairs(listings) do
+    quantity = quantity + listing.quantity
+    total = total + (listing.buyoutTotal or 0)
+  end
+  return #listings .. ":" .. quantity .. ":" .. total
+end
+
+-- Normalizes search rows into listings for one item key.
+local function searchListings(self, snapshot, rows, commodity)
+  local listings = {}
+  for index, row in ipairs(rows) do
+    local raw = {
+      marketKey = snapshot.marketKey, quantity = row.quantity, auctionID = row.auctionID,
+      seen = self.clock(), scanId = snapshot.id, index = index, own = row.own,
+    }
+    if commodity then
+      raw.itemKey = Schema.ItemKey(row.itemID, 0)
+      raw.divisible, raw.unitPrice, raw.source = true, row.unitPrice, "search_commodity"
+    else
+      raw.itemKey = Schema.ItemKey(row.itemID, row.suffix or 0)
+      raw.divisible, raw.buyoutTotal, raw.bid, raw.source = false, row.buyout, row.minBid, "search_item"
+      if row.quantity ~= 1 and not Capabilities.IsVerified("itemSearchBuyoutIsTotal") then
+        raw.complete = false -- price per unit or per auction not verified
+      end
+    end
+    local listing, why = Schema.NewListing(raw)
+    if listing then listings[#listings + 1] = listing else discard(snapshot, why) end
+  end
+  return listings
+end
+
+local function publishObservation(self, snapshot, listings, full)
+  snapshot.finished = self.clock()
+  snapshot.coverage = full == true and "full_unverified" or "partial"
+  snapshot.status = "partial"
+  snapshot.counts.rows = #listings + snapshot.counts.discarded
+  snapshot.counts.valid = #listings
+  snapshot.counts.itemKeys = #listings > 0 and 1 or 0
+  for _, listing in ipairs(listings) do snapshot.counts.units = snapshot.counts.units + listing.quantity end
+  if self.bus then self.bus:Publish("scanner.snapshot", snapshot, listings) end
+end
+
+local function observe(self, scopeKey, rows, full, commodity)
+  local snapshot = newSnapshot(self, "observed_search", scopeKey)
+  local listings = searchListings(self, snapshot, rows, commodity)
+  local sig = signature(listings)
+  local last = self.lastObserved[scopeKey]
+  local now = self.clock()
+  if last and last.sig == sig and now - last.t < self.opts.observeDedupe then
+    self:Trace("observation_duplicate", { scope = scopeKey })
+    return
+  end
+  self.lastObserved[scopeKey] = { sig = sig, t = now }
+  publishObservation(self, snapshot, listings, full)
+end
+
+local function handleResults(self, itemID, suffix, commodity, readFn)
+  local task = self.task
+  local scopeKey = Schema.ItemKey(itemID, suffix or 0)
+  if task and task.mode == "search" then
+    if task.itemID ~= itemID then
+      -- Someone else changed the search: suspend instead of guessing.
+      if task.timeoutTimer then task.timeoutTimer.Cancel() end
+      fail(self, task, "search_changed")
+      return
+    end
+    if task.timeoutTimer then task.timeoutTimer.Cancel() end
+    local rows, full = readFn()
+    local snapshot = self.snapshot
+    local listings = searchListings(self, snapshot, rows, commodity)
+    local callback = task.callback
+    snapshot.coverage = full == true and "full_unverified" or "partial"
+    task.byIndex = {}
+    for index, listing in ipairs(listings) do task.byIndex[index] = listing end
+    finish(self, task, "PARTIAL", full == true and "completeness_unverified" or "results_partial")
+    if callback then callback(snapshot, listings) end
+    return
+  end
+  if self:IsActive() then return end
+  observe(self, scopeKey, readFn())
+end
+
+function Scanner:OnCommodityResults(itemID)
+  self:Trace("commodity_results", { itemID = itemID, state = self.state })
+  handleResults(self, itemID, 0, true, function()
+    local rows, full = self.adapter:ReadCommodityResults(itemID)
+    return rows, full, true
+  end)
+end
+
+function Scanner:OnItemResults(itemKey)
+  local itemID = itemKey.itemID
+  if type(itemID) ~= "number" then return end
+  self:Trace("item_results", { itemID = itemID, state = self.state })
+  handleResults(self, itemID, itemKey.itemSuffix, false, function()
+    local rows, full = self.adapter:ReadItemResults(itemKey)
+    return rows, full, false
+  end)
+end
+
+-- Targeted read-only search for one item, e.g. to refresh a quote.
+-- callback(snapshot, listings) on results. Returns ok, reason.
+function Scanner:Search(itemID, suffix, callback)
+  if self:IsActive() then return false, "busy" end
+  if not self.adapter:IsOpen() then return false, "ah_closed" end
+  if not self.adapter:GetCapabilities().targetedSearch then return false, "unsupported" end
+  if self.adapter:IsReady() == false then return false, "throttled" end
+  self.scheduler:Invalidate()
+  local task = { mode = "search", itemID = itemID, attempts = 1, callback = callback }
+  self.task = task
+  self.snapshot = newSnapshot(self, "search", Schema.ItemKey(itemID, suffix or 0))
+  local ok, err = self.adapter:SendSearch(itemID, suffix)
+  if not ok then
+    fail(self, task, "request_failed:" .. tostring(err))
+    return false, "request_failed"
+  end
+  setState(self, "REQUESTED")
+  task.timeoutTimer = self.scheduler:After(self.opts.searchTimeout, function()
+    if current(self, task) then fail(self, task, "no_response") end
+  end)
+  return true
+end

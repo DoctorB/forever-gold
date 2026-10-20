@@ -1,0 +1,56 @@
+# Checks every push to main and every pull request. Offline: no account, no
+# credentials, never uploads anywhere. The ZIP is kept as a short-lived
+# workflow artifact for inspection only.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (Node 24)
+        with:
+          persist-credentials: false
+
+      - name: Install Lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y lua5.1 lua-check
+
+      - name: Lua 5.1 syntax check
+        run: find ForeverGold tests -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+
+      - name: Offline tests (economy, scanner replay, app, UI mock, package, bytecode lint)
+        run: lua5.1 tests/runner.lua
+
+      - name: Benchmark (order of magnitude only)
+        run: lua5.1 tests/bench.lua
+
+      - name: luacheck (informational until the baseline is clean)
+        continue-on-error: true
+        run: luacheck ForeverGold tests
+
+      - name: Build test package (no upload)
+        shell: pwsh
+        run: ./scripts/build.ps1 -SkipTests
+
+      - name: Keep test package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
+        with:
+          name: ForeverGold-test-package-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 14

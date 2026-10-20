@@ -1,0 +1,49 @@
+## Interface: 16001
+## Title: ForeverGold
+## Notes: Read-only Auction House analysis for WoW Forever: vendor and resale opportunities with costs, depth, prudent scenarios and confidence reasons. Never buys for you.
+## Notes-itIT: Analisi in sola lettura della casa d'aste per WoW Forever: opportunità vendor e rivendita con costi, profondità, scenari prudenti e motivi della confidenza. Non compra al posto tuo.
+## Author: DoctorB
+## Version: 0.1.0-alpha.1
+## SavedVariables: ForeverGoldDB
+
+Bootstrap.lua
+Locales\enUS.lua
+Locales\itIT.lua
+Core\Capabilities.lua
+Core\EventBus.lua
+Core\Scheduler.lua
+Economy\Money.lua
+Economy\Depth.lua
+Economy\Costs.lua
+Economy\MarketValue.lua
+Economy\Risk.lua
+Compat\ClientAdapter.lua
+Compat\AuctionHouse.lua
+Compat\Items.lua
+Compat\Professions.lua
+Data\Schema.lua
+Data\Migrations.lua
+Data\Store.lua
+Data\History.lua
+Data\Exchange.lua
+Data\Recipes.lua
+Data\Disenchant.lua
+Data\Demo.lua
+Strategies\Vendor.lua
+Strategies\Resale.lua
+Strategies\Disenchant.lua
+Strategies\Crafting.lua
+Strategies\Conversion.lua
+Services\Scanner.lua
+Services\Opportunities.lua
+Services\Transactions.lua
+Services\Diagnostics.lua
+Core\App.lua
+UI\Widgets.lua
+UI\Main.lua
+UI\Details.lua
+UI\Settings.lua
+UI\Panels.lua
+UI\Tooltips.lua
+UI\Commands.lua
+Core\Init.lua

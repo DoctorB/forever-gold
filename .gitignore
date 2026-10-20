@@ -1,0 +1,17 @@
+# Local build output and caches
+release/
+dist/
+__pycache__/
+*.log
+
+# Credentials and local overrides
+.env
+.env.*
+*.token
+.claude/settings.local.json
+
+# OS/editor noise
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/

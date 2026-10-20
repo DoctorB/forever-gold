@@ -1,0 +1,331 @@
+-- Main window: tabs Opportunities, History, Professions, Portfolio,
+-- Settings. Analysis only: no button here spends, posts or cancels.
+local _, ns = ...
+
+local W = ns.UI.Widgets
+local Money = ns.Economy.Money
+local Main = { tab = "opportunities", offset = 0, rows = {}, filters = { vendor = true, resale = true, allocated = false } }
+ns.UI.Main = Main
+
+Main.TABS = { "opportunities", "history", "professions", "portfolio", "settings" }
+Main.ROW_HEIGHT = 18
+Main.COLUMNS = {
+  { key = "item", width = 0.24 }, { key = "strategy", width = 0.10 }, { key = "qty", width = 0.06, right = true },
+  { key = "cost", width = 0.11, right = true }, { key = "revenue", width = 0.11, right = true },
+  { key = "profit", width = 0.11, right = true }, { key = "roi", width = 0.07, right = true },
+  { key = "risk", width = 0.11 }, { key = "age", width = 0.09, right = true },
+}
+
+local function L(key) return ns.L[key] or key end
+
+-- Text of one cell for an opportunity.
+function Main.Cell(opportunity, key, now)
+  if key == "item" then return opportunity.name or opportunity.itemKey end
+  if key == "strategy" then return L("STRAT_" .. opportunity.strategy) end
+  if key == "qty" then return tostring(opportunity.quantity) end
+  if key == "cost" then return Money.Format(opportunity.cost) end
+  if key == "revenue" then return Money.Format(opportunity.revenuePrudent) end
+  if key == "profit" then return Money.Format(opportunity.profit) end
+  if key == "roi" then return opportunity.roi and string.format("%.0f%%", opportunity.roi * 100) or "?" end
+  if key == "risk" then
+    local c = opportunity.confidence
+    return L("CLASS_" .. opportunity.class) .. " " .. (c and c.score or "?")
+  end
+  if key == "age" then
+    local seen = opportunity.provenance and opportunity.provenance.seen
+    if not seen or not now then return "?" end
+    local minutes = math.floor((now - seen) / 60)
+    if minutes < 60 then return minutes .. "m" end
+    return math.floor(minutes / 60) .. "h"
+  end
+  return ""
+end
+
+-- Filtered list shown in the table.
+function Main.Visible(results, filters)
+  local list = {}
+  for _, opportunity in ipairs(results and results.list or {}) do
+    local strategyOk = (opportunity.strategy == "vendor" and filters.vendor)
+      or (opportunity.strategy == "resale" and filters.resale)
+    local budgetOk = not filters.allocated or opportunity.allocation == "allocated"
+    if strategyOk and budgetOk then list[#list + 1] = opportunity end
+  end
+  return list
+end
+
+-- Why the table is empty: no data, insufficient data, unsupported, or no deals.
+function Main.EmptyReason(app, results)
+  if app and app.ah and not app.ah:GetCapabilities().replicate then return L("EMPTY_UNSUPPORTED") end
+  if not results or results.counts.itemKeys == 0 then return L("EMPTY_NO_DATA") end
+  if (results.excluded.insufficient_history or 0) > 0 and #results.list == 0 then return L("EMPTY_INSUFFICIENT") end
+  return L("EMPTY_NO_DEALS")
+end
+
+function Main.StatusLine(app, results)
+  local parts = {}
+  if results and results.demo then parts[#parts + 1] = W.Color(L("DEMO_BANNER"), W.WARN) end
+  local scanner = app and app.scanner
+  if scanner then
+    parts[#parts + 1] = L("SCAN_STATE") .. " " .. L("STATE_" .. scanner.state)
+    if scanner.reason then parts[#parts + 1] = "(" .. (ns.L["REASON_" .. scanner.reason] or scanner.reason) .. ")" end
+  end
+  if results then
+    local c = results.counts
+    parts[#parts + 1] = string.format(L("COUNTS"), c.opportunities, c.candidates, c.itemKeys, c.listings, c.units)
+    parts[#parts + 1] = L("COVERAGE") .. " " .. L("COVERAGE_" .. tostring(results.coverage))
+  end
+  return table.concat(parts, "  ")
+end
+
+function Main.Results()
+  if Main.demoResults then return Main.demoResults end
+  local app = ns.app
+  return app and app.opportunities and app.opportunities.results
+end
+
+local function layoutRows()
+  local frame = Main.frame
+  local tableFrame = frame.table
+  local width = tableFrame:GetWidth() or 600
+  local height = tableFrame:GetHeight() or 300
+  local count = math.max(1, math.floor(height / Main.ROW_HEIGHT) - 1)
+  for index = 1, math.max(count, #Main.rows) do
+    local row = Main.rows[index]
+    if not row and index <= count then
+      row = CreateFrame("Button", nil, tableFrame)
+      row:SetHeight(Main.ROW_HEIGHT)
+      row.cells = {}
+      for column = 1, #Main.COLUMNS do
+        row.cells[column] = W.Text(row, "GameFontHighlightSmall", Main.COLUMNS[column].right and "RIGHT" or "LEFT")
+      end
+      local highlight = row:CreateTexture(nil, "HIGHLIGHT")
+      highlight:SetAllPoints()
+      highlight:SetColorTexture(1, 0.82, 0.2, 0.12)
+      row:SetScript("OnClick", function() if row.opportunity then ns.UI.Details.Show(row.opportunity) end end)
+      Main.rows[index] = row
+    end
+    if row then
+      if index <= count then
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", tableFrame, "TOPLEFT", 0, -index * Main.ROW_HEIGHT)
+        row:SetPoint("RIGHT", tableFrame, "RIGHT", 0, 0)
+        local x = 0
+        for column, spec in ipairs(Main.COLUMNS) do
+          local cell = row.cells[column]
+          cell:ClearAllPoints()
+          cell:SetPoint("LEFT", row, "LEFT", x + 2, 0)
+          cell:SetWidth(width * spec.width - 4)
+          x = x + width * spec.width
+        end
+      else
+        row:Hide()
+      end
+    end
+  end
+  Main.visibleRows = count
+  local x = 0
+  for column, spec in ipairs(Main.COLUMNS) do
+    local header = frame.headers[column]
+    header:ClearAllPoints()
+    header:SetPoint("TOPLEFT", tableFrame, "TOPLEFT", x + 2, 0)
+    header:SetWidth(width * spec.width - 4)
+    x = x + width * spec.width
+  end
+end
+
+function Main.RefreshTable()
+  local frame = Main.frame
+  if not frame or not frame:IsShown() then return end
+  local app = ns.app
+  local results = Main.Results()
+  frame.status:SetText(Main.StatusLine(app, results))
+  frame.title:SetText("ForeverGold " .. ns.VERSION .. (Main.demoResults and ("  " .. W.Color(L("DEMO_BANNER"), W.WARN)) or ""))
+  local list = Main.Visible(results, Main.filters)
+  local maxOffset = math.max(0, #list - (Main.visibleRows or 1))
+  if Main.offset > maxOffset then Main.offset = maxOffset end
+  local now = app and app.clock and app.clock()
+  for index = 1, (Main.visibleRows or 0) do
+    local row = Main.rows[index]
+    local opportunity = list[index + Main.offset]
+    row.opportunity = opportunity
+    if opportunity then
+      for column, spec in ipairs(Main.COLUMNS) do
+        row.cells[column]:SetText(Main.Cell(opportunity, spec.key, now))
+      end
+      row:Show()
+    else
+      row:Hide()
+    end
+  end
+  frame.empty:SetText(#list == 0 and Main.EmptyReason(app, results) or "")
+  frame.denominator:SetText(results and string.format(L("EXCLUDED"), Main.ExcludedText(results)) or "")
+end
+
+function Main.ExcludedText(results)
+  local parts = {}
+  for reason, count in pairs(results.excluded or {}) do
+    parts[#parts + 1] = (ns.L["EXCL_" .. reason] or reason) .. " " .. count
+  end
+  table.sort(parts)
+  return #parts > 0 and table.concat(parts, ", ") or "0"
+end
+
+function Main.SelectTab(tab)
+  Main.tab = tab
+  local frame = Main.frame
+  for _, name in ipairs(Main.TABS) do
+    local panel = frame.panels[name]
+    if panel then
+      if name == tab then panel:Show() else panel:Hide() end
+    end
+    frame.tabs[name]:SetEnabled(name ~= tab)
+  end
+  if tab == "opportunities" then
+    Main.RefreshTable()
+  elseif ns.UI.Panels[tab] then
+    ns.UI.Panels[tab].Refresh(frame.panels[tab])
+  end
+end
+
+local function buildOpportunities(panel)
+  local frame = Main.frame
+  local scan = W.Button(panel, L("BTN_SCAN"), 110, function()
+    local app = ns.app
+    Main.demoResults = nil
+    local ok, reason = app.scanner:Start({ mode = "replicate" })
+    if not ok then ns.Print(L("SCAN_REFUSED") .. " " .. (ns.L["REASON_" .. reason] or reason)) end
+    Main.RefreshTable()
+  end)
+  scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  local cancel = W.Button(panel, L("BTN_CANCEL"), 90, function()
+    ns.app.scanner:Cancel("user")
+    Main.RefreshTable()
+  end)
+  cancel:SetPoint("LEFT", scan, "RIGHT", 4, 0)
+  local demo = W.Button(panel, L("BTN_DEMO"), 90, function()
+    if Main.demoResults then
+      Main.demoResults = nil
+    else
+      Main.demoResults = ns.app:Demo()
+    end
+    Main.RefreshTable()
+  end)
+  demo:SetPoint("LEFT", cancel, "RIGHT", 4, 0)
+  local vendor = W.Check(panel, L("FILTER_VENDOR"), function(value) Main.filters.vendor = value Main.RefreshTable() end)
+  vendor:SetPoint("LEFT", demo, "RIGHT", 10, 0)
+  vendor:SetChecked(true)
+  local resale = W.Check(panel, L("FILTER_RESALE"), function(value) Main.filters.resale = value Main.RefreshTable() end)
+  resale:SetPoint("LEFT", vendor, "RIGHT", 70, 0)
+  resale:SetChecked(true)
+  local allocated = W.Check(panel, L("FILTER_BUDGET"), function(value) Main.filters.allocated = value Main.RefreshTable() end)
+  allocated:SetPoint("LEFT", resale, "RIGHT", 80, 0)
+
+  local tableFrame = CreateFrame("Frame", nil, panel)
+  tableFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -30)
+  tableFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 18)
+  tableFrame:EnableMouseWheel(true)
+  tableFrame:SetScript("OnMouseWheel", function(_, delta)
+    Main.offset = math.max(0, Main.offset - delta * 3)
+    Main.RefreshTable()
+  end)
+  tableFrame:SetScript("OnSizeChanged", function()
+    layoutRows()
+    Main.RefreshTable()
+  end)
+  frame.table = tableFrame
+  frame.headers = {}
+  for column, spec in ipairs(Main.COLUMNS) do
+    local header = W.Text(tableFrame, "GameFontNormalSmall", spec.right and "RIGHT" or "LEFT")
+    header:SetText(L("COL_" .. spec.key))
+    frame.headers[column] = header
+  end
+  frame.empty = W.Text(tableFrame, "GameFontDisable", "CENTER")
+  frame.empty:SetPoint("CENTER", tableFrame, "CENTER", 0, 0)
+  frame.denominator = W.Text(panel, "GameFontDisableSmall")
+  frame.denominator:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 2)
+  frame.denominator:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+end
+
+function Main.Ensure()
+  if Main.frame then return Main.frame end
+  local frame = CreateFrame("Frame", "ForeverGoldMainFrame", UIParent, "BasicFrameTemplateWithInset")
+  Main.frame = frame
+  -- New frames start shown: hide until Toggle/Open decides.
+  frame:Hide()
+  frame:SetSize(820, 460)
+  frame:SetPoint("CENTER")
+  frame:SetFrameStrata("HIGH")
+  frame:SetClampedToScreen(true)
+  frame:SetMovable(true)
+  frame:SetResizable(true)
+  if frame.SetResizeBounds then
+    frame:SetResizeBounds(640, 320, 1600, 1000)
+  elseif frame.SetMinResize then
+    frame:SetMinResize(640, 320)
+  end
+  frame:EnableMouse(true)
+  frame:RegisterForDrag("LeftButton")
+  frame:SetScript("OnDragStart", frame.StartMoving)
+  frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "ForeverGoldMainFrame") end
+
+  frame.title = W.Text(frame, "GameFontNormal", "LEFT")
+  frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -6)
+  frame.status = W.Text(frame, "GameFontHighlightSmall")
+  frame.status:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -56)
+  frame.status:SetPoint("RIGHT", frame, "RIGHT", -14, 0)
+
+  frame.tabs, frame.panels = {}, {}
+  local previous
+  for _, name in ipairs(Main.TABS) do
+    local tab = W.Button(frame, L("TAB_" .. name), 120, function() Main.SelectTab(name) end)
+    if previous then
+      tab:SetPoint("LEFT", previous, "RIGHT", 4, 0)
+    else
+      tab:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -28)
+    end
+    frame.tabs[name] = tab
+    previous = tab
+    local panel = CreateFrame("Frame", nil, frame)
+    panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -74)
+    panel:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 22)
+    panel:Hide()
+    frame.panels[name] = panel
+  end
+  buildOpportunities(frame.panels.opportunities)
+  for name, builder in pairs(ns.UI.Panels) do
+    if frame.panels[name] then builder.Build(frame.panels[name]) end
+  end
+
+  local grip = CreateFrame("Button", nil, frame)
+  grip:SetSize(16, 16)
+  grip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
+  grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+  grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+  grip:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
+  grip:SetScript("OnMouseUp", function() frame:StopMovingOrSizing() end)
+
+  local version = W.Text(frame, "GameFontDisableSmall", "LEFT")
+  version:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 6)
+  version:SetText(L("FOOTER"))
+
+  frame:SetScript("OnShow", function() Main.SelectTab(Main.tab) end)
+  layoutRows()
+  return frame
+end
+
+function Main.Toggle()
+  local frame = Main.Ensure()
+  if frame:IsShown() then
+    frame:Hide()
+  else
+    frame:Show()
+    Main.SelectTab(Main.tab)
+  end
+end
+
+function Main.Open(tab)
+  local frame = Main.Ensure()
+  frame:Show()
+  Main.SelectTab(tab or Main.tab)
+end
