@@ -257,6 +257,9 @@ L.STATUS_OLD = "i prezzi potrebbero essere cambiati: il preventivo li ricontroll
 L.HINT_WAIT = "Prossima scansione possibile tra %s. Intanto gli oggetti che cerchi nella finestra AH vengono valutati."
 L.HINT_NONE_WAIT = "Niente da comprare nell'ultima scansione. Prossima scansione possibile tra %s."
 
+L.DETAIL_CALC = "Calcolo:"
+L.DETAIL_MORE_LOTS = "  ... altri %d lotti"
+
 L.HELP_1 = "/fg - apre o chiude la finestra"
 L.HELP_2 = "/fg scan - scansione AH in sola lettura (AH aperta)"
 L.HELP_3 = "/fg cancel - annulla la scansione"

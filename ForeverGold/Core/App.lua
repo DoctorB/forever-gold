@@ -178,6 +178,8 @@ function App:Process(snapshot, listings)
     ns.Data.History.FinishRecord(job)
     self.opportunities:Ingest(snapshot, listings)
     self:EvaluateChunked(function()
+      -- A user scan is summarised by UI/Feedback; notices are for the rest.
+      if snapshot.mode == "replicate" then return end
       self.opportunities:NotifyIfDue(function(good, counts)
         ns.Print(string.format(ns.L["NOTIFY_FOUND"], good, counts.itemKeys))
       end)

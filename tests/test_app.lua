@@ -41,8 +41,8 @@ T.Case("scan feeds history and a vendor opportunity with denominators", function
   local o = results.list[1]
   T.Eq(o.strategy, "vendor")
   T.Eq(o.profit, 300)
-  T.Eq(o.class, "prudent", "vendor price not yet verified")
-  T.Eq(o.pending, "sellPrice")
+  T.Eq(o.class, "vendor_confirmed", "buyout and vendor price verified in game")
+  T.Eq(o.pending, nil)
   T.Eq(o.allocation, "no_budget")
   T.Eq(results.excluded.insufficient_history, 2)
   local market = app.store:Market(app:MarketKey())

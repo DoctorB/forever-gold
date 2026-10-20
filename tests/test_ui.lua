@@ -52,7 +52,7 @@ T.Case("every tab builds and refreshes; demo rows and details render", function(
     first.scripts.OnClick()
     local details = ns.UI.Details.frame
     T.Ok(details:IsShown())
-    T.NotOk(details.prepare.enabled, "no preparation on demo data")
+    T.NotOk(details.purchase.buy.enabled, "no purchase on demo data")
     T.Ok(details.body.text:find("DEMO", 1, true) ~= nil)
   end)
 end)
@@ -257,7 +257,7 @@ T.Case("full assisted purchase from the window: plan, quote, click, done", funct
     eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
     clock.advance(60)
     local frame = ns.UI.Main.frame
-    T.Ok(frame.banner:GetText():find("Probable gain: +3s 0c", 1, true) ~= nil, frame.banner:GetText())
+    T.Ok(frame.banner:GetText():find("Verified gain available: +3s 0c", 1, true) ~= nil, frame.banner:GetText())
     T.Eq(frame.hint:GetText(), ns.L.HINT_CLICK_BUY)
     ns.UI.Main.rows[1].scripts.OnClick()
     local section = ns.UI.Details.frame.purchase
@@ -340,5 +340,36 @@ T.Case("cooldown countdown on the scan button and in the hint", function()
     T.Eq(frame.scanButton:GetText(), ns.L.BTN_SCAN)
     T.Ok(frame.scanButton.enabled)
     T.Ok(frame.status:GetText():find(ns.L.STATUS_OLD, 1, true) ~= nil)
+  end)
+end)
+
+T.Case("one analysis summary in chat, with the count after item data arrives", function()
+  withClient(function(ns, globals, clock, ah, eventFrame)
+    local items = {}
+    globals.C_Item.GetItemInfo = function(itemID)
+      local info = items[itemID]
+      if not info then return nil end
+      return info.name, "link", 1, 1, 1, "Type", "Sub", 20, "", 1, info.sellPrice, 7, 0, 0
+    end
+    ns.UI.Commands.Handle("")
+    eventFrame.scripts.OnEvent(eventFrame, "AUCTION_HOUSE_SHOW")
+    ns.UI.Commands.Handle("scan")
+    ah.delivered = true
+    eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(4)
+    local function summaries()
+      local n, last = 0, nil
+      for _, line in ipairs(ns.printed) do
+        if line:find("analysis done", 1, true) then n, last = n + 1, line end
+      end
+      return n, last
+    end
+    T.Eq(summaries(), 0, "waits for item data")
+    items[101] = { name = "Linen", sellPrice = 50 }
+    eventFrame.scripts.OnEvent(eventFrame, "GET_ITEM_INFO_RECEIVED", 101, true)
+    clock.advance(10)
+    local n, last = summaries()
+    T.Eq(n, 1)
+    T.Ok(last:find("analysis done: 1 opportunities", 1, true) ~= nil, last)
   end)
 end)

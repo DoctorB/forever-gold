@@ -22,6 +22,11 @@ diagnostica (26/26 simboli, 8/8 eventi), UI e demo, **persistenza verificata**
 dello stack (verificato), AH moderna a commodity. Dettagli in
 `docs/API-AUDIT.md`.
 
+**Primo guadagno reale (2026-10-20 13:59–14:00):** 8 Pyrite comprate con
+l'acquisto assistito per 6s 40c e vendute al mercante per 8s: +1s 60c,
+prezzo vendor verificato. Le opportunità vendor complete ora risultano
+"VERIFICATO".
+
 Alpha.2: acquisto assistito sperimentale (un clic per acquisto, tetto e
 controllo del preventivo), registro e controllo al mercante, commodity
 riconosciute, banner del guadagno. Prossima prova: sessione 3 di
@@ -60,7 +65,7 @@ campioni con la finestra AH; misura del cooldown.
 
 ## Prove eseguite (2026-10-20, Windows, Lua 5.1.5)
 
-- `lua5.1 tests/runner.lua` → **133 passed, 0 failed**: casi deterministici
+- `lua5.1 tests/runner.lua` → **134 passed, 0 failed**: casi deterministici
   della §13 (vendor 300, unitario 500, profondità 600, esempio §8 900/11.053,
   prezzo assente, deposito, DE 100/50%, crafting 2 craft/4 output, storico non
   condiviso, ciclo di conversione, import malformato/oversize), proprietà
@@ -77,16 +82,15 @@ campioni con la finestra AH; misura del cooldown.
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 51 file,
-  SHA-256 `f5890e265f5a0019b14307e499b972dd1a9cc218ed9ec189b5fdd3b4a678229f`.
+  SHA-256 `c121e91e1896674d44e4b6403c9c328e1ba641c39e41e99223dc5d31e04987de`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.
 
 ## Limiti
 
-- Nessuna semantica del client verificata (`Capabilities.VERIFIED` tutto
-  `false`): esito delle scansioni sempre "osservazione parziale"; vendor mai
-  "confermato"; rivendita sempre "speculativa" (commissione scenario).
+- Completezza della replica, commissione AH e depositi non verificati: esito
+  delle scansioni "osservazione parziale"; rivendita sempre "speculativa".
 - Righe della replica delle commodity trattate come lotti interi (acquisto
   parziale non ancora modellato).
 - Nessuna azione assistita; "Prepara" produce solo un riepilogo.

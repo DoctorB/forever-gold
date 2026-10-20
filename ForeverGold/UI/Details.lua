@@ -12,31 +12,28 @@ ns.UI.Details = Details
 local function L(key) return ns.L[key] or key end
 local fmt = Money.Format
 
--- Plain text body for one opportunity (also used by tests).
+-- Plain text body for one opportunity (also used by tests): what you gain,
+-- how reliable it is, what to do; then the calculation for who wants it.
 function Details.Text(o)
   local lines = {}
   local function add(text) lines[#lines + 1] = text end
-  add((o.name or o.itemKey) .. "  [" .. L("STRAT_" .. o.strategy) .. "]  " .. L("CLASS_" .. o.class))
+  add((o.name or o.itemKey) .. "  [" .. L("ACTION_" .. o.strategy) .. "]  " .. L("CLASS_" .. o.class))
   local gain = string.format(L("DETAIL_GAIN"), "+" .. fmt(o.profit))
   add(o.class == "speculative" and gain or W.Color(gain, o.class == "vendor_confirmed" and W.EMERALD or W.GOLD))
   add(L("DETAIL_CLASS_" .. o.class))
   if o.pending then add(W.Color(L("DETAIL_PENDING_" .. o.pending), W.GOLD)) end
+  if Schema.IsVariantUnknown(o.itemKey) then add(L("DETAIL_VARIANT_UNKNOWN")) end
+  add("")
   add(L("DETAIL_HOWTO"))
+  add(string.format(L("DETAIL_STEP_BUY"), o.quantity, o.name or o.itemKey, fmt(o.cost)))
   if o.strategy == "vendor" then
-    add(string.format(L("DETAIL_STEP_BUY"), o.quantity, o.name or o.itemKey, fmt(o.cost)))
     add(string.format(L("DETAIL_STEP_VENDOR"), fmt(o.revenuePrudent)))
   else
-    add(string.format(L("DETAIL_STEP_BUY"), o.quantity, o.name or o.itemKey, fmt(o.cost)))
     add(string.format(L("DETAIL_STEP_RELIST"), fmt(o.formula and o.formula.unitPrice)))
   end
   if o.commodity == true then add(L("DETAIL_COMMODITY")) end
   add("")
-  local c = o.confidence or {}
-  local reasons = {}
-  for _, reason in ipairs(c.reasons or {}) do reasons[#reasons + 1] = L("RISK_" .. reason) end
-  add(string.format(L("DETAIL_CONFIDENCE"), tostring(c.score), L("LABEL_" .. tostring(c.label)),
-    #reasons > 0 and table.concat(reasons, "; ") or "-"))
-  add("")
+  add(L("DETAIL_CALC"))
   local f = o.formula or {}
   if f.kind == "vendor" then
     add(string.format(L("DETAIL_VENDOR"), o.quantity, fmt(f.sellPrice), fmt(o.revenuePrudent), fmt(f.B), fmt(o.profit)))
@@ -46,26 +43,15 @@ function Details.Text(o)
     add(string.format(L("DETAIL_RESALE_F"), Money.FormatBp(f.feeBp), f.feeVerified and L("VERIFIED") or L("SCENARIO")))
     add(string.format(L("DETAIL_RESALE_L"), fmt(f.L), f.depositKnown and "" or L("DEPOSIT_UNKNOWN")))
     add(string.format(L("DETAIL_RESALE_P"), fmt(f.R), Money.FormatBp(f.feeBp), fmt(f.B), fmt(f.L), fmt(f.X), fmt(o.profit)))
-    add(string.format(L("DETAIL_BREAKEVEN"), fmt(f.breakEven)))
     if (f.residualUnits or 0) > 0 then add(string.format(L("DETAIL_RESIDUAL"), f.residualUnits)) end
-    if o.profitBase then add(string.format(L("DETAIL_BASE"), fmt(o.profitBase), fmt(f.basePrice))) end
   end
-  if o.roi then add(string.format(L("DETAIL_ROI"), o.roi * 100)) end
-  add("")
   add(L("DETAIL_LOTS"))
-  for _, lot in ipairs(o.lots or {}) do
-    local listing = lot.listing or {}
-    add(string.format("  %d x  %s  (%s/u)%s", lot.quantity, fmt(lot.cost), fmt(listing.unitPrice),
-      listing.auctionID and ("  #" .. listing.auctionID) or ""))
+  local lots = o.lots or {}
+  for index = 1, math.min(#lots, 6) do
+    local lot = lots[index]
+    add(string.format("  %d x  %s  (%s/u)", lot.quantity, fmt(lot.cost), fmt(lot.listing and lot.listing.unitPrice)))
   end
-  add("")
-  local p = o.provenance or {}
-  add(string.format(L("DETAIL_SOURCE"), tostring(p.source), tostring(p.scanId), L("COVERAGE_" .. tostring(o.coverage))))
-  if Schema.IsVariantUnknown(o.itemKey) then add(L("DETAIL_VARIANT_UNKNOWN")) end
-  local constraints = {}
-  for _, key in ipairs(o.constraints or {}) do constraints[#constraints + 1] = L("CONSTRAINT_" .. key) end
-  add(L("DETAIL_CONSTRAINTS") .. " " .. table.concat(constraints, "; "))
-  add(L("DETAIL_ALLOCATION") .. " " .. L("ALLOC_" .. tostring(o.allocation)))
+  if #lots > 6 then add(string.format(L("DETAIL_MORE_LOTS"), #lots - 6)) end
   add("")
   add(L("DETAIL_DISCLAIMER"))
   return table.concat(lines, "\n")
@@ -76,7 +62,7 @@ function Details.Ensure()
   local parent = ns.UI.Main.Ensure()
   local frame = CreateFrame("Frame", nil, parent, "BasicFrameTemplateWithInset")
   Details.frame = frame
-  frame:SetSize(440, 560)
+  frame:SetSize(440, 520)
   frame:SetPoint("TOPLEFT", parent, "TOPRIGHT", 4, 0)
   frame:EnableMouse(true)
   frame.title = W.Text(frame, "GameFontNormal")
@@ -84,15 +70,8 @@ function Details.Ensure()
   frame.title:SetText(L("DETAIL_TITLE"))
   frame.body = W.ScrollText(frame, false)
   frame.body:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -30)
-  frame.body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 212)
+  frame.body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 160)
   ns.UI.PurchasePanel.Build(frame)
-  frame.result = W.Text(frame, "GameFontHighlightSmall")
-  frame.result:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 40)
-  frame.result:SetPoint("RIGHT", frame, "RIGHT", -12, 0)
-  frame.prepare = W.Button(frame, L("BTN_PREPARE"), 150, function() Details.Prepare() end)
-  frame.prepare:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 12)
-  frame.refresh = W.Button(frame, L("BTN_REFRESH"), 150, function() Details.Refresh() end)
-  frame.refresh:SetPoint("LEFT", frame.prepare, "RIGHT", 6, 0)
   return frame
 end
 
@@ -100,42 +79,6 @@ function Details.Show(opportunity)
   local frame = Details.Ensure()
   Details.current = opportunity
   frame.body:SetText(Details.Text(opportunity))
-  frame.result:SetText("")
-  local demo = ns.UI.Main.demoResults ~= nil
-  frame.prepare:SetEnabled(not demo)
-  frame.refresh:SetEnabled(not demo)
   frame:Show()
   ns.UI.PurchasePanel.Show(opportunity)
-end
-
-function Details.Prepare()
-  local opportunity = Details.current
-  if not opportunity then return end
-  local prepared = ns.app.transactions:Prepare(opportunity)
-  Details.frame.result:SetText(string.format(L("PREPARED"), fmt(prepared.total), opportunity.name or opportunity.itemKey))
-end
-
-function Details.Refresh()
-  local opportunity = Details.current
-  local app = ns.app
-  if not opportunity then return end
-  local prepared = app.transactions.prepared
-  if not prepared or prepared.itemKey ~= opportunity.itemKey then prepared = app.transactions:Prepare(opportunity) end
-  local itemID = Schema.ItemIDOf(opportunity.itemKey)
-  local suffix = Schema.SuffixOf(opportunity.itemKey)
-  local ok, reason = app.scanner:Search(itemID, suffix, function(_, listings)
-    local status, reasons = app.transactions:Revalidate(prepared, listings)
-    local text = L("QUOTE_" .. status)
-    if #reasons > 0 then
-      local localized = {}
-      for _, why in ipairs(reasons) do localized[#localized + 1] = L("QUOTE_REASON_" .. why) end
-      text = text .. ": " .. table.concat(localized, ", ")
-    end
-    if Details.frame then Details.frame.result:SetText(text) end
-  end)
-  if not ok then
-    Details.frame.result:SetText(L("SCAN_REFUSED") .. " " .. (ns.L["REASON_" .. reason] or reason))
-  else
-    Details.frame.result:SetText(L("QUOTE_WAITING"))
-  end
 end

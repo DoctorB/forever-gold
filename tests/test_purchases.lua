@@ -212,6 +212,7 @@ end
 T.Case("vendor check: exact gold for the units sold verifies the vendor price", function()
   local s = setup({ bags = {} })
   local Capabilities = s.ns.Core.Capabilities
+  Capabilities.VERIFIED.sellPrice = false -- prove the runtime path
   T.NotOk(Capabilities.IsVerified("sellPrice"))
   buyLinen(s)
   local reports = {}
@@ -236,6 +237,7 @@ end)
 
 T.Case("vendor check: other income in the same visit does not verify anything", function()
   local s = setup({ bags = {} })
+  s.ns.Core.Capabilities.VERIFIED.sellPrice = false
   buyLinen(s)
   local reports = {}
   s.app.bus:Subscribe("vendor.check", function(report) reports[#reports + 1] = report end)
@@ -251,6 +253,10 @@ end)
 
 T.Case("with the vendor price verified the margin becomes VERIFIED", function()
   local s = setup()
+  s.ns.Core.Capabilities.VERIFIED.sellPrice = false
+  s.app:EvaluateChunked()
+  s.clock.advance(5)
+  T.Eq(s.find(101).class, "prudent", "not verified yet")
   s.ns.Core.Capabilities.RecordRuntime("sellPrice", { t = 1 })
   s.app:EvaluateChunked()
   s.clock.advance(5)

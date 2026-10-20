@@ -259,6 +259,9 @@ L.STATUS_OLD = "prices may have changed: the quote checks them before buying"
 L.HINT_WAIT = "Next scan possible in %s. Meanwhile, items you search in the AH window are evaluated."
 L.HINT_NONE_WAIT = "Nothing worth buying in the last scan. Next scan possible in %s."
 
+L.DETAIL_CALC = "Calculation:"
+L.DETAIL_MORE_LOTS = "  ... %d more lots"
+
 L.HELP_1 = "/fg - open or close the window"
 L.HELP_2 = "/fg scan - read-only AH scan (AH must be open)"
 L.HELP_3 = "/fg cancel - cancel the scan"

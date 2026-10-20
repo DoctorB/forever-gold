@@ -88,8 +88,8 @@ end
 
 function PurchasePanel.Build(frame)
   local section = CreateFrame("Frame", nil, frame)
-  section:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 64)
-  section:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 64)
+  section:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 12)
+  section:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
   section:SetHeight(140)
   local title = W.Text(section, "GameFontNormal")
   title:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)

@@ -40,6 +40,10 @@ Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
 - Lingua selezionabile: `/fg lang it|en|auto` o Impostazioni.
 - L'ultima lista di opportunità sopravvive a `/reload` e relog; conto alla
   rovescia del cooldown sul pulsante di scansione e nella riga di istruzioni.
+- Prezzo vendor verificato in gioco (primo acquisto assistito: +1s 60c):
+  le opportunità vendor complete risultano "VERIFICATO".
+- Dettaglio più corto; rimossi i pulsanti "Prepara" e "Aggiorna quotazione";
+  un solo riepilogo in chat, con il conteggio finale.
 
 ## [0.1.0-alpha.1] - 2026-10-20
 

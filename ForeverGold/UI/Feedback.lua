@@ -90,8 +90,23 @@ function Feedback.StateLine(app, state, reason, snapshot)
   return nil
 end
 
+Feedback.SUMMARY_WAIT = 8
+
 function Feedback.Attach(app)
   local Main = ns.UI.Main
+  local summary = ns.Core.Scheduler.New(app.schedulerEnv)
+  local awaitingSummary = false
+  local function trySummary(force)
+    local results = app.opportunities.results
+    if not awaitingSummary or not results then return false end
+    local c = results.counts
+    if not force and ((c.infoPending or 0) > 0 or (c.commodityPending or 0) > 0) then return false end
+    awaitingSummary = false
+    summary:Invalidate()
+    ns.Print(string.format(L("FB_ANALYZED"), #results.list, results.counts.candidates, results.counts.itemKeys))
+    return true
+  end
+  app.bus:Subscribe("opportunities.updated", function() trySummary() end)
   -- Once a second while waiting for the server: elapsed time on the bar.
   local ticker = ns.Core.Scheduler.New(app.schedulerEnv)
   local function tick()
@@ -126,10 +141,11 @@ function Feedback.Attach(app)
     if mode ~= "replicate" then return end
     if phase == "done" then
       Main.SetProgress(nil)
-      local results = app.opportunities.results
-      if results then
-        ns.Print(string.format(L("FB_ANALYZED"), #results.list, results.counts.candidates, results.counts.itemKeys))
-      end
+      summary:Invalidate()
+      awaitingSummary = true
+      -- Item data (vendor prices, commodity status) keeps arriving after
+      -- the first pass: report once it settles, or after a short wait.
+      if not trySummary() then summary:After(Feedback.SUMMARY_WAIT, function() trySummary(true) end) end
       return
     end
     Main.SetProgress({ phase = phase, done = done, total = total })
