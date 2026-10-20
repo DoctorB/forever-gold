@@ -62,6 +62,11 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   lots stay excluded (a lower `PlaceBid` could become a bid).
 - Variant items are searched directly with Forever's key (effective item
   level, item suffix = bonus ID + 1580, measured with the AH search test).
+- Guided fee and deposit test (Settings, `/fg feetest [itemID]`, default
+  Copper Bar): the player posts the item from the native AH window; the
+  add-on records the server's deposit quotes, measures the deposit paid,
+  reads the seller invoices in the mailbox and computes the real AH fee,
+  which then replaces the 5% scenario. Nothing is posted by the add-on.
 - Multi-unit item-search rows priced per unit (verified in game: the search
   groups single auctions at one price); they are observed, not bought.
 - Smaller saved data: one detailed observation per item and at most 8

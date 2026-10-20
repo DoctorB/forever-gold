@@ -16,7 +16,8 @@ local function setup(options)
     { itemID = 101, count = 10, buyout = 400 }, -- 40 each
     { itemID = 101, count = 5, buyout = 300 }, -- 60 each: above the vendor price
   }
-  local app, ns, clock, ah = Fakes.App({ rows = rows, items = ITEMS, wallet = wallet, bags = bags })
+  local inbox = options.inbox or {}
+  local app, ns, clock, ah = Fakes.App({ rows = rows, items = ITEMS, wallet = wallet, bags = bags, inbox = inbox })
   ah.commodityItems[101] = options.commodity101 ~= false and true or false
   ah.commodityItems[201] = false
   ah.commodityItems[102] = true
@@ -32,7 +33,7 @@ local function setup(options)
       if o.itemID == itemID then return o end
     end
   end
-  return { app = app, ns = ns, clock = clock, ah = ah, wallet = wallet, bags = bags, find = find }
+  return { app = app, ns = ns, clock = clock, ah = ah, wallet = wallet, bags = bags, find = find, inbox = inbox }
 end
 
 T.Case("commodities are recognised and bought in part at the unit price", function()
@@ -732,4 +733,55 @@ T.Case("AH search test: two single auctions at one price grouped by the search",
   T.Eq(report.lots, 1)
   T.Eq(report.votes.total, 1, "2x300 for two singles at 150: price per lot")
   T.Eq(report.votes.unit, 0)
+end)
+
+T.Case("fee test: deposit measured at posting, fee from the sale invoice", function()
+  ITEMS[2840] = { name = "Copper Bar", sellPrice = 50 }
+  local s = setup({ bags = { [2840] = 20 }, money = 9676 })
+  s.ah.depositPerUnit = 3 -- 12 h: 60, 24 h: 120, 48 h: 180 for 20 bars
+  s.ns.Core.Capabilities.VERIFIED.deposit, s.ns.Core.Capabilities.VERIFIED.fee = false, false
+  local test = s.app.feeTest
+  T.Ok(test:Start())
+  local state = test:State()
+  T.Eq(state.stage, "armed")
+  T.Eq(state.deposits[1], 60)
+  T.Eq(state.deposits[2], 120)
+  -- The player sells two bars to a merchant first: not a posting.
+  s.bags[2840] = 18
+  s.wallet.money = s.wallet.money + 100
+  s.app:OnEvent("PLAYER_MONEY")
+  T.Eq(state.stage, "armed")
+  T.Eq(state.count, 18)
+  -- Now posts the 18 bars for 24 h: 108 copper deposit.
+  s.bags[2840] = 0
+  s.wallet.money = s.wallet.money - 108
+  s.app:OnEvent("AUCTION_HOUSE_AUCTION_CREATED", 4242)
+  T.Eq(state.stage, "posted")
+  T.Eq(state.posted.deposit, 108)
+  T.Eq(state.posted.duration, 2)
+  T.Ok(s.ns.Core.Capabilities.IsVerified("deposit"))
+  T.Eq(s.ah.ownedQueries, 1)
+  s.ah.owned = { { auctionID = 4242, itemKey = { itemID = 2840 }, quantity = 18, buyoutAmount = 110 } }
+  s.app:OnEvent("OWNED_AUCTIONS_UPDATED")
+  T.Eq(state.posted.buyout, 110)
+  -- Sold: the invoice shows price 1980, deposit 108 back, AH cut 99.
+  s.inbox[1] = { invoiceType = "seller", itemName = "Copper Bar", subject = "Auction successful: Copper Bar", money = 1989,
+    bid = 1980, buyout = 1980, deposit = 108, consignment = 99 }
+  s.app:OnEvent("MAIL_INBOX_UPDATE")
+  T.Eq(state.stage, "sold")
+  T.Eq(state.result.feeBp, 500)
+  T.Eq(s.app.store:Settings().feeBp, 500)
+  T.Ok(s.app.store:Settings().feeVerified)
+  T.Ok(s.ns.Core.Capabilities.IsVerified("fee"))
+  -- The same invoice seen again is not counted twice.
+  s.app:OnEvent("MAIL_INBOX_UPDATE")
+  T.Eq(#state.sales, 1)
+  T.Eq(s.ah.spendCalls, 0, "nothing posted or bought by the add-on")
+end)
+
+T.Case("fee test refuses without the item or with the AH closed", function()
+  local s = setup({ bags = {} })
+  T.Eq(select(2, s.app.feeTest:Start(2840)), "no_item")
+  s.app:OnEvent("AUCTION_HOUSE_CLOSED")
+  T.Eq(select(2, s.app.feeTest:Start(2840)), "ah_closed")
 end)

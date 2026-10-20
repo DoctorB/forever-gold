@@ -103,6 +103,11 @@ function Fakes.AuctionHouse(rows)
     return { itemID = itemKey.itemID, isCommodity = status }
   end
   function api.GetQuoteDurationRemaining() return ah.quoteLeft or 30 end
+  function api.CalculateCommodityDeposit(itemID, duration, quantity)
+    return ah.depositPerUnit and ah.depositPerUnit * quantity * duration or nil
+  end
+  function api.QueryOwnedAuctions() ah.ownedQueries = (ah.ownedQueries or 0) + 1 end
+  function api.GetOwnedAuctions() return ah.owned or {} end
   -- Purchase symbols exist (like the real client) and record every call;
   -- spendCalls counts only the calls that spend, post or cancel auctions.
   local spending = { PlaceBid = true, ConfirmCommoditiesPurchase = true, PostItem = true, PostCommodity = true,
@@ -140,6 +145,15 @@ function Fakes.Env(clock, ah, extra)
     C_Timer = { After = function(delay, fn) clock.after(delay, fn) end },
     time = function() return clock.t end,
     GetMoney = function() return extra and extra.wallet and extra.wallet.money or nil end,
+    GetInboxNumItems = function() return #(extra and extra.inbox or {}) end,
+    GetInboxHeaderInfo = function(index)
+      local mail = extra.inbox[index]
+      return nil, nil, "Auction House", mail.subject, mail.money, 0, 30
+    end,
+    GetInboxInvoiceInfo = function(index)
+      local mail = extra.inbox[index]
+      return mail.invoiceType, mail.itemName, "Buyer", mail.bid, mail.buyout, mail.deposit, mail.consignment
+    end,
     GetItemCount = function(itemID) return extra and extra.bags and extra.bags[itemID] or 0 end,
     debugprofilestop = function() return clock.preciseMs() end,
     math = { random = function() return 0.5 end },

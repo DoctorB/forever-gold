@@ -30,6 +30,15 @@ function Commands.Handle(input)
   elseif command == "demo" then
     ns.UI.Main.demoResults = app:Demo()
     ns.UI.Main.Open("opportunities")
+  elseif command == "feetest" then
+    if rest == "cancel" then
+      app.feeTest:Cancel()
+    elseif rest == "status" then
+      local state = app.feeTest:State()
+      ns.Print(state and string.format(L("FT_STATUS"), state.name, L("FT_STAGE_" .. state.stage)) or L("FT_NONE"))
+    else
+      ns.UI.Feedback.StartFeeTest(app, tonumber(rest))
+    end
   elseif command == "probe" then
     ns.UI.Feedback.StartProbe(app)
   elseif command == "lang" then

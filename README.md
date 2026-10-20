@@ -60,6 +60,7 @@ before updating; to go back, delete the add-on folder and restore the file.
 | `/fg diagnostics` | client capability report, saved in the SavedVariables |
 | `/fg demo` | fictional data labelled DEMO |
 | `/fg probe` | read-only AH search test (variants, multi-unit lots), saved for the audit |
+| `/fg feetest [itemID]` · `status` · `cancel` | guided AH fee and deposit test (you post the item yourself) |
 | `/fg lang it` · `en` · `auto` | interface language |
 | `/fg reset` | opens History for a confirmed reset |
 

@@ -39,6 +39,11 @@ ClientAdapter.SYMBOLS = {
   { "C_EventUtils.IsEventValid", "C_EventUtils", "IsEventValid" },
   { "issecretvalue", nil, "issecretvalue" },
   { "GetMoney", nil, "GetMoney" },
+  { "C_AuctionHouse.QueryOwnedAuctions", "C_AuctionHouse", "QueryOwnedAuctions" },
+  { "C_AuctionHouse.GetOwnedAuctions", "C_AuctionHouse", "GetOwnedAuctions" },
+  { "GetInboxNumItems", nil, "GetInboxNumItems" },
+  { "GetInboxHeaderInfo", nil, "GetInboxHeaderInfo" },
+  { "GetInboxInvoiceInfo", nil, "GetInboxInvoiceInfo" },
   { "GetItemCount", nil, "GetItemCount" },
 }
 
@@ -51,6 +56,7 @@ ClientAdapter.EVENTS = {
   "COMMODITY_PRICE_UPDATED", "COMMODITY_PRICE_UNAVAILABLE", "COMMODITY_PURCHASE_SUCCEEDED",
   "COMMODITY_PURCHASE_FAILED", "COMMODITY_PURCHASED", "ITEM_PURCHASED", "AUCTION_HOUSE_PURCHASE_COMPLETED",
   "AUCTION_HOUSE_SHOW_ERROR", "MERCHANT_SHOW", "MERCHANT_CLOSED", "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED",
+  "OWNED_AUCTIONS_UPDATED", "AUCTION_HOUSE_AUCTION_CREATED", "PLAYER_MONEY", "BAG_UPDATE_DELAYED", "MAIL_INBOX_UPDATE",
 }
 
 function ClientAdapter.New(env)
@@ -162,6 +168,28 @@ function ClientAdapter:ItemLevel(link)
   local ok, level = self:Call("C_Item", "GetDetailedItemLevelInfo", link)
   if ok and type(level) == "number" and level > 0 then return level end
   return nil
+end
+
+-- AH sale invoices in the mailbox (read-only; the mail is not taken).
+-- Buyer names are not read. { { itemName, bid, buyout, deposit, consignment,
+--   money, subject, daysLeft, count } }
+function ClientAdapter:SellerInvoices()
+  local list = {}
+  local ok, count = self:Call(nil, "GetInboxNumItems")
+  if not ok or type(count) ~= "number" then return list end
+  for index = 1, math.min(count, 50) do
+    local okHeader, _, _, _, subject, money, _, daysLeft = self:Call(nil, "GetInboxHeaderInfo", index)
+    local okInvoice, invoiceType, itemName, _, bid, buyout, deposit, consignment, _, _, units =
+      self:Call(nil, "GetInboxInvoiceInfo", index)
+    if okInvoice and invoiceType == "seller" and type(itemName) == "string" then
+      list[#list + 1] = {
+        itemName = itemName, bid = bid, buyout = buyout, deposit = deposit, consignment = consignment,
+        money = okHeader and money or nil, subject = okHeader and subject or nil, daysLeft = okHeader and daysLeft or nil,
+        count = type(units) == "number" and units or nil,
+      }
+    end
+  end
+  return list
 end
 
 -- Player money in copper, or nil.

@@ -54,6 +54,10 @@ function AuctionHouse:OnEvent(event, ...)
     fire(self, "onThrottleReady")
   elseif event == "AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED" then
     fire(self, "onThrottleDropped")
+  elseif event == "OWNED_AUCTIONS_UPDATED" then
+    fire(self, "onOwned")
+  elseif event == "AUCTION_HOUSE_AUCTION_CREATED" then
+    fire(self, "onAuctionCreated", ...)
   elseif event == "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" then
     fire(self, "onBrowseResults")
   elseif event == "ITEM_KEY_ITEM_INFO_RECEIVED" then
@@ -242,6 +246,30 @@ function AuctionHouse:IsCommodity(itemID)
     return info.isCommodity
   end
   if ok then self.commodity[itemID] = "pending" end
+  return nil
+end
+
+-- Read-only request for the player's own auctions (OWNED_AUCTIONS_UPDATED).
+function AuctionHouse:QueryOwned()
+  return self.client:Call("C_AuctionHouse", "QueryOwnedAuctions", {})
+end
+
+-- { { auctionID, itemID, quantity, buyoutAmount, status } }
+function AuctionHouse:ReadOwned()
+  local ok, owned = self.client:Call("C_AuctionHouse", "GetOwnedAuctions")
+  local list = {}
+  if not ok or type(owned) ~= "table" then return list end
+  for _, auction in ipairs(owned) do
+    if type(auction) == "table" and type(auction.itemKey) == "table" then
+      list[#list + 1] = { auctionID = auction.auctionID, itemID = auction.itemKey.itemID, quantity = auction.quantity,
+        buyoutAmount = auction.buyoutAmount, status = auction.status }
+    end
+  end
+  return list
+end
+
+-- Deposit of a non-commodity needs an item location in the bags: not used.
+function AuctionHouse:ItemDeposit()
   return nil
 end
 

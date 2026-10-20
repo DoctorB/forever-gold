@@ -74,3 +74,16 @@ Requires `0.1.0-alpha.2`. Spends real gold, but only with your click.
 
 Do not sell anything else during the same merchant visit and do not repair: the
 gold comparison must be exact.
+
+## Session 4 — AH fee and deposit (guided)
+
+Uses an item the owner chooses (default: 20 Copper Bars). ForeverGold does
+not post: you post from the native AH window.
+
+| # | Action | Expected result | To record |
+| --- | --- | --- | --- |
+| 4.1 | AH open, Settings → "Fee and deposit test" (or `/fg feetest`) | chat: deposit quoted for 12/24/48 h and a suggested price | quotes |
+| 4.2 | Post **all** the bars from the AH window (Sell tab), any duration | chat: "Deposit paid: X … It matches the N h quote: deposit verified" | deposit and duration |
+| 4.3 | Wait for the sale (may take hours; `/fg feetest status` shows the stage) | — | — |
+| 4.4 | Open any mailbox (no need to take the mail) | chat: "Sale invoices read … fee X%. Fee verified" | fee |
+| 4.5 | `/reload`, then send the file for the audit | fee and deposit recorded in `ForeverGoldDB.verifiedRuntime` | — |

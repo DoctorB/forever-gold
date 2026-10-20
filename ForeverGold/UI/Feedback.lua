@@ -99,8 +99,52 @@ function Feedback.StartProbe(app)
   return ok
 end
 
+local function money(value)
+  return type(value) == "number" and ns.Economy.Money.Format(value) or "?"
+end
+
+-- Guided fee and deposit test.
+function Feedback.StartFeeTest(app, itemID)
+  local ok, reason = app.feeTest:Start(itemID)
+  if not ok then ns.Print(L("FT_REFUSED_" .. tostring(reason))) end
+  return ok
+end
+
+function Feedback.FeeTestLines(kind, state)
+  if kind == "armed" then
+    local d = state.deposits
+    return {
+      string.format(L("FT_ARMED"), state.count, state.name, money(d[1]), money(d[2]), money(d[3])),
+      state.lowest and string.format(L("FT_PRICE"), money(state.lowest)) or L("FT_PRICE_UNKNOWN"),
+    }
+  elseif kind == "posted" then
+    local p = state.posted
+    local line = string.format(L("FT_POSTED"), money(p.deposit), p.quantity, state.name)
+    if p.duration then
+      line = line .. " " .. string.format(L("FT_DEPOSIT_OK"), ({ 12, 24, 48 })[p.duration])
+    else
+      line = line .. " " .. L("FT_DEPOSIT_DIFF")
+    end
+    return { line, L("FT_WAIT") }
+  elseif kind == "owned" then
+    return { string.format(L("FT_OWNED"), state.posted.ownedQuantity or 0, state.name, money(state.posted.buyout)) }
+  elseif kind == "sold" then
+    local r = state.result
+    if r then
+      return { string.format(L("FT_SOLD"), r.sales, money(r.price), money(r.cut), r.feeBp / 100) }
+    end
+    return { L("FT_SOLD_UNREADABLE") }
+  elseif kind == "cancelled" then
+    return { L("FT_CANCELLED") }
+  end
+  return {}
+end
+
 function Feedback.Attach(app)
   local Main = ns.UI.Main
+  app.bus:Subscribe("feetest", function(kind, state)
+    for _, line in ipairs(Feedback.FeeTestLines(kind, state)) do ns.Print(line) end
+  end)
   app.bus:Subscribe("probe.progress", function(kind, data)
     if kind == "step" then
       ns.Print(string.format(L("PROBE_STEP"), data.index, data.total, data.name or "?"))

@@ -71,6 +71,12 @@ function App:Load(saved)
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, store = self.store,
     printer = function(kind, data) self.bus:Publish("probe.progress", kind, data) end,
   })
+  self.feeTest = ns.Services.FeeTest.New({
+    client = self.client, ah = self.ah, items = self.items, opportunities = self.opportunities, store = self.store,
+    clock = clock, printer = function(kind, data) self.bus:Publish("feetest", kind, data) end,
+  })
+  self.ah.callbacks.onOwned = function() self.feeTest:OnOwnedAuctions() end
+  self.ah.callbacks.onAuctionCreated = function() self.feeTest:OnBagsOrMoney() end
   self.vendorCheck = ns.Services.VendorCheck.New({
     client = self.client, store = self.store, clock = clock,
     printer = function(report) self.bus:Publish("vendor.check", report) end,
@@ -230,6 +236,10 @@ function App:OnEvent(event, ...)
     self.items:OnItemInfo(...)
   elseif event == "PLAYER_LOGOUT" then
     self.history:Prune(self.clock(), nil)
+  elseif event == "PLAYER_MONEY" or event == "BAG_UPDATE_DELAYED" then
+    self.feeTest:OnBagsOrMoney()
+  elseif event == "MAIL_INBOX_UPDATE" then
+    self.feeTest:OnInbox()
   elseif event == "MERCHANT_SHOW" then
     self.vendorCheck:OnMerchantShow()
   elseif event == "MERCHANT_CLOSED" then
