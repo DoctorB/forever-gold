@@ -1,83 +1,83 @@
 # Changelog
 
-Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni SemVer.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer versions.
 
 ## [0.1.0-alpha.2] - 2026-10-20
 
-Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
+In-game verification on build 1.60.1.70450 and first assisted purchases.
 
-### Aggiunto
+### Added
 
-- Acquisto assistito sperimentale (disattivato di default, Impostazioni):
-  preventivo del server per le commodity o ricerca dell'asta, poi un clic
-  "Compra: spendi X" abilitato solo se il prezzo non supera piano, tetto per
-  acquisto (default 50 silver) e oro disponibile. Nessun timer, nessun retry,
-  esito incerto registrato da verificare.
-- Registro degli acquisti e controllo al mercante: l'oro incassato viene
-  confrontato con le unità vendute; se coincide, il prezzo vendor risulta
-  verificato su questo client.
-- Commodity riconosciute (`GetItemKeyInfo`): acquisto parziale al prezzo
-  unitario, costo esatto sul book.
-- Banner del guadagno (verificato / probabile / speculativo), righe colorate
-  per classe, oro insufficiente in grigio, filtro "Solo verificati",
-  dettaglio con "Come fare".
-- Feedback della scansione in chat e barra di avanzamento.
-- Evidenze salvate con ogni scansione (conteggi, base indice, campioni di
-  stack, link grezzi, voti sul buyout).
+- Experimental assisted purchase (off by default, Settings): server quote
+  for commodities or auction search, then a "Buy: spend X" click enabled only
+  if the price does not exceed the plan, the per-purchase limit (default 50
+  silver) and the gold available. No timer, no retry; an uncertain outcome is
+  recorded for checking.
+- Purchase ledger and merchant check: the gold received is compared with the
+  units sold; when it matches, the vendor price is recorded as verified on
+  this client.
+- Commodities recognised (`GetItemKeyInfo`): partial purchase at the unit
+  price, exact cost from the order book.
+- Gain banner (verified / probable / speculative), rows coloured by class,
+  unaffordable rows greyed out, "Verified only" filter, "How to" steps in the
+  details.
+- Scan feedback in chat and a progress bar.
+- Evidence saved with every scan (counts, index base, stack samples, raw
+  links, buyout votes).
 
-### Modificato
+### Changed
 
-- Chiave oggetto con bonus ID: su Forever le varianti arrivano così.
-- Replica: nessun nuovo tentativo automatico; cooldown misurato (13 min 34 s
-  – 16 min) usato per non inviare richieste inutili.
-- "Verificato" richiede buyout e prezzo vendor provati in gioco.
-- Interfaccia in linguaggio semplice: colonne "Cosa fare / Paghi / Ricevi /
-  Guadagno / Affidabilità", una riga di istruzioni che dice cosa fare,
-  barra di stato e footer senza gergo, tooltip sulle righe, pulsante
-  "Attiva" degli acquisti assistiti direttamente nel dettaglio.
-- Varianti dello stesso oggetto unite in una riga vendor; margini vendor
-  sotto 25 rame o sotto il 5% nascosti (configurabili; migrazione schema 2).
-- Lingua selezionabile: `/fg lang it|en|auto` o Impostazioni.
-- L'ultima lista di opportunità sopravvive a `/reload` e relog; conto alla
-  rovescia del cooldown sul pulsante di scansione e nella riga di istruzioni.
-- Prezzo vendor verificato in gioco (primo acquisto assistito: +1s 60c):
-  le opportunità vendor complete risultano "VERIFICATO".
-- Dettaglio più corto; rimossi i pulsanti "Prepara" e "Aggiorna quotazione";
-  un solo riepilogo in chat, con il conteggio finale.
-- "Compra tutto" al posto di "Demo" (che resta in `/fg demo`): mette in coda
-  le offerte vendor dalla più redditizia, prepara da solo preventivi e
-  ricerche, salta le offerte sparite o rincarate e si ferma al limite di
-  spesa o a un esito incerto. Ogni acquisto resta un clic sullo stesso
-  pulsante, come richiede il gioco.
-- Scheda Portafoglio in tabella: riquadri con guadagno realizzato, speso,
-  incassato e valore ancora da vendere; tabella degli acquisti (data,
-  oggetto, quantità, pagato, venduti, incassato, guadagno, in borsa, stato).
-- Scheda Storico in tabella: riepilogo, tabella delle scansioni e tabella
-  dei prezzi registrati (riferimento, giorni di dati, minimo, in vendita);
-  esporta/importa in un riquadro che si apre solo quando serve.
+- Item key includes bonus IDs: on Forever item variants arrive that way.
+- Full scan: no automatic re-request; the measured cooldown is used to avoid
+  pointless requests.
+- "Verified" requires both auction buyout and vendor price proven in game.
+- Plain-language interface: "What to do / You pay / You get / Gain /
+  Reliability" columns, a hint line saying what to do next, status line and
+  footer without jargon, row tooltips, an "Enable" button for assisted
+  purchases right in the details.
+- Variants of the same item merged into one vendor row; vendor margins below
+  25 copper or 5% hidden (configurable; schema migration 2).
+- Selectable language: `/fg lang it|en|auto` or Settings.
+- The last opportunity list survives `/reload` and relog; cooldown countdown
+  on the scan button and in the hint line.
+- Vendor price verified in game (first assisted purchase: +1s 60c): complete
+  vendor opportunities show as "VERIFIED".
+- Shorter details; "Prepare" and "Refresh quote" buttons removed; a single
+  chat summary per scan, with the final count.
+- "Buy all" replaces "Demo" (still available as `/fg demo`): queues vendor
+  offers best first, prepares quotes and searches by itself, skips offers
+  that vanished or got dearer and stops at the spending limit or on an
+  uncertain outcome. Each purchase is still one click on the same button, as
+  the game requires.
+- Portfolio tab as a table: cards with realized gain, spent, received and
+  value still to sell; purchases table (date, item, quantity, paid, sold,
+  received, gain, in bags, status).
+- History tab as a table: summary, scans table and recorded-prices table
+  (reference, days of data, lowest, on sale); export/import in a box that
+  opens only when needed.
 
 ## [0.1.0-alpha.1] - 2026-10-20
 
-Prima alpha di sola analisi, **non verificata in gioco**.
+First analysis-only alpha, **not verified in game**.
 
-### Aggiunto
+### Added
 
-- Core economico puro: denaro in copper interi senza conversione di `nil` in
-  zero, profondità per livelli, profitto/ROI/pareggio con arrotondamenti
-  prudenti, depositi rimborsati e persi, punteggio di confidenza etichettato.
-- Strategie vendor e rivendita AH con soglie configurabili (15% ROI, 10 silver)
-  dichiarate come scelte di prodotto; disenchant, crafting e conversioni come
-  funzioni pure con ranking disattivato.
-- Scanner in sola lettura con macchina a stati, generazioni, timeout, retry
-  limitati con backoff, lettura a blocchi con budget per frame, osservazione
-  passiva delle ricerche dell'utente, ricerca mirata per aggiornare una
-  quotazione.
-- Storico locale per mercato e variante con retention, import/export testuale
-  validato, migrazioni versionate su copia.
-- UI nativa (Opportunità, Storico, Professioni, Portafoglio, Impostazioni),
-  dettaglio con formula espansa, modalità demo etichettata, tooltip,
-  localizzazione enUS e itIT.
-- `/fg diagnostics` con report salvato e trace eventi limitato.
-- Licenza MIT.
-- Test offline (economia, replay scanner, app, UI su mock, pacchetto, lint
-  dei globali sul bytecode), benchmark, build PowerShell con checksum.
+- Pure economic core: money as integer copper without turning `nil` into
+  zero, depth by price levels, profit/ROI/break-even with prudent rounding,
+  refunded and lost deposits, labelled confidence score.
+- Vendor and AH resale strategies with configurable thresholds (15% ROI,
+  10 silver) declared as product choices; disenchant, crafting and
+  conversions as pure functions with ranking disabled.
+- Read-only scanner with a state machine, generations, timeouts, bounded
+  retries with backoff, chunked reading within a per-frame budget, passive
+  observation of the player's own searches, targeted search to refresh a
+  quote.
+- Local history per market and variant with retention, validated text
+  import/export, versioned migrations on a copy.
+- Native UI (Opportunities, History, Professions, Portfolio, Settings),
+  details with the expanded formula, labelled demo mode, tooltips, enUS and
+  itIT localisation.
+- `/fg diagnostics` with a saved report and a bounded event trace.
+- MIT license.
+- Offline tests (economy, scanner replay, app, UI on mocks, package, bytecode
+  globals lint), benchmark, PowerShell build with checksum.

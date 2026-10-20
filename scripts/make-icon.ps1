@@ -1,10 +1,10 @@
 # Generates ForeverGold/Media/ForeverGold.tga (64x64, 32-bit, uncompressed)
-# from the CurseForge PNG. The TGA is NOT referenced by the TOC until it has
-# been seen loading in the client (docs/STATUS.md).
+# from the logo (docs/ForeverGold-CurseForge.png). The TGA is NOT referenced
+# by the TOC until it has been seen loading in the client (docs/STATUS.md).
 #   powershell -ExecutionPolicy Bypass -File scripts/make-icon.ps1
 [CmdletBinding()]
 param(
-  [string]$Source = "assets/ForeverGold-CurseForge.png",
+  [string]$Source = "docs/ForeverGold-CurseForge.png",
   [string]$Target = "ForeverGold/Media/ForeverGold.tga",
   [int]$Size = 64
 )

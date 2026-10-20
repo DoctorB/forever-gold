@@ -1,86 +1,94 @@
+<p align="center">
+  <img src="docs/ForeverGold-CurseForge.png" alt="ForeverGold logo" width="160">
+</p>
+
 # ForeverGold
 
-Addon di **analisi** della casa d'aste per **World of Warcraft: Forever**.
-Individua occasioni economiche e spiega perché potrebbero convenire: prezzo
-effettivo, quantità acquistabile, capitale, costi, profitto prudente,
-freschezza dei dati, confidenza e vincoli. **Non compra mai da solo**: l'acquisto
-assistito, opzionale, richiede un tuo clic per ogni acquisto. Non mette
-all'asta e non cancella aste.
+Auction House **analysis** add-on for **World of Warcraft: Forever**. It finds
+money-making opportunities and explains why they may pay off: effective
+price, quantity you can buy, capital, costs, prudent profit, data freshness,
+reliability and constraints. **It never buys on its own**: the optional
+assisted purchase needs your click for every single purchase. It never
+posts or cancels auctions.
 
-> Stato: `0.1.0-alpha.2`, alpha provata in parte in gioco sulla build
-> 1.60.1.70450 (persistenza, replica, indice, buyout, cooldown). Il dettaglio
-> di cosa è verificato è in `docs/API-AUDIT.md`.
+> Status: `0.1.0-alpha.2`, alpha partly tested in game on build 1.60.1.70450
+> (persistence, full scan, auction prices, vendor prices, assisted purchases
+> of commodities and individual auctions). What is verified, and how, is in
+> [`docs/API-AUDIT.md`](docs/API-AUDIT.md).
 
-## Cosa fa
+## What it does
 
-- **Vendor arbitrage**: oggetti in asta che il mercante paga più del buyout
-  (`quantità × prezzo vendor − buyout`, nessuna commissione AH).
-- **Rivendita AH**: lotti sotto il riferimento storico locale, con
-  profondità reale (somma dei livelli, mai "prezzo minimo × quantità"),
-  commissione (scenario 5% finché non verificata), depositi, buffer prudente
-  e quantità limitata dalla liquidità osservata. Senza storico sufficiente
-  mostra solo uno scenario.
-- **Storico locale** per mercato e variante: un campione al giorno, finestre
-  7/30 giorni; prezzi richiesti e profondità, mai "volume venduto".
-- **Diagnostica** (`/fg diagnostics`): build, simboli API, eventi, persistenza.
-- **Acquisto assistito** (sperimentale, da Impostazioni): dal dettaglio
-  "1. Preventivo" chiede il prezzo al server senza spendere; "2. Compra:
-  spendi X" si abilita solo se il preventivo rientra nel piano, nel tetto per
-  acquisto e nel tuo oro. Dopo la vendita al mercante ForeverGold confronta
-  l'oro incassato col previsto.
-- **Compra tutto**: mette in coda le offerte vendor entro il limite di spesa
-  e prepara da solo ogni acquisto; tu premi lo stesso pulsante una volta per
-  ogni acquisto (il gioco richiede un clic per ogni spesa).
-- Disenchant, crafting e conversioni: calcoli pronti, ranking **disattivato**
-  finché non esistono dati verificati per Forever.
+- **Vendor arbitrage**: auctions a merchant pays more for than their buyout
+  (`quantity × vendor price − buyout`, no AH fee). Margins below 25 copper or
+  5% are hidden (configurable); variants of the same item are merged.
+- **AH resale**: lots below the local price reference, with real depth (sum
+  of the price levels, never "lowest price × quantity"), AH fee (5% scenario
+  until measured), deposits, a prudent buffer and a quantity limited by the
+  observed liquidity. Without enough history it only shows a scenario.
+- **Local price history** per market and item variant: one sample per day,
+  7/30-day windows; listed prices and depth, never "sold volume".
+- **Assisted purchase** (experimental, off by default): in an opportunity's
+  details, "1. Get quote" asks the server for the current price without
+  spending; "2. Buy: spend X" is enabled only if the quote fits the plan,
+  the spending limit and your gold. After you sell to a merchant, ForeverGold
+  compares the gold received with what was expected.
+- **Buy all**: queues the vendor offers within the spending limit and
+  prepares each purchase by itself; you press the same button once per
+  purchase (the game requires a click for every spend).
+- **Portfolio**: realized gain, gold spent and received, items still to sell
+  and a table of every purchase.
+- **Diagnostics** (`/fg diagnostics`): build, API symbols, events, saving.
+- Disenchant, crafting and conversions: calculations ready, ranking
+  **disabled** until verified data for Forever exists.
 
-## Installazione
+## Installation
 
-1. Estrai lo ZIP in `World of Warcraft\_classic_beta_\Interface\AddOns\`
-   (deve risultare `AddOns\ForeverGold\ForeverGold.toc`).
-2. Abilita ForeverGold nella lista addon.
+1. Extract the ZIP into `World of Warcraft\_classic_beta_\Interface\AddOns\`
+   (you must end up with `AddOns\ForeverGold\ForeverGold.toc`).
+2. Enable ForeverGold in the add-on list.
 
-Backup e rollback: copia `WTF\Account\<account>\SavedVariables\ForeverGold.lua`
-prima di aggiornare; per tornare indietro cancella la cartella dell'addon e
-ripristina il file.
+Backup and rollback: copy `WTF\Account\<account>\SavedVariables\ForeverGold.lua`
+before updating; to go back, delete the add-on folder and restore the file.
 
-## Uso
+## Usage
 
-| Comando | Effetto |
+| Command | Effect |
 | --- | --- |
-| `/fg` | apre/chiude la finestra (Opportunità · Storico · Professioni · Portafoglio · Impostazioni) |
-| `/fg scan` | scansione in sola lettura; richiede l'AH aperta |
-| `/fg cancel` | annulla la scansione |
-| `/fg diagnostics` | report delle capacità del client, salvato nei SavedVariables |
-| `/fg demo` | dati fittizi etichettati DEMO (il pulsante della finestra è ora "Compra tutto") |
-| `/fg reset` | apre lo Storico per un azzeramento con conferma |
+| `/fg` | opens/closes the window (Opportunities · History · Professions · Portfolio · Settings) |
+| `/fg scan` | read-only full scan; the Auction House must be open (about once every 15 minutes) |
+| `/fg cancel` | cancels the scan |
+| `/fg diagnostics` | client capability report, saved in the SavedVariables |
+| `/fg demo` | fictional data labelled DEMO |
+| `/fg lang it` · `en` · `auto` | interface language |
+| `/fg reset` | opens History for a confirmed reset |
 
-La tabella mostra sempre i denominatori (opportunità / candidati / chiavi
-oggetto / righe / unità) e la copertura della scansione. Il punteggio di
-confidenza è euristico ed etichettato: **non è una probabilità di guadagno**.
-Un prezzo basso non garantisce una vendita futura.
+Typical loop: open the AH, press **Scan AH**, click a green row (or **Buy all**),
+press **1. Get quote** then **2. Buy**, sell the items to any merchant, check
+the result in **Portfolio**.
 
-## Limiti noti
+The reliability label is a heuristic, **not a probability of profit**. A low
+price is not a guaranteed future sale.
 
-- La scansione completa usa `C_AuctionHouse.ReplicateItems`, disponibile
-  circa ogni 15 minuti (misurato fra 13 min 34 s e 16 min); la completezza
-  non è dichiarata, quindi l'esito resta "osservazione parziale".
-- Commissione AH e depositi sono scenari dichiarati: la rivendita resta
-  speculativa.
-- L'acquisto assistito è sperimentale; vendita al mercante e rimessa
-  all'asta restano manuali.
+## Known limits
 
-## Sviluppo
+- The full scan uses `C_AuctionHouse.ReplicateItems`, available about every
+  15 minutes (measured between 14 min 27 s and 15 min 38 s); completeness is
+  not declared, so the result stays "partial observation".
+- AH fee and deposits are declared scenarios: resale stays speculative.
+- Assisted purchase is experimental; selling to merchants and relisting stay
+  manual.
 
-- Test offline: `lua5.1 tests/runner.lua` (Lua 5.1, nessuna dipendenza).
+## Development
+
+- Offline tests: `lua5.1 tests/runner.lua` (Lua 5.1, no dependencies).
 - Benchmark: `lua5.1 tests/bench.lua`.
-- Pacchetto: `powershell -ExecutionPolicy Bypass -File scripts/build.ps1`
-  → `release/ForeverGold-<versione>.zip` + `.sha256` + `manifest.json`.
-- Icona texture: `scripts/make-icon.ps1` (TGA 64×64 dal PNG CurseForge).
+- Package: `powershell -ExecutionPolicy Bypass -File scripts/build.ps1`
+  → `release/ForeverGold-<version>.zip` + `.sha256` + `manifest.json`.
+- Texture icon: `scripts/make-icon.ps1` (64×64 TGA from the logo).
 
-Documenti: `docs/STATUS.md`, `docs/API-AUDIT.md`, `docs/DECISIONS.md`,
-`docs/TESTING-IN-GAME.md`.
+Documents: [`docs/STATUS.md`](docs/STATUS.md), [`docs/API-AUDIT.md`](docs/API-AUDIT.md),
+[`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/TESTING-IN-GAME.md`](docs/TESTING-IN-GAME.md).
 
-## Licenza
+## License
 
-MIT, vedi `LICENSE`.
+MIT, see [`LICENSE`](LICENSE).
