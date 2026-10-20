@@ -67,15 +67,15 @@ end
 function Settings.Build(panel)
   panel.inputs = {}
   local y = 0
+  -- One field per row: labels are full sentences and must not be cut.
   for index, field in ipairs(Settings.FIELDS) do
-    local column = (index - 1) % 2
-    if column == 0 and index > 1 then y = y - 26 end
+    if index > 1 then y = y - 24 end
     local label = W.Text(panel, "GameFontHighlightSmall")
-    label:SetPoint("TOPLEFT", panel, "TOPLEFT", column * 380, y - 4)
-    label:SetWidth(240)
+    label:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y - 4)
+    label:SetWidth(420)
     label:SetText(L(field.label))
     local input = W.Input(panel, 90)
-    input:SetPoint("TOPLEFT", panel, "TOPLEFT", column * 380 + 250, y)
+    input:SetPoint("TOPLEFT", panel, "TOPLEFT", 430, y)
     panel.inputs[field.key] = input
   end
   y = y - 30

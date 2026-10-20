@@ -82,7 +82,7 @@ campioni con la finestra AH; misura del cooldown.
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 51 file,
-  SHA-256 `d55d03d7107ce577941ed9bc0fe0153c5490547f2ef20461b9ab2612a1281219`.
+  SHA-256 `d040be2ccfaaa12a6d5d665c4b1804484cb6dc4e11b8f9834d73a00488269429`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.
