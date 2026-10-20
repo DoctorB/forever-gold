@@ -162,3 +162,36 @@ T.Case("progress text and fraction", function()
     T.Eq(Main.ProgressText(nil), nil)
   end)
 end)
+
+T.Case("waiting shows elapsed time; silence explains the cooldown; refusal says when", function()
+  withClient(function(ns, _, clock, ah, eventFrame)
+    ns.UI.Commands.Handle("")
+    eventFrame.scripts.OnEvent(eventFrame, "AUCTION_HOUSE_SHOW")
+    ns.UI.Commands.Handle("scan")
+    ah.delivered = true
+    eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(120)
+    ah.delivered = false
+    clock.advance(400)
+    ns.UI.Commands.Handle("scan")
+    clock.advance(5)
+    T.Ok(ns.UI.Main.frame.progressText:GetText():find("5 s / 60 s", 1, true) ~= nil, ns.UI.Main.frame.progressText:GetText())
+    clock.advance(60)
+    local last = ns.printed[#ns.printed]
+    T.Ok(last:find("no answer from the server in 60 s", 1, true) ~= nil, last)
+    T.Ok(last:find("no answer up to 8 min 40 s", 1, true) ~= nil, last)
+    ns.UI.Commands.Handle("scan")
+    last = ns.printed[#ns.printed]
+    T.Ok(last:find("next attempt possible in 3 min 55 s", 1, true) ~= nil, last)
+    T.Eq(ah.replicateCalls, 2)
+  end)
+end)
+
+T.Case("durations read naturally", function()
+  withClient(function(ns)
+    local D = ns.UI.Feedback.Duration
+    T.Eq(D(45), "45 s")
+    T.Eq(D(606), "10 min 6 s")
+    T.Eq(D(900), "15 min")
+  end)
+end)

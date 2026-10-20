@@ -91,6 +91,9 @@ function Main.ProgressText(progress)
     return string.format("%s %d/%d (%d%%)", label, progress.done or 0, progress.total,
       math.floor((progress.done or 0) * 100 / progress.total))
   end
+  if progress.timeout then
+    return string.format("%s... %d s / %d s", label, progress.elapsed or 0, progress.timeout)
+  end
   return label .. "..."
 end
 
@@ -249,10 +252,8 @@ end
 local function buildOpportunities(panel)
   local frame = Main.frame
   local scan = W.Button(panel, L("BTN_SCAN"), 110, function()
-    local app = ns.app
     Main.demoResults = nil
-    local ok, reason = app.scanner:Start({ mode = "replicate" })
-    if not ok then ns.Print(L("SCAN_REFUSED") .. " " .. (ns.L["REASON_" .. reason] or reason)) end
+    ns.UI.Feedback.StartScan(ns.app)
     Main.RefreshTable()
   end)
   scan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)

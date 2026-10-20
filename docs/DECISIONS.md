@@ -28,3 +28,5 @@ come rivederla.
 | D21 | 2026-10-20 | Icona: `Media/ForeverGold.tga` 64×64 32 bit generata da `scripts/make-icon.ps1`, **non referenziata dal TOC** | §14: non presumere che la texture carichi | Provare `## IconTexture` in gioco |
 | D22 | 2026-10-20 | Lint: controllo dei globali sul bytecode (`luac -l`) nei test; `.luacheckrc` pronto per luacheck in CI | luacheck non installato localmente | — |
 | D23 | 2026-10-20 | Licenza MIT (`LICENSE`, `## X-License: MIT` nel TOC), inclusa nello ZIP | Scelta del proprietario, come per Forever ChatGuard | — |
+| D24 | 2026-10-20 | Replica: nessun nuovo tentativo automatico dopo 60 s senza risposta; pausa di 5 min (`silentPause`) dopo ogni richiesta senza risposta; limiti del cooldown misurati e salvati (`ForeverGoldDB.scanner`) | In gioco 7 richieste in 10 minuti sono rimaste senza risposta: i retry non aiutano e potrebbero prolungare il cooldown | Ridurre la pausa quando il cooldown sarà misurato |
+| D25 | 2026-10-20 | Feedback: poche righe in chat per scansione e barra di avanzamento con fasi; le ricerche manuali restano silenziose | Richiesta del proprietario: nessun feedback visivo durante la scansione | — |

@@ -16,6 +16,42 @@ local function reasonText(reason)
   return ns.L["REASON_" .. key] or tostring(reason)
 end
 
+-- "10 min 6 s", "45 s".
+function Feedback.Duration(seconds)
+  seconds = math.max(0, math.floor((seconds or 0) + 0.5))
+  local minutes = math.floor(seconds / 60)
+  if minutes == 0 then return seconds .. " s" end
+  local rest = seconds - minutes * 60
+  if rest == 0 then return minutes .. " min" end
+  return minutes .. " min " .. rest .. " s"
+end
+
+-- What we know about the replicate cooldown, as one sentence.
+function Feedback.CooldownText(app)
+  local info = app.scanner:Cooldown()
+  if not info.lowerBound and not info.upperBound then return L("CD_UNKNOWN") end
+  local text = info.lowerBound and string.format(L("CD_LOWER"), Feedback.Duration(info.lowerBound)) or ""
+  if info.upperBound then
+    text = text .. (text ~= "" and "; " or "") .. string.format(L("CD_UPPER"), Feedback.Duration(info.upperBound))
+  end
+  return text
+end
+
+-- Chat line when a scan cannot start.
+function Feedback.RefusedLine(app, reason, seconds)
+  if reason == "cooldown" then
+    return string.format(L("FB_COOLDOWN"), Feedback.Duration(seconds), Feedback.CooldownText(app))
+  end
+  return L("SCAN_REFUSED") .. " " .. reasonText(reason)
+end
+
+-- Starts a user scan and reports a refusal.
+function Feedback.StartScan(app)
+  local ok, reason, seconds = app.scanner:Start({ mode = "replicate" })
+  if not ok then ns.Print(Feedback.RefusedLine(app, reason, seconds)) end
+  return ok
+end
+
 local function userScan(snapshot)
   return snapshot and snapshot.mode == "replicate"
 end
@@ -39,6 +75,8 @@ function Feedback.StateLine(app, state, reason, snapshot)
     local line = string.format(L("FB_DONE"), seconds, c.itemKeys, c.valid, c.units)
     if state == "PARTIAL" then line = line .. " " .. L("STATE_PARTIAL") .. ": " .. reasonText(reason) end
     return line
+  elseif state == "FAILED" and reason == "no_response" then
+    return string.format(L("FB_NO_RESPONSE"), app.scanner.opts.timeout, Feedback.CooldownText(app))
   elseif state == "FAILED" then
     return L("FB_FAILED") .. " " .. reasonText(reason)
   elseif state == "CANCELLED" then
@@ -49,14 +87,27 @@ end
 
 function Feedback.Attach(app)
   local Main = ns.UI.Main
+  -- Once a second while waiting for the server: elapsed time on the bar.
+  local ticker = ns.Core.Scheduler.New(app.schedulerEnv)
+  local function tick()
+    local progress = Main.progress
+    if not progress or progress.phase ~= "waiting" or not app.scanner:IsActive() then return end
+    progress.elapsed = app.clock() - (progress.since or app.clock())
+    Main.UpdateProgress()
+    ticker:After(1, tick)
+  end
   app.bus:Subscribe("scanner.state", function(state, reason, snapshot)
     local line = Feedback.StateLine(app, state, reason, snapshot)
     if line then ns.Print(line) end
     if userScan(snapshot) then
       if state == "FAILED" or state == "CANCELLED" then
         Main.SetProgress(nil)
+      elseif state == "RECEIVING" then
+        Main.SetProgress({ phase = "receiving" })
       elseif app.scanner:IsActive() then
-        Main.SetProgress({ phase = state == "RECEIVING" and "receiving" or "waiting" })
+        ticker:Invalidate()
+        Main.SetProgress({ phase = "waiting", since = app.clock(), elapsed = 0, timeout = app.scanner.opts.timeout })
+        ticker:After(1, tick)
       end
     end
     Main.RefreshTable()

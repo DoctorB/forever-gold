@@ -23,6 +23,7 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 | 2026-10-20 (2) | 1.60.1.70450 | `/reload` + `/fg diagnostics`; file riscritto alle 12:53 | `loads = 2`, `previousLoad` = primo caricamento (12:47:54), `created` invariato: dati **riletti dopo `/reload`** e non azzerati. Mancano logout/login e riavvio completo |
 | 2026-10-20 (3) | 1.60.1.70450 | relog e riavvio completo del client | `loads` 3 (relog 12:53:12), 4 (12:54:16), 5 dopo il riavvio (12:56:55, `previousLoad` = 12:54:16): **persistenza verificata** nei tre passaggi |
 | 2026-10-20 (4) | 1.60.1.70450 | AH aperta, `/fg scan` alle 12:57:19, secondo `/fg scan` alle 12:58:09, AH chiusa alle 12:59:25 | prima replica letta in ~31 s: 2.081 chiavi oggetto, 29.449 aste acquistabili, 204.636 unità; esito parziale `rows_incomplete`. Durante la lettura il client ha inviato **centinaia di `REPLICATE_ITEM_LIST_UPDATE`** (≥ 190 in ~1 s). La seconda richiesta, 19 s dopo la fine della prima, **non ha ricevuto risposta per 76 s** (retry incluso): cooldown della replica > 76 s, durata ignota. Nessuna chiave con suffisso diverso da 0 su 2.081. Base dell'indice e conteggio righe persi perché il trace era saturato |
+| 2026-10-20 (5) | 1.60.1.70450 | ForeverGold con feedback; `/fg scan` alle 13:03:29 (+2 retry automatici), 13:06:19 (+1 retry) | **nessuna risposta** a nessuna delle 7 richieste fra 12:58:09 e 13:07:25: cooldown della replica **≥ 10 min 6 s** dall'ultima scansione riuscita (12:57:19). Non sappiamo se le richieste durante il cooldown lo prolunghino: da ora nessun retry automatico e pausa di 5 min dopo ogni richiesta senza risposta. `AUCTION_HOUSE_THROTTLED_SYSTEM_READY` arriva durante l'attesa (non indica la fine del cooldown). Una ricerca manuale (itemID 2516, commodity) ha prodotto `COMMODITY_SEARCH_RESULTS_UPDATED` |
 
 ## Client target
 
@@ -90,7 +91,7 @@ finiscono in `ForeverGoldDB.diagnostics.report.events`.
 
 1. Indice di `GetReplicateItemInfo`: 0 o 1? Dalla 2ª scansione il valore è salvato con lo snapshot (`indexBase`).
 2. `buyoutPrice` della replica: totale dello stack o per unità? Ogni scansione salva ora 8 righe multi-unità (`samples`) da confrontare con la finestra AH.
-3. Cooldown della replica: > 76 s osservato; durata esatta da misurare (ritentare dopo 5, 10, 15 minuti). Gli aggiornamenti durante la lettura sono ora contati (`lateUpdates`) e le righe incomplete rilette fino a 4 volte.
+3. Cooldown della replica: ≥ 10 min 6 s osservato; lo scanner salva ora in `ForeverGoldDB.scanner` i limiti misurati (`lowerBound`, `upperBound`) a ogni tentativo. Gli aggiornamenti durante la lettura sono ora contati (`lateUpdates`) e le righe incomplete rilette fino a 4 volte.
 9. Formato dei link: nessun suffisso su 2.081 chiavi. Ogni scansione salva ora fino a 6 item string grezzi (`links`) per verificare se gli oggetti "of the …" hanno un suffisso e in quale campo.
 4. Il client Forever usa commodity (ricerca per itemID) o solo aste individuali?
 5. AH condivisa fra fazioni/realm? (finché ignoto la fazione resta nella `MarketKey`)

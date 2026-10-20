@@ -22,9 +22,13 @@ ns.Services.Scanner = Scanner
 
 Scanner.ACTIVE = { REQUESTED = true, RECEIVING = true, NORMALIZING = true, THROTTLED = true }
 Scanner.DEFAULTS = {
-  timeout = 60, -- seconds without any replicate event before a retry
+  timeout = 60, -- seconds without any replicate event: no response
   settle = 2, -- seconds without new update events before reading
-  maxRetries = 2,
+  -- No automatic re-request after a silent server: in game (2026-10-20) a
+  -- silent replicate meant cooldown, and re-requesting may extend it.
+  maxRetries = 0,
+  maxThrottleWaits = 3, -- waits for the throttle system before giving up
+  silentPause = 300, -- pacing after an unanswered replicate request (not a cooldown claim)
   backoffBase = 5,
   backoffCap = 60,
   infoWait = 3, -- wait before re-reading rows still missing item data
@@ -37,11 +41,14 @@ Scanner.DEFAULTS = {
   progressEvery = 250, -- rows between progress events
 }
 
--- deps: { adapter, scheduler, clock, bus, marketKey(), build(), trace?(kind, data) }
+-- deps: { adapter, scheduler, clock, bus, marketKey(), build(), trace?(kind, data),
+--         memory? (persisted table for the measured replicate cooldown) }
 function Scanner.New(deps, opts)
   local self = setmetatable({}, { __index = Scanner })
   self.adapter, self.scheduler, self.clock, self.bus = deps.adapter, deps.scheduler, deps.clock, deps.bus
   self.marketKey, self.build, self.trace = deps.marketKey, deps.build, deps.trace
+  self.memory = deps.memory or {}
+  self.memory.observations = self.memory.observations or {}
   self.opts = {}
   for key, value in pairs(Scanner.DEFAULTS) do self.opts[key] = value end
   for key, value in pairs(opts or {}) do self.opts[key] = value end
@@ -134,8 +141,40 @@ end
 
 local attempt
 
-local function retry(self, task, reason)
-  if task.attempts > self.opts.maxRetries then
+-- Replicate cooldown, measured instead of assumed. Relative to the last
+-- request that got an answer: a silent request at +X proves the cooldown is
+-- longer than X (lowerBound); an answered one at +Y proves it is at most Y
+-- (upperBound). After a silent request the next one waits silentPause, so
+-- the server is not hammered and each attempt narrows the measurement.
+local function observe(self, answered, requestedAt)
+  local memory = self.memory
+  local since = memory.lastSuccess and (requestedAt - memory.lastSuccess) or nil
+  if answered then
+    if since and (not memory.upperBound or since < memory.upperBound) then memory.upperBound = since end
+    memory.lastSuccess = requestedAt
+  else
+    memory.lastSilent = requestedAt
+    if since and (not memory.lowerBound or since > memory.lowerBound) then memory.lowerBound = since end
+  end
+  local list = memory.observations
+  list[#list + 1] = { t = requestedAt, answered = answered, since = since }
+  while #list > 20 do table.remove(list, 1) end
+end
+
+-- { lastSuccess, lowerBound, upperBound, remaining } at time now.
+function Scanner:Cooldown(now)
+  local memory = self.memory
+  local info = { lastSuccess = memory.lastSuccess, lowerBound = memory.lowerBound, upperBound = memory.upperBound, remaining = 0 }
+  now = now or self.clock()
+  if memory.lastSilent and (not memory.lastSuccess or memory.lastSilent > memory.lastSuccess) then
+    local left = memory.lastSilent + self.opts.silentPause - now
+    if left > 0 then info.remaining = left end
+  end
+  return info
+end
+
+local function retry(self, task, reason, limit)
+  if task.attempts > (limit or self.opts.maxRetries) then
     fail(self, task, reason)
     return
   end
@@ -151,7 +190,7 @@ attempt = function(self, task)
   local ready = self.adapter:IsReady()
   if ready == false then
     setState(self, "THROTTLED", "not_ready")
-    retry(self, task, "throttled")
+    retry(self, task, "throttled", self.opts.maxThrottleWaits)
     return
   end
   local ok, err = self.adapter:RequestReplicate()
@@ -163,18 +202,21 @@ attempt = function(self, task)
   setState(self, "REQUESTED")
   task.timeoutTimer = self.scheduler:After(self.opts.timeout, function()
     if current(self, task) and self.state == "REQUESTED" then
+      observe(self, false, task.requestedAt)
       retry(self, task, "no_response")
     end
   end)
 end
 
--- request: { mode = "replicate" }. Returns ok, reason.
+-- request: { mode = "replicate" }. Returns ok, reason (, seconds left).
 function Scanner:Start(request)
   request = request or { mode = "replicate" }
   if self:IsActive() then return false, "busy" end
   if not self.adapter:IsOpen() then return false, "ah_closed" end
   if request.mode ~= "replicate" then return false, "unsupported_mode" end
   if not self.adapter:GetCapabilities().replicate then return false, "unsupported" end
+  local cooldown = self:Cooldown()
+  if cooldown.remaining > 0 then return false, "cooldown", cooldown.remaining end
   self.scheduler:Invalidate()
   local task = { mode = "replicate", attempts = 0, updates = 0, lateUpdates = 0, rounds = 0, byIndex = {} }
   self.task = task
@@ -312,6 +354,7 @@ function Scanner:OnReplicateUpdate()
     return
   end
   task.updates = task.updates + 1
+  if task.updates == 1 then observe(self, true, task.requestedAt) end
   if task.timeoutTimer then task.timeoutTimer.Cancel() end
   if task.settleTimer then task.settleTimer.Cancel() end
   if self.state ~= "RECEIVING" then setState(self, "RECEIVING") end
@@ -388,7 +431,7 @@ local function publishObservation(self, snapshot, listings, full)
   if self.bus then self.bus:Publish("scanner.snapshot", snapshot, listings) end
 end
 
-local function observe(self, scopeKey, rows, full, commodity)
+local function observeSearch(self, scopeKey, rows, full, commodity)
   local snapshot = newSnapshot(self, "observed_search", scopeKey)
   local listings = searchListings(self, snapshot, rows, commodity)
   local sig = signature(listings)
@@ -424,8 +467,11 @@ local function handleResults(self, itemID, suffix, commodity, readFn)
     if callback then callback(snapshot, listings) end
     return
   end
-  if self:IsActive() then return end
-  observe(self, scopeKey, readFn())
+  -- While a replicate request only waits for the server, the user's own
+  -- searches are still observed; during reading they are not.
+  local waiting = task and task.mode == "replicate" and (self.state == "REQUESTED" or self.state == "THROTTLED")
+  if self:IsActive() and not waiting then return end
+  observeSearch(self, scopeKey, readFn())
 end
 
 function Scanner:OnCommodityResults(itemID)

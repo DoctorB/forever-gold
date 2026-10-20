@@ -321,3 +321,49 @@ T.Case("stack samples and raw item strings are kept as evidence", function()
   T.Ok(withSuffix, "suffix links are preferred")
   T.Ok(#snap.links <= 6)
 end)
+
+T.Case("replicate cooldown is measured, not assumed; silent requests are not repeated", function()
+  local s = setup(rows(3))
+  s.event("AUCTION_HOUSE_SHOW")
+  T.Ok(s.scanner:Start())
+  local first = s.clock.t
+  s.deliver()
+  s.clock.advance(30)
+  T.Eq(s.scanner.memory.lastSuccess, first)
+  -- The fake server now stays silent (cooldown).
+  s.ah.delivered = false
+  s.clock.advance(570) -- +10 min after the first request
+  T.Ok(s.scanner:Start())
+  s.clock.advance(61)
+  T.Eq(s.scanner.state, "FAILED")
+  T.Eq(s.scanner.reason, "no_response")
+  T.Eq(s.ah.replicateCalls, 2, "no automatic re-request")
+  T.Eq(s.scanner.memory.lowerBound, 600)
+  -- After a silent request the next one waits the pacing pause.
+  local ok, reason, left = s.scanner:Start()
+  T.NotOk(ok)
+  T.Eq(reason, "cooldown")
+  T.Eq(left, 300 - 61)
+  T.Eq(s.ah.replicateCalls, 2)
+  -- Past it a request goes out; an answer gives the upper bound.
+  s.clock.advance(left + 300)
+  T.Ok(s.scanner:Start())
+  local third = s.clock.t
+  s.deliver()
+  s.clock.advance(30)
+  T.Eq(s.scanner.memory.upperBound, third - first)
+  T.Eq(s.scanner.memory.lastSuccess, third)
+  T.Eq(#s.scanner.memory.observations, 3)
+end)
+
+T.Case("the user's own searches are observed while the replicate waits", function()
+  local s = setup(rows(3))
+  s.ah.commodity[2516] = { { quantity = 200, unitPrice = 3, auctionID = 5 } }
+  s.event("AUCTION_HOUSE_SHOW")
+  s.scanner:Start()
+  T.Eq(s.scanner.state, "REQUESTED")
+  s.event("COMMODITY_SEARCH_RESULTS_UPDATED", 2516)
+  T.Eq(#s.snapshots, 1)
+  T.Eq(s.snapshots[1].snapshot.mode, "observed_search")
+  T.Eq(s.scanner.state, "REQUESTED", "replicate still waiting")
+end)

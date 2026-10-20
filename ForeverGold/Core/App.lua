@@ -47,6 +47,7 @@ function App:Load(saved)
     marketKey = function() return self:MarketKey() end,
     build = function() return self.client:BuildInfo().version end,
     trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
+    memory = self:ScannerMemory(),
   }, { budgetMs = settings.frameBudgetMs })
   self.opportunities = ns.Services.Opportunities.New({
     store = self.store, history = self.history, items = self.items, clock = clock, bus = self.bus,
@@ -55,6 +56,13 @@ function App:Load(saved)
   self:Subscribe()
   self.loaded = true
   return self.store:Persisted(saved)
+end
+
+-- Persisted scanner measurements (replicate cooldown bounds).
+function App:ScannerMemory()
+  local db = self.store.db
+  db.scanner = db.scanner or {}
+  return db.scanner
 end
 
 function App:MarketKey()
