@@ -32,7 +32,7 @@ local function rowsText(listings, limit)
   local parts = {}
   for index = 1, math.min(#listings, limit or 6) do
     local l = listings[index]
-    parts[#parts + 1] = string.format("%dx%s", l.quantity, tostring(l.buyoutTotal))
+    parts[#parts + 1] = string.format("%dx%s", l.quantity, tostring(l.rawBuyout or l.buyoutTotal))
   end
   return table.concat(parts, " ")
 end
@@ -203,7 +203,9 @@ function Probe:RunLot(c)
       -- unit:  a row of q units costs what one unit costs in the replicate
       --        (q single auctions grouped into one row at the unit price).
       local total, unit, mismatch = 0, 0, 0
-      for _, row in ipairs(listings or {}) do
+      for _, listing in ipairs(listings or {}) do
+        -- Compare what the server sent, not our per-unit normalisation.
+        local row = { quantity = listing.quantity, buyoutTotal = listing.rawBuyout or listing.buyoutTotal }
         if row.quantity > 1 and row.buyoutTotal then
           local rowTotal, rowUnit = false, false
           for _, lot in ipairs(c.replicate) do

@@ -108,6 +108,7 @@ function Schema.NewListing(raw)
     complete = raw.complete ~= false,
     own = raw.own == true or nil,
     link = raw.link, -- kept only for variant items: their search needs the item level
+    rawBuyout = raw.rawBuyout, -- item search: buyoutAmount as the server sent it
   }
   listing.id = raw.auctionID or ((raw.scanId or "?") .. ":" .. tostring(raw.index or "?"))
   if raw.bid ~= nil then listing.bid = Money.Normalize(raw.bid) end

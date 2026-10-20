@@ -195,7 +195,8 @@ end
 -- On Forever the AH item key of a random-variant item is its effective item
 -- level plus itemSuffix = bonus ID + 1580 (measured 2026-10-20, build 70450:
 -- 13 keys from browse results over 4 items all match). Not universal: bonus
--- 12919 was seen with suffix 14315, so callers keep the browse fallback.
+-- 12919 was seen with suffix 14315 and bonus 12720 with 14299, so callers
+-- keep the browse fallback.
 -- Returns the suffix, or nil when the variant is not a single bonus ID.
 AuctionHouse.BONUS_SUFFIX_OFFSET = 1580
 

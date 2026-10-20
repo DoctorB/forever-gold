@@ -19,7 +19,9 @@ Capabilities.VERIFIED = {
   replicateIndexBase = true, -- 2026-10-20, build 70450: 0-based, 31,058 rows read with no discard
   commoditySearch = false,
   itemSearch = false,
-  itemSearchBuyoutIsTotal = false, -- buyoutAmount of a multi-unit item auction
+  -- 2026-10-20, build 70450: false is verified, buyoutAmount of a multi-unit
+  -- item-search row is per unit (single auctions grouped at one price).
+  itemSearchBuyoutIsTotal = false,
   sellPrice = true, -- 2026-10-20, build 70450: 8 Pyrite sold for exactly 8 x sellPrice (vendor check)
   persistence = true, -- 2026-10-20, build 70450: re-read after /reload, relog and restart
   fee = false, -- AH cut measured on a real sale

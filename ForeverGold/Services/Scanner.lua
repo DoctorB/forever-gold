@@ -429,8 +429,17 @@ local function searchListings(self, snapshot, rows, commodity)
       local _, suffix, bonus = Schema.VariantFromLink(row.link)
       raw.itemKey = Schema.ItemKey(row.itemID, suffix or row.suffix or 0, false, bonus)
       raw.divisible, raw.buyoutTotal, raw.bid, raw.source = false, row.buyout, row.minBid, "search_item"
-      if row.quantity ~= 1 and not Capabilities.IsVerified("itemSearchBuyoutIsTotal") then
-        raw.complete = false -- price per unit or per auction not verified
+      raw.rawBuyout = row.buyout
+      if row.quantity ~= 1 then
+        -- Verified in game (probe, 2026-10-20): a multi-unit item-search row
+        -- groups single auctions at one price and buyoutAmount is per unit
+        -- (58 single auctions at 100 -> one row "58 x 100").
+        if type(row.buyout) == "number" and not Capabilities.IsVerified("itemSearchBuyoutIsTotal") then
+          raw.buyoutTotal = row.buyout * row.quantity
+        end
+        -- What PlaceBid buys on a grouped row (one unit or the group) is not
+        -- verified: observed, never bought.
+        raw.complete = false
       end
     end
     local listing, why = Schema.NewListing(raw)

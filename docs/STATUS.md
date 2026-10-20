@@ -80,7 +80,7 @@ of price history exist (needs the real AH fee and deposit).
   keys → both run stepwise within 2 ms per frame; estimated history 11.8 MB
   after 10 days (20 MB budget).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 54 files,
-  SHA-256 `140dbae654bcf4bce419ebdddd45ea189fb32f93705be689e3489dfdeffe3c48`.
+  SHA-256 `598f2414be5f888eafb92763fe5662d624beb40fc00afb54631504cdf3774a55`.
 
 Mocks prove our logic only; in-game evidence is listed in `docs/API-AUDIT.md`.
 

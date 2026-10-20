@@ -598,20 +598,15 @@ T.Case("multi-unit auction: refused while the search price meaning is unverified
   T.Eq(s.ah.spendCalls, 0)
 end)
 
-T.Case("vendor auction with more units at no higher price is accepted once verified", function()
+T.Case("grouped item-search rows are priced per unit and never bought", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
-  s.ns.Core.Capabilities.VERIFIED.itemSearchBuyoutIsTotal = true
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare()
-  s.ah.items[201] = { { quantity = 2, buyout = 200, auctionID = 77 } }
+  s.ah.items[201] = { { quantity = 2, buyout = 150, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
-  T.Eq(p.current.state, "located")
-  p:Confirm()
-  s.app:OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 77)
-  local entry = s.app.store.db.ledger[1]
-  T.Eq(entry.quantity, 2)
-  T.Eq(entry.remaining, 2)
+  T.Eq(p.current.state, "rejected", "what PlaceBid buys on a grouped row is unknown")
+  T.Eq(s.ah.spendCalls, 0)
 end)
 
 T.Case("AH search test: variants and multi-unit lots probed read-only, results saved", function()

@@ -230,6 +230,8 @@ T.Case("multi-unit item search rows are not buyable until the price meaning is v
   local listings = s.snapshots[1].listings
   T.Ok(listings[1].buyable)
   T.NotOk(listings[2].buyable)
+  T.Eq(listings[2].buyoutTotal, 4500, "grouped row: per-unit price x units")
+  T.Eq(listings[2].unitPrice, 900)
 end)
 
 T.Case("targeted search: another search changing results suspends the task", function()

@@ -62,6 +62,8 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   lots stay excluded (a lower `PlaceBid` could become a bid).
 - Variant items are searched directly with Forever's key (effective item
   level, item suffix = bonus ID + 1580, measured with the AH search test).
+- Multi-unit item-search rows priced per unit (verified in game: the search
+  groups single auctions at one price); they are observed, not bought.
 - Smaller saved data: one detailed observation per item and at most 8
   interval prices per item and day (the saved file had reached 7.9 MB; the
   new pruning cuts the estimate from 11.3 to 4.3 MB); old saves are trimmed
