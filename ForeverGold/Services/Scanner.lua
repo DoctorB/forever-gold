@@ -23,10 +23,10 @@ ns.Services.Scanner = Scanner
 Scanner.ACTIVE = { REQUESTED = true, RECEIVING = true, NORMALIZING = true, THROTTLED = true }
 
 -- Replicate cooldown measured in game, counted from the last answered
--- request: silent at +13 min 34 s, answered at +16 min (2026-10-20, build
--- 70450). A request 4 min after a silent one stayed silent, so silent
--- requests do not restart it. Used only as the starting measurement.
-Scanner.MEASURED = { lowerBound = 814, upperBound = 960, source = "2026-10-20 build 70450" }
+-- request: silent at +14 min 27 s, answered at +15 min 38 s (2026-10-20,
+-- build 70450, six requests). Silent requests do not restart it. Used only
+-- as the starting measurement; every attempt keeps refining it.
+Scanner.MEASURED = { lowerBound = 867, upperBound = 938, source = "2026-10-20 build 70450" }
 Scanner.DEFAULTS = {
   timeout = 60, -- seconds without any replicate event: no response
   settle = 2, -- seconds without new update events before reading

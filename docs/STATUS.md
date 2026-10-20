@@ -27,6 +27,11 @@ l'acquisto assistito per 6s 40c e vendute al mercante per 8s: +1s 60c,
 prezzo vendor verificato. Le opportunità vendor complete ora risultano
 "VERIFICATO".
 
+**Sessione 9 (14:19–14:37):** altri tre acquisti (due commodity e una
+asta singola), 4/4 controlli al mercante esatti, guadagno realizzato totale
++3s 30c su 19s 45c spesi. Entrambi i percorsi d'acquisto (preventivo
+commodity e asta singola) sono verificati in gioco.
+
 Alpha.2: acquisto assistito sperimentale (un clic per acquisto, tetto e
 controllo del preventivo), registro e controllo al mercante, commodity
 riconosciute, banner del guadagno. Prossima prova: sessione 3 di
@@ -82,7 +87,7 @@ campioni con la finestra AH; misura del cooldown.
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 52 file,
-  SHA-256 `e03e036d7d0c97ea5a5dc759d986ff3c92a2a00010eecd4768e7aff147e5cd5c`.
+  SHA-256 `5b0a4de27d36b717329cc563144296a092c29a2029f03f47bd47f201a3b5bc98`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.
