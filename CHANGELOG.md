@@ -67,6 +67,9 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   add-on records the server's deposit quotes, measures the deposit paid,
   reads the seller invoices in the mailbox and computes the real AH fee,
   which then replaces the 5% scenario. Nothing is posted by the add-on.
+  When the deposit paid matches several quotes (small lots hit the minimum
+  deposit, e.g. 100 copper for both 12 and 24 h), all matching durations are
+  reported and none is recorded as the posting duration.
 - Multi-unit item-search rows priced per unit (verified in game: the search
   groups single auctions at one price); they are observed, not bought.
 - Smaller saved data: one detailed observation per item and at most 8

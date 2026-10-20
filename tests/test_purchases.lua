@@ -759,6 +759,7 @@ T.Case("fee test: deposit measured at posting, fee from the sale invoice", funct
   T.Eq(state.stage, "posted")
   T.Eq(state.posted.deposit, 108)
   T.Eq(state.posted.duration, 2)
+  T.Eq(#state.posted.durations, 1)
   T.Ok(s.ns.Core.Capabilities.IsVerified("deposit"))
   T.Eq(s.ah.ownedQueries, 1)
   s.ah.owned = { { auctionID = 4242, itemKey = { itemID = 2840 }, quantity = 18, buyoutAmount = 110 } }
@@ -777,6 +778,25 @@ T.Case("fee test: deposit measured at posting, fee from the sale invoice", funct
   s.app:OnEvent("MAIL_INBOX_UPDATE")
   T.Eq(#state.sales, 1)
   T.Eq(s.ah.spendCalls, 0, "nothing posted or bought by the add-on")
+end)
+
+T.Case("fee test: a deposit matching two quotes leaves the duration open", function()
+  ITEMS[2840] = { name = "Copper Bar", sellPrice = 50 }
+  local s = setup({ bags = { [2840] = 20 }, money = 9676 })
+  s.ah.depositPerUnit, s.ah.minDeposit = 2, 100 -- 20 bars: 12 h 100, 24 h 100, 48 h 120
+  s.ns.Core.Capabilities.VERIFIED.deposit = false
+  T.Ok(s.app.feeTest:Start())
+  local state = s.app.feeTest:State()
+  s.bags[2840] = 0
+  s.wallet.money = s.wallet.money - 100
+  s.app:OnEvent("AUCTION_HOUSE_AUCTION_CREATED", 4242)
+  T.Eq(state.stage, "posted")
+  T.Eq(state.posted.duration, nil)
+  T.Eq(table.concat(state.posted.durations, ","), "1,2")
+  T.Ok(s.ns.Core.Capabilities.IsVerified("deposit"))
+  T.Eq(s.app.store.db.verifiedRuntime.deposit.duration, nil)
+  local line = s.ns.UI.Feedback.FeeTestLines("posted", state)[1]
+  T.Ok(line:find("12/24 h", 1, true), line)
 end)
 
 T.Case("fee test refuses without the item or with the AH closed", function()

@@ -104,7 +104,7 @@ function Fakes.AuctionHouse(rows)
   end
   function api.GetQuoteDurationRemaining() return ah.quoteLeft or 30 end
   function api.CalculateCommodityDeposit(itemID, duration, quantity)
-    return ah.depositPerUnit and ah.depositPerUnit * quantity * duration or nil
+    return ah.depositPerUnit and math.max(ah.minDeposit or 0, ah.depositPerUnit * quantity * duration) or nil
   end
   function api.QueryOwnedAuctions() ah.ownedQueries = (ah.ownedQueries or 0) + 1 end
   function api.GetOwnedAuctions() return ah.owned or {} end

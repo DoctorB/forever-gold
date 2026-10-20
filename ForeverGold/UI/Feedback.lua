@@ -120,8 +120,11 @@ function Feedback.FeeTestLines(kind, state)
   elseif kind == "posted" then
     local p = state.posted
     local line = string.format(L("FT_POSTED"), money(p.deposit), p.quantity, state.name)
-    if p.duration then
-      line = line .. " " .. string.format(L("FT_DEPOSIT_OK"), ({ 12, 24, 48 })[p.duration])
+    local durations = p.durations or { p.duration }
+    if #durations > 0 then
+      local hours = {}
+      for i, d in ipairs(durations) do hours[i] = ({ 12, 24, 48 })[d] end
+      line = line .. " " .. string.format(L("FT_DEPOSIT_OK"), table.concat(hours, "/"))
     else
       line = line .. " " .. L("FT_DEPOSIT_DIFF")
     end

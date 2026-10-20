@@ -92,15 +92,23 @@ function FeeTest:OnBagsOrMoney()
     return
   end
   -- Quote again for the quantity actually posted (the baseline may have moved).
+  -- Small lots can share one quote between durations (minimum deposit): the
+  -- duration is known only when a single quote matches.
   local calc = deposits(self, state.itemID, posted)
-  local duration
+  local durations = {}
   for _, d in ipairs(FeeTest.DURATIONS) do
-    if calc[d] and calc[d] == paid then duration = d end
+    if calc[d] and calc[d] == paid then durations[#durations + 1] = d end
   end
+  local duration = #durations == 1 and durations[1] or nil
   state.stage = "posted"
-  state.posted = { at = self.clock(), quantity = posted, deposit = paid, calculated = calc, duration = duration }
-  if duration and not Capabilities.IsVerified("deposit") then
-    local evidence = { t = self.clock(), itemID = state.itemID, quantity = posted, deposit = paid, duration = duration }
+  state.posted = {
+    at = self.clock(), quantity = posted, deposit = paid, calculated = calc, duration = duration, durations = durations,
+  }
+  if #durations > 0 and not Capabilities.IsVerified("deposit") then
+    local evidence = {
+      t = self.clock(), itemID = state.itemID, quantity = posted, deposit = paid, duration = duration,
+      durations = durations,
+    }
     self.store.db.verifiedRuntime.deposit = evidence
     Capabilities.RecordRuntime("deposit", evidence)
     state.posted.verifiedNow = true
