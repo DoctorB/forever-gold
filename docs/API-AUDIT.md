@@ -1,7 +1,8 @@
 # ForeverGold — audit API
 
-Stato al 2026-10-20. Nessuna voce è ancora `runtime_verified` su ForeverGold:
-servono le sessioni descritte in `docs/TESTING-IN-GAME.md`.
+Stato al 2026-10-20, dopo la sessione 1. Tutti i simboli della matrice sono
+`present` sulla build 70450; nessuna semantica è ancora `runtime_verified`
+(servono le prove AH di `docs/TESTING-IN-GAME.md`).
 
 <!-- verified: replicate=false replicateBuyoutIsTotal=false replicateIndexBase=false commoditySearch=false itemSearch=false itemSearchBuyoutIsTotal=false sellPrice=false persistence=false fee=false deposit=false -->
 
@@ -14,16 +15,23 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 `runtime_verified` (comportamento osservato e registrato), `unsupported`,
 `unknown`.
 
+## Sessioni di verifica
+
+| Data | Build | Metodo | Esito |
+| --- | --- | --- | --- |
+| 2026-10-20 (1) | 1.60.1.70450 (`GetBuildInfo`, compilata il 15 ottobre 2026) | ForeverGold 0.1.0-alpha.1, `/fg diagnostics`, realm `ClassicBetaPvE`, fazione Alliance; file `ForeverGold.lua` scritto dal client alle 12:51 | addon caricato con `Interface 16001`; 26/26 simboli presenti; 8/8 eventi accettati da `C_EventUtils.IsEventValid` e registrati; `SupportsCopperValues()` → `true`; `GetCurrentRegion()` → 110; SavedVariables **scritte** (rilettura non ancora provata: `loads = 1`) |
+
 ## Client target
 
 | Voce | Valore | Stato | Evidenza |
 | --- | --- | --- | --- |
-| Prodotto | WoW Forever, flavor `wow_classic_beta`, cartella `_classic_beta_` | osservato sul disco | `C:\Program Files (x86)\World of Warcraft\.build.info` e `_classic_beta_\.flavor.info`, letti il 2026-10-20 |
-| Build installata | 1.60.1.70450 | osservata sul disco, non da `GetBuildInfo` | `.build.info` (Version 1.60.1.70450) |
-| Interface TOC | `16001` | verificata su build 1.60.1.70374 da un altro addon dello stesso proprietario; da riconfermare su 70450 | `forever-chatguard/docs/compatibility.md` (probe 2026-10-14: `GetBuildInfo()` → 16001, `WOW_PROJECT_ID` 18) |
+| Prodotto | WoW Forever, flavor `wow_classic_beta`, cartella `_classic_beta_`, `WOW_PROJECT_ID` 18 | verificato | `.build.info`, `.flavor.info`; diagnostica 2026-10-20 |
+| Build | 1.60.1.70450 | verificata | `GetBuildInfo()` → `"1.60.1", "70450", "Oct 15 2026", 16001` |
+| Interface TOC | `16001` | verificata | `GetBuildInfo()` su 70450; ForeverGold caricato con quel valore |
+| Mercato | product `p18`, region `110`, realm `ClassicBetaPvE`, faction `Alliance` | osservato | diagnostica; la regione 110 non è uno dei codici Retail 1–5: resta solo parte della chiave |
 | Runtime Lua | 5.1 (niente `goto`, `//`, bitwise) | verificato su 70374 (stessa fonte) | idem |
 | Template UI usati | `UIPanelButtonTemplate`, `UICheckButtonTemplate`, `InputBoxTemplate`, `BasicFrameTemplateWithInset` | verificati su 70374 (stessa fonte) | idem |
-| SavedVariables | scritte dal client in `WTF\Account\<account>\SavedVariables\` | verificato per altri addon; **non** per ForeverGold | file `ForeverChatGuard.lua`, `ForeverOneButton.lua` presenti |
+| SavedVariables | scritte dal client in `WTF\Account\<account>\SavedVariables\` | **scrittura** verificata per ForeverGold; rilettura da provare | `ForeverGold.lua` scritto il 2026-10-20 alle 12:51 con `loads = 1` |
 
 ## Fonti documentali
 
