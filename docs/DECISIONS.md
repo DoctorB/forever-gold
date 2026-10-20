@@ -27,4 +27,4 @@ come rivederla.
 | D20 | 2026-10-20 | Build con `scripts/build.ps1` (PowerShell 5.1/7), ZIP creato con `System.IO.Compression` per avere separatori `/` | `Compress-Archive` di PowerShell 5.1 può scrivere `\` nei nomi | — |
 | D21 | 2026-10-20 | Icona: `Media/ForeverGold.tga` 64×64 32 bit generata da `scripts/make-icon.ps1`, **non referenziata dal TOC** | §14: non presumere che la texture carichi | Provare `## IconTexture` in gioco |
 | D22 | 2026-10-20 | Lint: controllo dei globali sul bytecode (`luac -l`) nei test; `.luacheckrc` pronto per luacheck in CI | luacheck non installato localmente | — |
-| D23 | 2026-10-20 | Nessuna licenza scelta: il pacchetto viene costruito ma marcato non distribuibile | La licenza è una scelta del proprietario | In attesa del proprietario |
+| D23 | 2026-10-20 | Licenza MIT (`LICENSE`, `## X-License: MIT` nel TOC), inclusa nello ZIP | Scelta del proprietario, come per Forever ChatGuard | — |

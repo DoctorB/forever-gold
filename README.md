@@ -74,5 +74,4 @@ Documenti: `docs/STATUS.md`, `docs/API-AUDIT.md`, `docs/DECISIONS.md`,
 
 ## Licenza
 
-Non ancora scelta dal proprietario: il pacchetto non è distribuibile finché
-non viene aggiunto un file `LICENSE`.
+MIT, vedi `LICENSE`.

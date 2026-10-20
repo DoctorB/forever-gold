@@ -24,5 +24,6 @@ Prima alpha di sola analisi, **non verificata in gioco**.
   dettaglio con formula espansa, modalità demo etichettata, tooltip,
   localizzazione enUS e itIT.
 - `/fg diagnostics` con report salvato e trace eventi limitato.
+- Licenza MIT.
 - Test offline (economia, replay scanner, app, UI su mock, pacchetto, lint
   dei globali sul bytecode), benchmark, build PowerShell con checksum.

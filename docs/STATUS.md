@@ -60,8 +60,8 @@ Prossimo gate: sessioni 1 e 2 di `docs/TESTING-IN-GAME.md` sul client
   chiavi → eseguite a passi con budget 2 ms/frame; storico stimato 11,8 MB
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
-- `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.1.zip`, 45 file,
-  SHA-256 `ac6b332efab6beefddf796b115e8b1b4b68969a7e1ab25d6357fcb47efd69a3b`.
+- `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.1.zip`, 46 file,
+  SHA-256 `e63598fe721e7b2893b17e767a396eefcf3040e08c942916dfe3e681c584e353`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.
@@ -78,7 +78,6 @@ comportamento del server.
 - Icona TGA generata ma non referenziata dal TOC.
 - luacheck non disponibile in locale: in CI è informativo; il lint bloccante
   è il controllo dei globali sul bytecode.
-- Nessuna licenza: pacchetto non distribuibile.
 
 ## Blocker e dato minimo per sbloccarli
 
@@ -91,4 +90,3 @@ comportamento del server.
 | Persistenza | contatore caricamenti dopo `/reload`, relog, riavvio |
 | `sellPrice` | prezzo pagato dal mercante per un oggetto proposto |
 | Commissione AH | una vendita reale qualsiasi del proprietario (importo e incasso) |
-| Licenza | scelta del proprietario |

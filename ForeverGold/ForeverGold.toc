@@ -5,6 +5,7 @@
 ## Author: DoctorB
 ## Version: 0.1.0-alpha.1
 ## SavedVariables: ForeverGoldDB
+## X-License: MIT
 
 Bootstrap.lua
 Locales\enUS.lua
