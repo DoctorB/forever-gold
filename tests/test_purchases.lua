@@ -613,3 +613,49 @@ T.Case("vendor auction with more units at no higher price is accepted once verif
   T.Eq(entry.quantity, 2)
   T.Eq(entry.remaining, 2)
 end)
+
+T.Case("AH search test: variants and multi-unit lots probed read-only, results saved", function()
+  local s = setup({ rows = {
+    { itemID = 201, count = 1, buyout = 200, link = "|Hitem:201::::::::20:1486::1:1:12720:::::|h[Green Sword]|h" },
+    { itemID = 202, count = 2, buyout = 100 },
+  } })
+  ITEMS[202] = ITEMS[202] or { name = "Pair of Boots", sellPrice = 10 }
+  s.ah.commodityItems[202] = false
+  s.app.items.cache[202] = nil
+  -- server data: the sword exists only under level 22, the boots lot of 2 costs 100 in total
+  s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 1, level = 22 } }
+  s.ah.items[202] = { { quantity = 2, buyout = 100, auctionID = 2 } }
+  s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 } } }
+  local lines = {}
+  s.app.bus:Subscribe("probe.progress", function(kind, data) lines[#lines + 1] = { kind, data } end)
+  T.Ok(s.app.probe:Start())
+  local function itemResults(itemID, level)
+    s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = itemID, itemLevel = level, itemSuffix = 0, battlePetSpeciesID = 0 })
+  end
+  for _ = 1, 20 do
+    s.clock.advance(1)
+    local search = s.ah.lastSearch
+    if search and not s.ah.answered then
+      s.ah.answered = true
+    end
+    if s.app.scanner.task and s.app.scanner.task.mode == "search" then
+      itemResults(s.app.scanner.task.itemID, s.ah.lastSearch.itemLevel)
+    elseif s.app.scanner.task and s.app.scanner.task.mode == "browse" then
+      s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+    end
+    if not s.app.probe.running then break end
+  end
+  T.NotOk(s.app.probe.running, "finished")
+  local report = s.app.store.db.diagnostics.probe
+  T.Eq(report.variants, 1)
+  T.Eq(report.lots, 1)
+  T.Eq(report.votes.total, 1, "the boots row equals the replicate lot total")
+  T.Eq(report.votes.unit, 0)
+  local kinds = {}
+  for _, entry in ipairs(report.results) do kinds[entry.kind] = entry end
+  T.Eq(kinds.variant_direct.rows, 0)
+  T.Eq(kinds.variant_browse.keys, "22/0/0")
+  T.Eq(kinds.variant_key.rows, 1)
+  T.Eq(s.ah.spendCalls, 0, "read-only")
+  T.Eq(lines[#lines][1], "done")
+end)

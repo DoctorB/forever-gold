@@ -320,6 +320,13 @@ L.PORT_STATUS_bags, L.PORT_STATUS_uncertain = "da vendere", "controlla borse"
 L.PORT_BUDGET_SHORT = "Budget %s  ·  limite di spesa %s"
 L.PORT_LIMIT_SHORT = "Limite di spesa %s (Impostazioni)"
 
+L.BTN_PROBE = "Test ricerche AH"
+L.PROBE_STEP = "Test ricerche AH %d/%d: %s..."
+L.PROBE_DONE = "Test ricerche AH finito: %d oggetti con varianti, %d con lotti multipli; voti sul prezzo dei lotti: per lotto %d, per pezzo %d. Nulla è stato comprato. Scrivi /reload per salvare i risultati."
+L.PROBE_REFUSED_nothing = "Test ricerche AH: nessun oggetto con varianti o lotti multipli nell'ultima scansione. Prima scansiona l'AH."
+L.PROBE_REFUSED_busy = "Test ricerche AH: aspetta che finisca la scansione o il test in corso."
+L.PROBE_REFUSED_ah_closed = "Test ricerche AH: apri prima la casa d'aste."
+
 L.HELP_1 = "/fg - apre o chiude la finestra"
 L.HELP_2 = "/fg scan - scansione AH in sola lettura (AH aperta)"
 L.HELP_3 = "/fg cancel - annulla la scansione"

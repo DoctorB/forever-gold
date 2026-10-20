@@ -59,6 +59,7 @@ before updating; to go back, delete the add-on folder and restore the file.
 | `/fg cancel` | cancels the scan |
 | `/fg diagnostics` | client capability report, saved in the SavedVariables |
 | `/fg demo` | fictional data labelled DEMO |
+| `/fg probe` | read-only AH search test (variants, multi-unit lots), saved for the audit |
 | `/fg lang it` · `en` · `auto` | interface language |
 | `/fg reset` | opens History for a confirmed reset |
 

@@ -61,7 +61,7 @@ of price history exist (needs the real AH fee and deposit).
 
 ## Tests run (2026-10-20, Windows, Lua 5.1.5; GitHub Actions on Ubuntu)
 
-- `lua5.1 tests/runner.lua` → **155 passed, 0 failed**: deterministic cases
+- `lua5.1 tests/runner.lua` → **156 passed, 0 failed**: deterministic cases
   of spec §13 (vendor 300, unit 500, depth 600, §8 example 900/11,053, missing
   price, deposit, DE 100/50%, crafting 2 crafts/4 outputs, separate history,
   conversion cycle, malformed/oversize import), properties (cost not
@@ -80,7 +80,7 @@ of price history exist (needs the real AH fee and deposit).
   keys → both run stepwise within 2 ms per frame; estimated history 11.8 MB
   after 10 days (20 MB budget).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.2.zip`, 54 files,
-  SHA-256 `a3c44d70f53bbdc4837d30abb8c1723ca023230380231b7188127770c7b55f77`.
+  SHA-256 `29b8befc163ff186ebe95d619967061d4af77a9528d589761984bcdc0cd46c75`.
 
 Mocks prove our logic only; in-game evidence is listed in `docs/API-AUDIT.md`.
 

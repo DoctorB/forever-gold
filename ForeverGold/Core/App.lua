@@ -66,6 +66,11 @@ function App:Load(saved)
   self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
     stale = function() return self.opportunities.stale end })
   self.bus:Subscribe("purchase.state", function(current) self.batch:OnPurchase(current) end)
+  self.probe = ns.Services.Probe.New({
+    scanner = self.scanner, ah = self.ah, client = self.client, items = self.items, opportunities = self.opportunities,
+    scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, store = self.store,
+    printer = function(kind, data) self.bus:Publish("probe.progress", kind, data) end,
+  })
   self.vendorCheck = ns.Services.VendorCheck.New({
     client = self.client, store = self.store, clock = clock,
     printer = function(report) self.bus:Publish("vendor.check", report) end,

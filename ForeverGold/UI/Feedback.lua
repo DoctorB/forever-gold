@@ -92,8 +92,22 @@ end
 
 Feedback.SUMMARY_WAIT = 8
 
+-- "AH search test": read-only probe, progress and summary in chat.
+function Feedback.StartProbe(app)
+  local ok, reason = app.probe:Start()
+  if not ok then ns.Print(L("PROBE_REFUSED_" .. tostring(reason))) end
+  return ok
+end
+
 function Feedback.Attach(app)
   local Main = ns.UI.Main
+  app.bus:Subscribe("probe.progress", function(kind, data)
+    if kind == "step" then
+      ns.Print(string.format(L("PROBE_STEP"), data.index, data.total, data.name or "?"))
+    elseif kind == "done" then
+      ns.Print(string.format(L("PROBE_DONE"), data.variants, data.lots, data.votes.total, data.votes.unit))
+    end
+  end)
   local summary = ns.Core.Scheduler.New(app.schedulerEnv)
   local awaitingSummary = false
   local function trySummary(force)

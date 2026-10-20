@@ -30,6 +30,8 @@ function Commands.Handle(input)
   elseif command == "demo" then
     ns.UI.Main.demoResults = app:Demo()
     ns.UI.Main.Open("opportunities")
+  elseif command == "probe" then
+    ns.UI.Feedback.StartProbe(app)
   elseif command == "lang" then
     local code = ({ it = "itIT", itit = "itIT", en = "enUS", enus = "enUS", auto = "auto" })[rest]
     if not code then
