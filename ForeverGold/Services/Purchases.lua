@@ -148,6 +148,11 @@ function Purchases:Prepare()
     return false, reason
   end
   set(self, "locating")
+  -- The search may get no answer (or another search may replace it): stop
+  -- waiting instead of leaving the panel on "waiting for the server".
+  self.scheduler:After(Purchases.QUOTE_TIMEOUT + 2, function()
+    if alive(self, current, { locating = true }) then set(self, "rejected", "no_answer") end
+  end)
   return true
 end
 
