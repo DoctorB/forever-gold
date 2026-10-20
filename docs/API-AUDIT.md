@@ -4,7 +4,7 @@ Stato al 2026-10-20, dopo la sessione 1. Tutti i simboli della matrice sono
 `present` sulla build 70450; nessuna semantica è ancora `runtime_verified`
 (servono le prove AH di `docs/TESTING-IN-GAME.md`).
 
-<!-- verified: replicate=false replicateBuyoutIsTotal=false replicateIndexBase=false commoditySearch=false itemSearch=false itemSearchBuyoutIsTotal=false sellPrice=false persistence=true fee=false deposit=false -->
+<!-- verified: replicate=false replicateBuyoutIsTotal=false replicateIndexBase=true commoditySearch=false itemSearch=false itemSearchBuyoutIsTotal=false sellPrice=false persistence=true fee=false deposit=false -->
 
 Il commento sopra è letto da `tests/test_package.lua`: ogni flag deve
 coincidere con `Capabilities.VERIFIED` in `ForeverGold/Core/Capabilities.lua`
@@ -24,6 +24,7 @@ Stati ammessi: `documented` (presente nella documentazione del client),
 | 2026-10-20 (3) | 1.60.1.70450 | relog e riavvio completo del client | `loads` 3 (relog 12:53:12), 4 (12:54:16), 5 dopo il riavvio (12:56:55, `previousLoad` = 12:54:16): **persistenza verificata** nei tre passaggi |
 | 2026-10-20 (4) | 1.60.1.70450 | AH aperta, `/fg scan` alle 12:57:19, secondo `/fg scan` alle 12:58:09, AH chiusa alle 12:59:25 | prima replica letta in ~31 s: 2.081 chiavi oggetto, 29.449 aste acquistabili, 204.636 unità; esito parziale `rows_incomplete`. Durante la lettura il client ha inviato **centinaia di `REPLICATE_ITEM_LIST_UPDATE`** (≥ 190 in ~1 s). La seconda richiesta, 19 s dopo la fine della prima, **non ha ricevuto risposta per 76 s** (retry incluso): cooldown della replica > 76 s, durata ignota. Nessuna chiave con suffisso diverso da 0 su 2.081. Base dell'indice e conteggio righe persi perché il trace era saturato |
 | 2026-10-20 (5) | 1.60.1.70450 | ForeverGold con feedback; `/fg scan` alle 13:03:29 (+2 retry automatici), 13:06:19 (+1 retry) | **nessuna risposta** a nessuna delle 7 richieste fra 12:58:09 e 13:07:25: cooldown della replica **≥ 10 min 6 s** dall'ultima scansione riuscita (12:57:19). Non sappiamo se le richieste durante il cooldown lo prolunghino: da ora nessun retry automatico e pausa di 5 min dopo ogni richiesta senza risposta. `AUCTION_HOUSE_THROTTLED_SYSTEM_READY` arriva durante l'attesa (non indica la fine del cooldown). Una ricerca manuale (itemID 2516, commodity) ha prodotto `COMMODITY_SEARCH_RESULTS_UPDATED` |
+| 2026-10-20 (6) | 1.60.1.70450 | ForeverGold con richieste non ripetute; `/fg scan` alle 13:13:19, AH chiusa alle 13:14:23 | **risposta** dopo 6 s (13:13:25); 31.058 righe lette con base indice **0**, 0 scartate, 0 incomplete dopo 2 riletture; 2.575 chiavi, 210.676 unità; scansione completa in 38 s; 3.084 `REPLICATE_ITEM_LIST_UPDATE` durante la lettura. Cooldown: silenzio a +13 min 34 s, risposta a +16 min dall'ultima scansione riuscita; una richiesta 4 min 11 s dopo una silenziosa è rimasta silenziosa, quindi le richieste senza risposta **non** fanno ripartire il cooldown. Link: il campo suffisso è vuoto, le varianti arrivano come **bonus ID** (`item:15268::::::::20:1486::1:1:12730:1:28:5256`) |
 
 ## Client target
 
@@ -58,7 +59,7 @@ riga è scartata con motivo (`Money.Normalize`), mai convertita con perdita.
 | `C_AuctionHouse.ReplicateItems` | `()`; "da usare al posto della query allItem" | scansione su richiesta utente | documented | evento successivo, ritardo, cooldown, dati con AH chiusa | stato FAILED `no_response` dopo retry limitati; osservazione passiva |
 | `C_AuctionHouse.GetNumReplicateItems` | `() → number` | conteggio righe | documented | valore prima/dopo l'evento | FAILED `count_unavailable` |
 | `C_AuctionHouse.GetReplicateItemInfo` | `(index: number)` → 18 valori: name, texture, count, qualityID, usable, level, levelType, minBid, minIncrement, buyoutPrice, bidAmount, highBidder, bidderFullName, owner, ownerFullName, saleStatus, itemID, hasAllInfo | righe asta | documented | **base dell'indice** (0 o 1: rilevata leggendo l'indice 0), **buyoutPrice totale dello stack o unitario**, valore 0 senza buyout, `hasAllInfo` | indice: rilevamento automatico; buyout: assunto totale, confidenza penalizzata (`semanticsUnverified`) |
-| `C_AuctionHouse.GetReplicateItemLink` | `(index) → itemLink?` | variante (suffix) | documented | link disponibile con `hasAllInfo` falso? | variante sconosciuta → esclusa dalla rivendita |
+| `C_AuctionHouse.GetReplicateItemLink` | `(index) → itemLink?` | variante (bonus ID; suffisso vuoto su Forever) | runtime_verified (formato) | link disponibile con `hasAllInfo` falso? | variante sconosciuta → esclusa dalla rivendita |
 | `C_AuctionHouse.IsThrottledMessageSystemReady` | `() → bool` | prontezza | documented | comportamento durante/dopo la replica | assente → si procede e si registra |
 | `C_AuctionHouse.SendSearchQuery` | `(itemKey, sorts, separateOwnerItems, minLevel?, maxLevel?)`; 100 chiamate/minuto | solo "Aggiorna quotazione" su richiesta | documented | `sorts` vuoto accettato? evento di risposta | rifiuto con motivo |
 | `C_AuctionHouse.MakeItemKey` | `(itemID, itemLevel?, itemSuffix?, battlePetSpeciesID?) → ItemKey` | chiave per la ricerca mirata | documented | suffix nel ruleset Forever | — |
@@ -92,7 +93,8 @@ finiscono in `ForeverGoldDB.diagnostics.report.events`.
 1. Indice di `GetReplicateItemInfo`: 0 o 1? Dalla 2ª scansione il valore è salvato con lo snapshot (`indexBase`).
 2. `buyoutPrice` della replica: totale dello stack o per unità? Ogni scansione salva ora 8 righe multi-unità (`samples`) da confrontare con la finestra AH.
 3. Cooldown della replica: ≥ 10 min 6 s osservato; lo scanner salva ora in `ForeverGoldDB.scanner` i limiti misurati (`lowerBound`, `upperBound`) a ogni tentativo. Gli aggiornamenti durante la lettura sono ora contati (`lateUpdates`) e le righe incomplete rilette fino a 4 volte.
-9. Formato dei link: nessun suffisso su 2.081 chiavi. Ogni scansione salva ora fino a 6 item string grezzi (`links`) per verificare se gli oggetti "of the …" hanno un suffisso e in quale campo.
+9. Formato dei link: risolto. Suffisso vuoto, varianti nei bonus ID (campo 13 = numero, poi gli ID); la chiave oggetto include ora i bonus ID ordinati (`i:15268:0:b12730`). Resta da capire il modificatore `28:5256`.
+10. Significato del buyout della replica: ogni scansione salva ora `buyoutVotes` (stack confrontati con le aste singole dello stesso oggetto) come evidenza statistica, da confermare con 2–3 confronti nella finestra AH.
 4. Il client Forever usa commodity (ricerca per itemID) o solo aste individuali?
 5. AH condivisa fra fazioni/realm? (finché ignoto la fazione resta nella `MarketKey`)
 6. Commissione AH e depositi effettivi su una vendita reale (oggi scenario 5%).

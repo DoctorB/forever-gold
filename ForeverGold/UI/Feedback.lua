@@ -30,6 +30,9 @@ end
 function Feedback.CooldownText(app)
   local info = app.scanner:Cooldown()
   if not info.lowerBound and not info.upperBound then return L("CD_UNKNOWN") end
+  if info.lowerBound and info.upperBound then
+    return string.format(L("CD_RANGE"), Feedback.Duration(info.lowerBound), Feedback.Duration(info.upperBound))
+  end
   local text = info.lowerBound and string.format(L("CD_LOWER"), Feedback.Duration(info.lowerBound)) or ""
   if info.upperBound then
     text = text .. (text ~= "" and "; " or "") .. string.format(L("CD_UPPER"), Feedback.Duration(info.upperBound))
@@ -38,8 +41,10 @@ function Feedback.CooldownText(app)
 end
 
 -- Chat line when a scan cannot start.
-function Feedback.RefusedLine(app, reason, seconds)
-  if reason == "cooldown" then
+function Feedback.RefusedLine(app, reason, seconds, kind)
+  if reason == "cooldown" and kind == "measured" then
+    return string.format(L("FB_COOLDOWN_MEASURED"), Feedback.Duration(seconds), Feedback.CooldownText(app))
+  elseif reason == "cooldown" then
     return string.format(L("FB_COOLDOWN"), Feedback.Duration(seconds), Feedback.CooldownText(app))
   end
   return L("SCAN_REFUSED") .. " " .. reasonText(reason)
@@ -47,8 +52,8 @@ end
 
 -- Starts a user scan and reports a refusal.
 function Feedback.StartScan(app)
-  local ok, reason, seconds = app.scanner:Start({ mode = "replicate" })
-  if not ok then ns.Print(Feedback.RefusedLine(app, reason, seconds)) end
+  local ok, reason, seconds, kind = app.scanner:Start({ mode = "replicate" })
+  if not ok then ns.Print(Feedback.RefusedLine(app, reason, seconds, kind)) end
   return ok
 end
 

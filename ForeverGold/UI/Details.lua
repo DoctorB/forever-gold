@@ -106,7 +106,7 @@ function Details.Refresh()
   local prepared = app.transactions.prepared
   if not prepared or prepared.itemKey ~= opportunity.itemKey then prepared = app.transactions:Prepare(opportunity) end
   local itemID = Schema.ItemIDOf(opportunity.itemKey)
-  local suffix = tonumber(opportunity.itemKey:match(":(%d+)$"))
+  local suffix = Schema.SuffixOf(opportunity.itemKey)
   local ok, reason = app.scanner:Search(itemID, suffix, function(_, listings)
     local status, reasons = app.transactions:Revalidate(prepared, listings)
     local text = L("QUOTE_" .. status)

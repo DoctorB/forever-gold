@@ -186,3 +186,26 @@ T.Case("snapshot evidence and counts are saved with the market", function()
   T.Eq(#saved.samples, 8)
   T.Ok(#saved.links > 0)
 end)
+
+T.Case("buyout meaning: stacks vote by comparing with single auctions", function()
+  local _, ns = Fakes.App({})
+  local Schema = ns.Data.Schema
+  local function l(itemID, quantity, buyout)
+    return Schema.NewListing({ marketKey = "m", itemKey = Schema.ItemKey(itemID, 0), quantity = quantity,
+      buyoutTotal = buyout, source = "replicate" })
+  end
+  local totals = { l(1, 1, 100), l(1, 1, 110), l(1, 5, 520), l(1, 10, 990), l(2, 1, 50), l(2, 20, 1000), l(3, 4, 400) }
+  local votes = ns.Services.Diagnostics.BuyoutVotes(totals)
+  T.Eq(votes.items, 2)
+  T.Eq(votes.total, 3)
+  T.Eq(votes.unit, 0)
+  local units = { l(1, 1, 100), l(1, 5, 105), l(1, 3, 98) }
+  T.Eq(ns.Services.Diagnostics.BuyoutVotes(units).unit, 2)
+end)
+
+T.Case("scanner memory is seeded with the bounds measured in game", function()
+  local app, ns = Fakes.App({})
+  T.Eq(app.scanner.memory.lowerBound, ns.Services.Scanner.MEASURED.lowerBound)
+  T.Eq(app.scanner.memory.upperBound, ns.Services.Scanner.MEASURED.upperBound)
+  T.Eq(app.store.db.scanner, app.scanner.memory)
+end)

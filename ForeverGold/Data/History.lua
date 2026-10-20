@@ -84,7 +84,7 @@ function History.FinishRecord(job)
     id = snapshot.id, t = job.now, mode = snapshot.mode, coverage = snapshot.coverage, items = job.updated,
     started = snapshot.started, status = snapshot.status, reason = snapshot.reason, indexBase = snapshot.indexBase,
     counts = snapshot.counts, discardReasons = snapshot.discardReasons, updates = snapshot.updates,
-    lateUpdates = snapshot.lateUpdates, rounds = snapshot.rounds,
+    lateUpdates = snapshot.lateUpdates, rounds = snapshot.rounds, buyoutVotes = snapshot.buyoutVotes,
     samples = snapshot.samples and #snapshot.samples > 0 and snapshot.samples or nil,
     links = snapshot.links and #snapshot.links > 0 and snapshot.links or nil,
   }

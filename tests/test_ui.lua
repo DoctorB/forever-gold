@@ -172,6 +172,8 @@ T.Case("waiting shows elapsed time; silence explains the cooldown; refusal says 
     eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
     clock.advance(120)
     ah.delivered = false
+    -- No prior measurement: forget the seeded bounds.
+    ns.app.scanner.memory.lowerBound, ns.app.scanner.memory.upperBound = nil, nil
     clock.advance(400)
     ns.UI.Commands.Handle("scan")
     clock.advance(5)
@@ -193,5 +195,23 @@ T.Case("durations read naturally", function()
     T.Eq(D(45), "45 s")
     T.Eq(D(606), "10 min 6 s")
     T.Eq(D(900), "15 min")
+  end)
+end)
+
+T.Case("with the measured cooldown a scan too early is refused before sending", function()
+  withClient(function(ns, _, clock, ah, eventFrame)
+    eventFrame.scripts.OnEvent(eventFrame, "AUCTION_HOUSE_SHOW")
+    ns.UI.Commands.Handle("scan")
+    ah.delivered = true
+    eventFrame.scripts.OnEvent(eventFrame, "REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(600) -- 10 min after the answered request
+    ns.UI.Commands.Handle("scan")
+    local last = ns.printed[#ns.printed]
+    T.Ok(last:find("still cooling down: next scan possible in 3 min 34 s", 1, true) ~= nil, last)
+    T.Ok(last:find("between 13 min 34 s and 16 min", 1, true) ~= nil, last)
+    T.Eq(ah.replicateCalls, 1)
+    clock.advance(215)
+    ns.UI.Commands.Handle("scan")
+    T.Eq(ah.replicateCalls, 2, "allowed once the proven bound has passed")
   end)
 end)

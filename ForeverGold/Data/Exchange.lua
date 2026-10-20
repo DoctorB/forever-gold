@@ -52,9 +52,9 @@ function Exchange.Import(store, text, expectedMarketKey)
         return { ok = false, error = "other_market", line = 1 }
       end
     elseif line:match("%S") then
-      local itemKey, day, price, depth = line:match("^(i:%d+:%d+) (%d+) (%d+) (%d+)$")
+      local itemKey, day, price, depth = line:match("^(%S+) (%d+) (%d+) (%d+)$")
       day, price, depth = tonumber(day), tonumber(price), tonumber(depth)
-      if not itemKey or not day or day > 1000000 or not Money.IsCopper(price) or price == 0
+      if not ns.Data.Schema.IsItemKey(itemKey) or not day or day > 1000000 or not Money.IsCopper(price) or price == 0
         or not Money.IsQuantity(depth + 1) then
         return { ok = false, error = "bad_line", line = lineNo }
       end

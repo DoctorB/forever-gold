@@ -83,6 +83,46 @@ function Diagnostics:SampleListings(latest)
   return #samples
 end
 
+-- Evidence on the meaning of the replicate buyout. For every item with both
+-- single-unit and multi-unit auctions, a stack votes "total" when
+-- buyout / count is closer to the singles' median price than buyout itself,
+-- "unit" otherwise; unclear stacks (both far, > 50%) do not vote.
+-- listings: normalized listings whose buyoutTotal holds the raw buyout.
+function Diagnostics.BuyoutVotes(listings)
+  local singles, stacks = {}, {}
+  for _, listing in ipairs(listings) do
+    if listing.source == "replicate" and listing.buyoutTotal and listing.complete then
+      local key = listing.itemKey
+      if listing.quantity == 1 then
+        singles[key] = singles[key] or {}
+        table.insert(singles[key], listing.buyoutTotal)
+      else
+        stacks[key] = stacks[key] or {}
+        table.insert(stacks[key], listing)
+      end
+    end
+  end
+  local votes = { items = 0, total = 0, unit = 0, unclear = 0 }
+  for key, list in pairs(stacks) do
+    if singles[key] then
+      votes.items = votes.items + 1
+      local single = ns.Economy.MarketValue.Median(singles[key])
+      for _, listing in ipairs(list) do
+        local asTotal = math.abs(listing.buyoutTotal / listing.quantity - single) / single
+        local asUnit = math.abs(listing.buyoutTotal - single) / single
+        if math.min(asTotal, asUnit) > 0.5 then
+          votes.unclear = votes.unclear + 1
+        elseif asTotal < asUnit then
+          votes.total = votes.total + 1
+        else
+          votes.unit = votes.unit + 1
+        end
+      end
+    end
+  end
+  return votes
+end
+
 -- Summary lines for chat output.
 function Diagnostics.Summary(report, L)
   local lines = {}

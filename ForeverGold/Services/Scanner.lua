@@ -21,6 +21,12 @@ local Scanner = {}
 ns.Services.Scanner = Scanner
 
 Scanner.ACTIVE = { REQUESTED = true, RECEIVING = true, NORMALIZING = true, THROTTLED = true }
+
+-- Replicate cooldown measured in game, counted from the last answered
+-- request: silent at +13 min 34 s, answered at +16 min (2026-10-20, build
+-- 70450). A request 4 min after a silent one stayed silent, so silent
+-- requests do not restart it. Used only as the starting measurement.
+Scanner.MEASURED = { lowerBound = 814, upperBound = 960, source = "2026-10-20 build 70450" }
 Scanner.DEFAULTS = {
   timeout = 60, -- seconds without any replicate event: no response
   settle = 2, -- seconds without new update events before reading
@@ -161,14 +167,20 @@ local function observe(self, answered, requestedAt)
   while #list > 20 do table.remove(list, 1) end
 end
 
--- { lastSuccess, lowerBound, upperBound, remaining } at time now.
+-- { lastSuccess, lowerBound, upperBound, remaining, kind } at time now.
+-- kind "measured": still inside the proven lower bound after the last
+-- answered request; kind "silent": pacing pause after an unanswered one.
 function Scanner:Cooldown(now)
   local memory = self.memory
   local info = { lastSuccess = memory.lastSuccess, lowerBound = memory.lowerBound, upperBound = memory.upperBound, remaining = 0 }
   now = now or self.clock()
+  if memory.lastSuccess and memory.lowerBound then
+    local left = memory.lastSuccess + memory.lowerBound - now
+    if left > 0 then info.remaining, info.kind = left, "measured" end
+  end
   if memory.lastSilent and (not memory.lastSuccess or memory.lastSilent > memory.lastSuccess) then
     local left = memory.lastSilent + self.opts.silentPause - now
-    if left > 0 then info.remaining = left end
+    if left > info.remaining then info.remaining, info.kind = left, "silent" end
   end
   return info
 end
@@ -216,7 +228,7 @@ function Scanner:Start(request)
   if request.mode ~= "replicate" then return false, "unsupported_mode" end
   if not self.adapter:GetCapabilities().replicate then return false, "unsupported" end
   local cooldown = self:Cooldown()
-  if cooldown.remaining > 0 then return false, "cooldown", cooldown.remaining end
+  if cooldown.remaining > 0 then return false, "cooldown", cooldown.remaining, cooldown.kind end
   self.scheduler:Invalidate()
   local task = { mode = "replicate", attempts = 0, updates = 0, lateUpdates = 0, rounds = 0, byIndex = {} }
   self.task = task
@@ -251,7 +263,8 @@ local function readRow(self, task, index)
     discard(snapshot, "item_id")
     return
   end
-  local suffix = Schema.SuffixFromLink(row.link)
+  local _, suffix, bonus = Schema.VariantFromLink(row.link)
+  if bonus and bonus ~= "" then snapshot.counts.withBonus = (snapshot.counts.withBonus or 0) + 1 end
   -- Evidence for docs/API-AUDIT.md: a few stacks and raw item strings.
   if row.count and row.count > 1 and row.buyout and #snapshot.samples < self.opts.samples then
     snapshot.samples[#snapshot.samples + 1] = { itemID = row.itemID, count = row.count, buyout = row.buyout, minBid = row.minBid }
@@ -260,7 +273,7 @@ local function readRow(self, task, index)
   if itemString and #snapshot.links < self.opts.links and (suffix ~= 0 or #snapshot.links < self.opts.links / 2) then
     snapshot.links[#snapshot.links + 1] = itemString
   end
-  local itemKey = Schema.ItemKey(row.itemID, suffix, suffix == nil)
+  local itemKey = Schema.ItemKey(row.itemID, suffix, suffix == nil, bonus)
   local buyout = row.buyout
   if buyout == 0 then buyout = nil end
   local listing, why = Schema.NewListing({
@@ -408,7 +421,8 @@ local function searchListings(self, snapshot, rows, commodity)
       raw.itemKey = Schema.ItemKey(row.itemID, 0)
       raw.divisible, raw.unitPrice, raw.source = true, row.unitPrice, "search_commodity"
     else
-      raw.itemKey = Schema.ItemKey(row.itemID, row.suffix or 0)
+      local _, suffix, bonus = Schema.VariantFromLink(row.link)
+      raw.itemKey = Schema.ItemKey(row.itemID, suffix or row.suffix or 0, false, bonus)
       raw.divisible, raw.buyoutTotal, raw.bid, raw.source = false, row.buyout, row.minBid, "search_item"
       if row.quantity ~= 1 and not Capabilities.IsVerified("itemSearchBuyoutIsTotal") then
         raw.complete = false -- price per unit or per auction not verified

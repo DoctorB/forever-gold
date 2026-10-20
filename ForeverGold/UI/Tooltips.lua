@@ -12,9 +12,9 @@ local function L(key) return ns.L[key] or key end
 
 -- Text for an item link, or nil when there is nothing to say.
 function Tooltips.Line(app, link)
-  local suffix, itemID = Schema.SuffixFromLink(link)
+  local itemID, suffix, bonus = Schema.VariantFromLink(link)
   if not itemID then return nil end
-  local itemKey = Schema.ItemKey(itemID, suffix)
+  local itemKey = Schema.ItemKey(itemID, suffix, false, bonus)
   local estimate = MarketValue.Estimate(app.history, itemKey, app:MarketKey(), app.clock())
   if estimate.status ~= "ok" then
     if (estimate.samples[30] or 0) == 0 then return nil end

@@ -15,7 +15,9 @@ Aggiornato: 2026-10-20 · versione `0.1.0-alpha.1` · **alpha non verificata in 
 Sessioni in gioco del 2026-10-20 (build 1.60.1.70450): caricamento,
 diagnostica (26/26 simboli, 8/8 eventi), UI e demo, **persistenza verificata**
 (`/reload`, relog, riavvio), prima replica reale (2.081 chiavi, 29.449 aste,
-204.636 unità in ~31 s), cooldown della replica ≥ 10 min. Dettagli in
+204.636 unità in ~31 s), seconda scansione completa (31.058 righe, 0 scarti,
+38 s), indice 0-based verificato, cooldown della replica misurato fra
+13 min 34 s e 16 min, varianti come bonus ID. Dettagli in
 `docs/API-AUDIT.md`.
 
 Prossimo gate: una scansione con lo scanner aggiornato per leggere dal file
@@ -51,7 +53,7 @@ campioni con la finestra AH; misura del cooldown.
 
 ## Prove eseguite (2026-10-20, Windows, Lua 5.1.5)
 
-- `lua5.1 tests/runner.lua` → **103 passed, 0 failed**: casi deterministici
+- `lua5.1 tests/runner.lua` → **108 passed, 0 failed**: casi deterministici
   della §13 (vendor 300, unitario 500, profondità 600, esempio §8 900/11.053,
   prezzo assente, deposito, DE 100/50%, crafting 2 craft/4 output, storico non
   condiviso, ciclo di conversione, import malformato/oversize), proprietà
@@ -68,7 +70,7 @@ campioni con la finestra AH; misura del cooldown.
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.1.zip`, 47 file,
-  SHA-256 `377f4e49b8967bb524c39946aa878abe67c093d2458c5caef6ed2fdd745c9c86`.
+  SHA-256 `974c4a716112740f8d143b6a3494a2b22635bf2797dcf6759aba44d33902cd17`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.

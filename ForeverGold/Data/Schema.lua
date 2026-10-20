@@ -24,26 +24,41 @@ function Schema.MarketKey(fields)
   }, "|")
 end
 
--- ItemKey from verified parts; variantUnknown when the source could not
--- expose a variant that matters (e.g. missing link for a suffix item).
-function Schema.ItemKey(itemID, suffix, variantUnknown)
+-- ItemKey from verified parts: "i:<itemID>:<suffix>" plus ":b<bonus ids>"
+-- when the item string carries bonus IDs. On Forever (build 70450) random
+-- variants such as "of the Bear" arrive as bonus IDs with an empty suffix
+-- field, so bonus IDs are part of the key. variantUnknown when the source
+-- could not expose the variant (e.g. missing link).
+function Schema.ItemKey(itemID, suffix, variantUnknown, bonus)
   if type(itemID) ~= "number" or itemID <= 0 or math.floor(itemID) ~= itemID then return nil end
   if variantUnknown then return "i:" .. itemID .. ":?" end
-  local s = tonumber(suffix) or 0
-  return "i:" .. itemID .. ":" .. s
+  local key = "i:" .. itemID .. ":" .. (tonumber(suffix) or 0)
+  if type(bonus) == "string" and bonus ~= "" then key = key .. ":b" .. bonus end
+  return key
 end
 
 function Schema.ItemIDOf(itemKey)
   return tonumber(type(itemKey) == "string" and itemKey:match("^i:(%d+):") or nil)
 end
 
+function Schema.SuffixOf(itemKey)
+  return tonumber(type(itemKey) == "string" and itemKey:match("^i:%d+:(%-?%d+)") or nil)
+end
+
+function Schema.IsItemKey(itemKey)
+  return type(itemKey) == "string"
+    and (itemKey:match("^i:%d+:%-?%d+$") ~= nil or itemKey:match("^i:%d+:%-?%d+:b[%d%.]+$") ~= nil)
+end
+
 function Schema.IsVariantUnknown(itemKey)
   return type(itemKey) == "string" and itemKey:sub(-2) == ":?"
 end
 
--- Parses the suffix id out of an item link or item string.
--- item:ID:enchant:gem1:gem2:gem3:gem4:suffixID:...
-function Schema.SuffixFromLink(link)
+-- Parses an item link or item string:
+-- item:ID:enchant:gem1:gem2:gem3:gem4:suffixID:uniqueID:linkLevel:specID:
+--      modifiersMask:itemContext:numBonusIDs:bonusID...:numModifiers:...
+-- Returns itemID, suffix, bonus (sorted bonus IDs joined by "."), or nil.
+function Schema.VariantFromLink(link)
   if type(link) ~= "string" then return nil end
   local itemString = link:match("item:([%-%d:]+)")
   if not itemString then return nil end
@@ -52,8 +67,23 @@ function Schema.SuffixFromLink(link)
     index = index + 1
     fields[index] = value
   end
-  if not tonumber(fields[1]) then return nil end
-  return tonumber(fields[7]) or 0, tonumber(fields[1])
+  local itemID = tonumber(fields[1])
+  if not itemID then return nil end
+  local bonus = {}
+  local count = tonumber(fields[13]) or 0
+  for position = 14, 13 + math.min(count, 16) do
+    local id = tonumber(fields[position])
+    if id then bonus[#bonus + 1] = id end
+  end
+  table.sort(bonus)
+  return itemID, tonumber(fields[7]) or 0, table.concat(bonus, ".")
+end
+
+-- Suffix id of a link (0 when empty); second value the itemID.
+function Schema.SuffixFromLink(link)
+  local itemID, suffix = Schema.VariantFromLink(link)
+  if not itemID then return nil end
+  return suffix, itemID
 end
 
 -- Listing. raw: { marketKey, itemKey, quantity, buyoutTotal?, unitPrice?,

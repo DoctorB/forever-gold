@@ -58,11 +58,16 @@ function App:Load(saved)
   return self.store:Persisted(saved)
 end
 
--- Persisted scanner measurements (replicate cooldown bounds).
+-- Persisted scanner measurements (replicate cooldown bounds), seeded with
+-- the bounds measured in game when nothing has been measured yet.
 function App:ScannerMemory()
   local db = self.store.db
   db.scanner = db.scanner or {}
-  return db.scanner
+  local memory, measured = db.scanner, ns.Services.Scanner.MEASURED
+  if memory.lowerBound == nil and memory.upperBound == nil then
+    memory.lowerBound, memory.upperBound, memory.seed = measured.lowerBound, measured.upperBound, measured.source
+  end
+  return memory
 end
 
 function App:MarketKey()
@@ -101,6 +106,7 @@ function App:Process(snapshot, listings)
   local work, budget = self.work, self.store:Settings().frameBudgetMs
   work:Invalidate()
   self.processing = true
+  if snapshot.mode == "replicate" then snapshot.buyoutVotes = ns.Services.Diagnostics.BuyoutVotes(listings) end
   local job = self.history:BeginRecord(snapshot, listings)
   local total = #job.order
   self:Progress("history", 0, total, snapshot.mode)
