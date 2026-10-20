@@ -79,7 +79,7 @@ Un prezzo basso non garantisce una vendita futura.
 - Icona texture: `scripts/make-icon.ps1` (TGA 64×64 dal PNG CurseForge).
 
 Documenti: `docs/STATUS.md`, `docs/API-AUDIT.md`, `docs/DECISIONS.md`,
-`docs/TESTING-IN-GAME.md` e la specifica di progetto in `docs/`.
+`docs/TESTING-IN-GAME.md`.
 
 ## Licenza
 
