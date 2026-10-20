@@ -105,7 +105,8 @@ function Feedback.Attach(app)
     if kind == "step" then
       ns.Print(string.format(L("PROBE_STEP"), data.index, data.total, data.name or "?"))
     elseif kind == "done" then
-      ns.Print(string.format(L("PROBE_DONE"), data.variants, data.lots, data.votes.total, data.votes.unit))
+      ns.Print(string.format(L("PROBE_DONE"), data.variants, data.lots, data.votes.total, data.votes.unit,
+        data.votes.mismatch or 0))
     end
   end)
   local summary = ns.Core.Scheduler.New(app.schedulerEnv)

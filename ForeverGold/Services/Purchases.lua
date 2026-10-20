@@ -289,6 +289,10 @@ function Purchases:OnEvent(event, a, b)
   local current = self.current
   if not current then return end
   local plan = current.plan
+  if self.trace then
+    self.trace("purchase_event", { event = event, a = a ~= nil and tostring(a) or nil, b = b ~= nil and tostring(b) or nil,
+      state = current.state, itemID = plan.itemID })
+  end
   if event == "COMMODITY_PRICE_UPDATED" and current.state == "quoting" then
     local unit, total = Money.Normalize(a), Money.Normalize(b)
     current.quote = { unit = unit, total = total, at = self.clock() }

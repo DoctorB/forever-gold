@@ -3,9 +3,10 @@
 -- ready, and records what the server answers in ForeverGoldDB.diagnostics.probe:
 --   variants  items with bonus IDs: direct search with the built key, then a
 --             browse by name and a search with each server key of the item;
---   lots      non-commodity items sold in lots of 2+: replicate lot vs the
---             item-search row, to learn whether buyoutAmount is per lot or
---             per unit (votes "total" / "unit").
+--   lots      non-commodity items sold in lots of 2+ or stackable: replicate
+--             lots vs the item-search rows, to learn whether buyoutAmount is
+--             per lot or per unit (votes "total" / "unit"; a same-price row
+--             with another lot size is recorded as a mismatch).
 -- Nothing is bought, bid, posted or cancelled.
 local _, ns = ...
 
@@ -14,7 +15,7 @@ local Probe = {}
 ns.Services.Probe = Probe
 
 Probe.MAX_VARIANTS = 4
-Probe.MAX_LOTS = 4
+Probe.MAX_LOTS = 8
 Probe.READY_TRIES = 15
 Probe.STEP_TIMEOUT = 12
 
@@ -49,18 +50,28 @@ function Probe:Candidates()
           variants[#variants + 1] = { itemID = itemID, itemKey = itemKey, name = info.name, link = listing.link,
             quantity = listing.quantity, buyout = listing.buyoutTotal }
         end
-        if listing.quantity > 1 and listing.buyoutTotal and not listing.divisible and not seenL[itemID]
-          and #lots < Probe.MAX_LOTS and self.ah:IsCommodity(itemID) == false then
+        -- Lots of 2+, or stackable items (the search may show bigger lots
+        -- than the replicate); commodities are left out, unknown ones kept.
+        local stackable = (info.stackCount or 1) > 1
+        if (listing.quantity > 1 or stackable) and listing.buyoutTotal and not listing.divisible and not seenL[itemID]
+          and self.ah:IsCommodity(itemID) ~= true then
           seenL[itemID] = true
           local replicate = {}
           for _, other in ipairs(view.listings) do
             if other.buyoutTotal then replicate[#replicate + 1] = { quantity = other.quantity, total = other.buyoutTotal } end
           end
-          lots[#lots + 1] = { itemID = itemID, itemKey = itemKey, name = info.name, link = listing.link, replicate = replicate }
+          lots[#lots + 1] = { itemID = itemID, itemKey = itemKey, name = info.name, link = listing.link, replicate = replicate,
+            multi = listing.quantity > 1, stackCount = info.stackCount }
         end
       end
     end
   end
+  -- Lots of 2+ first, then the stackable ones.
+  table.sort(lots, function(a, b)
+    if a.multi ~= b.multi then return a.multi end
+    return a.itemID < b.itemID
+  end)
+  while #lots > Probe.MAX_LOTS do table.remove(lots) end
   return variants, lots
 end
 
@@ -172,26 +183,38 @@ end
 -- Lot item: compare the replicate lots with the item-search rows.
 function Probe:RunLot(c)
   local level = self.client:ItemLevel(c.link)
+  local commodity = self.ah:IsCommodity(c.itemID)
+  if commodity == true then
+    self:Log({ kind = "lots_skip", itemID = c.itemID, name = c.name, reason = "commodity" })
+    self:Next()
+    return
+  end
   self:WhenReady(function()
     self:Search(c.itemID, Schema.SuffixOf(c.itemKey), level, nil, function(listings)
-      local total, unit = 0, 0
+      local total, unit, mismatch = 0, 0, 0
       for _, row in ipairs(listings or {}) do
         for _, lot in ipairs(c.replicate) do
-          if row.quantity == lot.quantity and row.quantity > 1 and row.buyoutTotal then
-            if row.buyoutTotal == lot.total then total = total + 1 end
-            if row.buyoutTotal * row.quantity == lot.total then unit = unit + 1 end
+          if row.quantity > 1 and row.buyoutTotal then
+            if row.quantity == lot.quantity then
+              if row.buyoutTotal == lot.total then total = total + 1 end
+              if row.buyoutTotal * row.quantity == lot.total then unit = unit + 1 end
+            elseif row.buyoutTotal == lot.total then
+              mismatch = mismatch + 1
+            end
           end
         end
       end
       self.report.votes.total = self.report.votes.total + total
       self.report.votes.unit = self.report.votes.unit + unit
+      self.report.votes.mismatch = (self.report.votes.mismatch or 0) + mismatch
       local replicate = {}
       for index = 1, math.min(#c.replicate, 6) do
         replicate[index] = string.format("%dx%s", c.replicate[index].quantity, tostring(c.replicate[index].total))
       end
       self:Log({ kind = "lots", itemID = c.itemID, name = c.name, replicate = table.concat(replicate, " "),
         rows = listings and #listings or "no_answer", sample = listings and rowsText(listings) or nil,
-        votesTotal = total, votesUnit = unit })
+        votesTotal = total, votesUnit = unit, sizeMismatch = mismatch, stackCount = c.stackCount,
+        commodity = tostring(commodity) })
       self:Next()
     end)
   end)

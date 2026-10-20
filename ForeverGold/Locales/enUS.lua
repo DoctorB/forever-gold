@@ -324,7 +324,7 @@ L.PORT_LIMIT_SHORT = "Spending limit %s (Settings)"
 
 L.BTN_PROBE = "AH search test"
 L.PROBE_STEP = "AH search test %d/%d: %s..."
-L.PROBE_DONE = "AH search test finished: %d variant items, %d multi-unit items; lot price votes: per lot %d, per unit %d. Nothing was bought. Type /reload so the results are saved."
+L.PROBE_DONE = "AH search test finished: %d variant items, %d lot items; lot price votes: per lot %d, per unit %d, same price with another lot size %d. Nothing was bought. Type /reload so the results are saved."
 L.PROBE_REFUSED_nothing = "AH search test: no variant or multi-unit item in the last scan. Scan the AH first."
 L.PROBE_REFUSED_busy = "AH search test: wait for the current scan or test to finish."
 L.PROBE_REFUSED_ah_closed = "AH search test: open the Auction House first."

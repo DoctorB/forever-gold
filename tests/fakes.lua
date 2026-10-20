@@ -132,7 +132,7 @@ function Fakes.Env(clock, ah, extra)
       GetItemInfo = function(itemID)
         local info = extra and extra.items and extra.items[itemID]
         if not info then return nil end
-        return info.name, "link", 1, 1, 1, "Type", "Sub", 20, "", 1, info.sellPrice, info.classID or 7, 0, 0
+        return info.name, "link", 1, 1, 1, "Type", "Sub", info.stackCount or 1, "", 1, info.sellPrice, info.classID or 7, 0, 0
       end,
       RequestLoadItemDataByID = function() end,
     },

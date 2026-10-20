@@ -675,3 +675,47 @@ T.Case("variant items are searched with the Forever key: level and bonus ID + 15
   T.Eq(s.ah.browseCalls, nil)
   T.Eq(s.ns.Compat.AuctionHouse.SuffixForBonus("12720.12800"), nil, "several bonus IDs: no guess")
 end)
+
+T.Case("AH search test: stackable non-commodity items are probed; lot-size mismatch recorded", function()
+  local s = setup({ rows = { { itemID = 210, count = 1, buyout = 100 } } })
+  ITEMS[210] = { name = "Stackable Thing", sellPrice = 80 }
+  s.ah.commodityItems[210] = false
+  s.app.items.cache[210] = nil
+  local env = s.app.client.env
+  local baseInfo = env.C_Item.GetItemInfo
+  env.C_Item.GetItemInfo = function(itemID)
+    if itemID == 210 then return "Stackable Thing", "link", 1, 1, 1, "T", "S", 5, "", 1, 80, 15, 0, 0 end
+    return baseInfo(itemID)
+  end
+  s.ah.items[210] = { { quantity = 2, buyout = 100, auctionID = 3 } }
+  T.Ok(s.app.probe:Start())
+  for _ = 1, 10 do
+    s.clock.advance(1)
+    if s.app.scanner.task and s.app.scanner.task.mode == "search" then
+      s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 210, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+    end
+    if not s.app.probe.running then break end
+  end
+  local report = s.app.store.db.diagnostics.probe
+  T.Eq(report.lots, 1)
+  T.Eq(report.votes.mismatch, 1, "1x100 in the replicate, 2x100 in the search")
+  local lot
+  for _, e in ipairs(report.results) do if e.kind == "lots" then lot = e end end
+  T.Eq(lot.stackCount, 5)
+  T.Eq(lot.sample, "2x100")
+end)
+
+T.Case("purchase events are traced while a purchase is in progress", function()
+  local s = setup()
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  p:Prepare()
+  s.app:OnEvent("AUCTION_HOUSE_SHOW_ERROR", 7)
+  local found
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "purchase_event" and e.event == "AUCTION_HOUSE_SHOW_ERROR" then found = e end
+  end
+  T.Ok(found)
+  T.Eq(found.a, "7")
+  T.Eq(found.state, "quoting")
+end)
