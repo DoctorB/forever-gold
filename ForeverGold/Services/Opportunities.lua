@@ -16,6 +16,7 @@ function Opportunities.New(deps)
   local self = setmetatable({
     store = deps.store, history = deps.history, items = deps.items, clock = deps.clock, bus = deps.bus,
     commodity = deps.commodity, latest = {}, marketKey = nil, results = nil, lastNotify = 0,
+    stale = {}, -- itemID -> true: a purchase attempt found the offer gone
   }, { __index = Opportunities })
   return self
 end
@@ -61,12 +62,16 @@ function Opportunities:Ingest(snapshot, listings)
     end
     list[#list + 1] = listing
   end
-  if snapshot.mode == "replicate" then self.latest = {} end
+  if snapshot.mode == "replicate" then
+    self.latest = {}
+    self.stale = {}
+  end
   if snapshot.mode ~= "replicate" and snapshot.scope and not grouped[snapshot.scope] then
     -- Observation of an empty result: the item has no listing right now.
     self.latest[snapshot.scope] = nil
   end
   for itemKey, list in pairs(grouped) do
+    if snapshot.mode ~= "search" then self.stale[Schema.ItemIDOf(itemKey) or 0] = nil end
     self.latest[itemKey] = {
       listings = list, seen = snapshot.finished, coverage = snapshot.coverage, mode = snapshot.mode,
       scanId = snapshot.id, source = list[1].source,
@@ -98,11 +103,21 @@ function Opportunities:BeginEvaluate()
   return job
 end
 
+-- A purchase attempt showed the offer is gone or dearer: hide it until
+-- fresh data for the item arrives (next scan or a manual search).
+function Opportunities:MarkStale(itemID)
+  if itemID then self.stale[itemID] = true end
+end
+
 function Opportunities:EvaluateStep(job, index)
   local itemKey = job.keys[index]
   local view = self.latest[itemKey]
   if not view then return end
   local results, now, settings = job.results, job.now, job.settings
+  if self.stale[Schema.ItemIDOf(itemKey) or 0] then
+    results.excluded.stale = (results.excluded.stale or 0) + 1
+    return
+  end
   results.counts.itemKeys = results.counts.itemKeys + 1
   results.counts.listings = results.counts.listings + #view.listings
   local buyable = 0

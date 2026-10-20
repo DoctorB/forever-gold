@@ -166,6 +166,9 @@ function PurchasePanel.Show(opportunity)
   PurchasePanel.Update()
 end
 
+-- Rejections that mean the offer in the list no longer exists as shown.
+PurchasePanel.STALE_REASONS = { lot_gone = true, price_up = true, unavailable = true, no_answer = true }
+
 function PurchasePanel.Attach(app)
   app.bus:Subscribe("purchase.state", function(current)
     PurchasePanel.Update()
@@ -177,6 +180,9 @@ function PurchasePanel.Attach(app)
       app:EvaluateChunked()
     elseif current and current.state == "uncertain" then
       ns.Print(L("PB_UNCERTAIN"))
+    elseif current and current.state == "rejected" and PurchasePanel.STALE_REASONS[current.reason] then
+      app.opportunities:MarkStale(current.plan.itemID)
+      app:EvaluateChunked()
     end
   end)
   app.bus:Subscribe("vendor.check", function(report)

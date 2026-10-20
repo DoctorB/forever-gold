@@ -274,3 +274,43 @@ T.Case("individual auction: no answer to the search stops waiting", function()
   T.Eq(p.current.reason, "no_answer")
   T.Eq(s.ah.spendCalls, 0)
 end)
+
+T.Case("vendor purchase accepts any variant of the item; the attempt is traced", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
+    link = "|Hitem:201::::::::20:1486::1:1:12730:::::|h[Green Sword]|h" } } })
+  local o = s.find(201)
+  T.Eq(o.itemKey, "i:201:0:b12730")
+  local p = s.app.purchases
+  p:Begin(o, 5000)
+  p:Prepare()
+  -- The search result carries no bonus in its key (no link): same item, other key.
+  s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 91 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "located")
+  T.Eq(p.current.auction.amount, 190)
+  local found
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "purchase_locate" then found = e end
+  end
+  T.Ok(found, "locate traced")
+  T.Eq(found.rows, 1)
+  T.Eq(found.matched, 1)
+  T.Eq(found.planKey, "i:201:0:b12730")
+end)
+
+T.Case("an offer found gone leaves the list until fresh data arrives", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  local p = s.app.purchases
+  local opportunity = s.find(201)
+  s.ns.UI = s.ns.UI or {}
+  p:Begin(opportunity, 5000)
+  p:Prepare()
+  s.ah.items[201] = { { quantity = 1, buyout = 999, auctionID = 92 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.reason, "lot_gone")
+  s.app.opportunities:MarkStale(201)
+  s.app:EvaluateChunked()
+  s.clock.advance(5)
+  T.Eq(s.find(201), nil)
+  T.Eq(s.app.opportunities.results.excluded.stale, 1)
+end)

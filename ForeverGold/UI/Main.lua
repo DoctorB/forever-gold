@@ -118,6 +118,9 @@ function Main.FooterText(results)
   if (excluded.below_threshold or 0) > 0 then
     parts[#parts + 1] = string.format(L("FOOTER_SMALL"), excluded.below_threshold)
   end
+  if (excluded.stale or 0) > 0 then
+    parts[#parts + 1] = string.format(L("FOOTER_STALE"), excluded.stale)
+  end
   if (excluded.insufficient_history or 0) > 0 then
     parts[#parts + 1] = string.format(L("FOOTER_HISTORY"), excluded.insufficient_history)
   end

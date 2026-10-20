@@ -22,11 +22,11 @@ ns.Services.Purchases = Purchases
 Purchases.QUOTE_TIMEOUT = 10
 Purchases.CONFIRM_TIMEOUT = 20
 
--- deps: { purchase (Compat/Purchase), client, scanner, scheduler, clock, bus, store }
+-- deps: { purchase (Compat/Purchase), client, scanner, scheduler, clock, bus, store, trace?(kind, data) }
 function Purchases.New(deps)
   return setmetatable({
     purchase = deps.purchase, client = deps.client, scanner = deps.scanner, scheduler = deps.scheduler,
-    clock = deps.clock, bus = deps.bus, store = deps.store, current = nil,
+    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, current = nil,
   }, { __index = Purchases })
 end
 
@@ -40,6 +40,9 @@ function Purchases.Plan(opportunity, money, cap)
   local plan = {
     itemKey = opportunity.itemKey, itemID = itemID, name = opportunity.name, strategy = opportunity.strategy,
     sellPrice = opportunity.sellPrice, budget = budget, quantity = 0, expectedTotal = 0,
+    -- A merchant pays the same for every variant of an item: for vendor
+    -- purchases any variant will do; resale needs the exact one.
+    anyVariant = opportunity.strategy == "vendor",
   }
   local lots = {}
   for _, lot in ipairs(opportunity.lots or {}) do lots[#lots + 1] = lot end
@@ -87,6 +90,10 @@ local function set(self, state, reason)
   local current = self.current
   current.state, current.reason = state, reason
   current.changed = self.clock()
+  if self.trace then
+    self.trace("purchase", { state = state, reason = reason, itemID = current.plan.itemID, kind = current.plan.kind,
+      quantity = current.plan.quantity, expected = current.plan.expectedTotal })
+  end
   publish(self)
 end
 
@@ -128,13 +135,21 @@ function Purchases:Prepare()
   end
   local ok, reason = self.scanner:Search(plan.itemID, Schema.SuffixOf(plan.itemKey), function(_, listings)
     if not alive(self, current, { locating = true }) then return end
-    local best
+    local best, matched, cheapest = nil, 0, nil
     for _, listing in ipairs(listings) do
-      if listing.buyable and listing.auctionID ~= nil and listing.itemKey == plan.itemKey
-        and listing.quantity == plan.lot.quantity and listing.buyoutTotal <= plan.lot.buyoutTotal
-        and (not best or listing.buyoutTotal < best.buyoutTotal) then
-        best = listing
+      local sameItem = listing.itemKey == plan.itemKey
+        or (plan.anyVariant and Schema.ItemIDOf(listing.itemKey) == plan.itemID)
+      if listing.buyoutTotal and (not cheapest or listing.buyoutTotal < cheapest) then cheapest = listing.buyoutTotal end
+      if listing.buyable and listing.auctionID ~= nil and sameItem
+        and listing.quantity == plan.lot.quantity and listing.buyoutTotal <= plan.lot.buyoutTotal then
+        matched = matched + 1
+        if not best or listing.buyoutTotal < best.buyoutTotal then best = listing end
       end
+    end
+    if self.trace then
+      self.trace("purchase_locate", { rows = #listings, matched = matched, cheapest = cheapest,
+        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
+        firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity })
     end
     if best then
       current.auction = { auctionID = best.auctionID, amount = best.buyoutTotal }

@@ -261,6 +261,8 @@ L.HINT_NONE_WAIT = "Niente da comprare nell'ultima scansione. Prossima scansione
 L.DETAIL_CALC = "Calcolo:"
 L.DETAIL_MORE_LOTS = "  ... altri %d lotti"
 
+L.FOOTER_STALE = "%d offerte sparite dopo la scansione (nascoste fino a dati nuovi)"
+
 L.HELP_1 = "/fg - apre o chiude la finestra"
 L.HELP_2 = "/fg scan - scansione AH in sola lettura (AH aperta)"
 L.HELP_3 = "/fg cancel - annulla la scansione"

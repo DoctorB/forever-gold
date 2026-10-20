@@ -60,6 +60,7 @@ function App:Load(saved)
   self.purchases = ns.Services.Purchases.New({
     purchase = ns.Compat.Purchase.New(self.client), client = self.client, scanner = self.scanner,
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, bus = self.bus, store = self.store,
+    trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
   })
   self.vendorCheck = ns.Services.VendorCheck.New({
     client = self.client, store = self.store, clock = clock,

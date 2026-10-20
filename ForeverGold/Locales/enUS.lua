@@ -263,6 +263,8 @@ L.HINT_NONE_WAIT = "Nothing worth buying in the last scan. Next scan possible in
 L.DETAIL_CALC = "Calculation:"
 L.DETAIL_MORE_LOTS = "  ... %d more lots"
 
+L.FOOTER_STALE = "%d offers gone since the scan (hidden until new data)"
+
 L.HELP_1 = "/fg - open or close the window"
 L.HELP_2 = "/fg scan - read-only AH scan (AH must be open)"
 L.HELP_3 = "/fg cancel - cancel the scan"
