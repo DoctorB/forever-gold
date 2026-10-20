@@ -62,6 +62,12 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   lots stay excluded (a lower `PlaceBid` could become a bid).
 - Variant items are searched directly with Forever's key (effective item
   level, item suffix = bonus ID + 1580, measured with the AH search test).
+- Smaller saved data: one detailed observation per item and at most 8
+  interval prices per item and day (the saved file had reached 7.9 MB; the
+  new pruning cuts the estimate from 11.3 to 4.3 MB); old saves are trimmed
+  on load.
+- AH search test also probes items with several single auctions at the
+  same price (the search may group them) and votes per lot / per unit.
 - AH search test also probes stackable non-commodity items and records
   same-price rows with another lot size; purchase-related client events are
   traced while a purchase is in progress.

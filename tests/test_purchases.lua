@@ -698,7 +698,7 @@ T.Case("AH search test: stackable non-commodity items are probed; lot-size misma
   end
   local report = s.app.store.db.diagnostics.probe
   T.Eq(report.lots, 1)
-  T.Eq(report.votes.mismatch, 1, "1x100 in the replicate, 2x100 in the search")
+  T.Eq(report.votes.unit, 1, "1x100 in the replicate, 2x100 in the search: price per unit")
   local lot
   for _, e in ipairs(report.results) do if e.kind == "lots" then lot = e end end
   T.Eq(lot.stackCount, 5)
@@ -718,4 +718,23 @@ T.Case("purchase events are traced while a purchase is in progress", function()
   T.Ok(found)
   T.Eq(found.a, "7")
   T.Eq(found.state, "quoting")
+end)
+
+T.Case("AH search test: two single auctions at one price grouped by the search", function()
+  local s = setup({ rows = { { itemID = 211, count = 1, buyout = 150 }, { itemID = 211, count = 1, buyout = 150 } } })
+  ITEMS[211] = { name = "Plain Ring", sellPrice = 200 }
+  s.ah.commodityItems[211] = false
+  s.ah.items[211] = { { quantity = 2, buyout = 300, auctionID = 4 } }
+  T.Ok(s.app.probe:Start())
+  for _ = 1, 10 do
+    s.clock.advance(1)
+    if s.app.scanner.task and s.app.scanner.task.mode == "search" then
+      s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 211, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+    end
+    if not s.app.probe.running then break end
+  end
+  local report = s.app.store.db.diagnostics.probe
+  T.Eq(report.lots, 1)
+  T.Eq(report.votes.total, 1, "2x300 for two singles at 150: price per lot")
+  T.Eq(report.votes.unit, 0)
 end)

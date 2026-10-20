@@ -85,6 +85,8 @@ function App:Load(saved)
   end
   self:Subscribe()
   self.loaded = true
+  -- Trim saved data written by older versions (smaller file, less memory).
+  self.history:Prune(clock(), nil)
   self:RestoreView()
   return self.store:Persisted(saved)
 end

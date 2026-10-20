@@ -9,8 +9,10 @@ local History = {}
 ns.Data.History = History
 
 local DAY = MarketValue.DAY
-local MAX_INTERVALS_PER_DAY = 24
-History.MAX_RECENT_PER_ITEM = 20 -- detailed observations kept per item key
+-- Kept small on purpose: 20 detailed observations per item made the saved
+-- file 7.9 MB for 5,645 items in game, and only the latest one is used.
+History.MAX_INTERVALS_PER_DAY = 8 -- interval prices kept per item and day
+History.MAX_RECENT_PER_ITEM = 1 -- detailed observation kept per item key (the latest)
 
 function History.New(store, clock)
   return setmetatable({ store = store, clock = clock }, { __index = History })
@@ -66,9 +68,11 @@ function History.RecordStep(job, index)
     bucket = { p = {}, depth = {}, partial = 0 }
     item.days[job.day] = bucket
   end
-  if #bucket.p < MAX_INTERVALS_PER_DAY then
-    bucket.p[#bucket.p + 1] = interval.price
-    bucket.depth[#bucket.depth + 1] = interval.depth
+  bucket.p[#bucket.p + 1] = interval.price
+  bucket.depth[#bucket.depth + 1] = interval.depth
+  while #bucket.p > History.MAX_INTERVALS_PER_DAY do
+    table.remove(bucket.p, 1)
+    table.remove(bucket.depth, 1)
   end
   if job.partial then bucket.partial = bucket.partial + 1 end
   bucket.price = lowerMedian(bucket.p)
@@ -138,11 +142,20 @@ function History:Prune(now, watched)
           removed.recent = removed.recent + 1
         end
       end
+      while #kept > History.MAX_RECENT_PER_ITEM do
+        table.remove(kept, 1)
+        removed.recent = removed.recent + 1
+      end
       item.recent = kept
-      for day in pairs(item.days) do
+      for day, bucket in pairs(item.days) do
         if today - day >= retention.dailyDays then
           item.days[day] = nil
           removed.days = removed.days + 1
+        elseif bucket.p and #bucket.p > History.MAX_INTERVALS_PER_DAY then
+          while #bucket.p > History.MAX_INTERVALS_PER_DAY do
+            table.remove(bucket.p, 1)
+            if bucket.depth then table.remove(bucket.depth, 1) end
+          end
         end
       end
       keys[#keys + 1] = itemKey

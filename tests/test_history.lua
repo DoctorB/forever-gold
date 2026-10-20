@@ -51,7 +51,7 @@ T.Case("several scans in one day make one daily sample", function()
   for index = 1, 10 do record(history, A, key, 100 + index, now + index) end
   local series = history:Series(A, key)
   T.Eq(#series, 1)
-  T.Eq(series[1].price, 105)
+  T.Eq(series[1].price, 106, "lower median of the last 8 of the day")
 end)
 
 T.Case("retention: details 7 days, daily 90 days, ledger untouched", function()
@@ -65,7 +65,8 @@ T.Case("retention: details 7 days, daily 90 days, ledger untouched", function()
   record(history, A, key, 100, now - 1 * DAY)
   local removed = history:Prune(now)
   T.Eq(removed.days, 1)
-  T.Eq(removed.recent, 2)
+  T.Eq(removed.recent, 0, "only the latest observation is ever kept")
+  T.Eq(#history:Item(A, key).recent, 1)
   T.Eq(#history:Series(A, key), 2)
   T.Eq(#store.db.ledger, 1)
 end)
@@ -205,4 +206,21 @@ T.Case("migration 2 raises the old 1-copper vendor threshold, keeps a custom one
   T.Eq(db.settings.minVendorProfit, 25)
   local custom = Migrations.Run({ schema = 1, settings = { minVendorProfit = 7 } }, ns.CopyTable)
   T.Eq(custom.settings.minVendorProfit, 7)
+end)
+
+T.Case("pruning trims old saves: 1 observation per item, 8 prices per day", function()
+  local now = 100 * DAY
+  local store = Store.New(nil, { now = now })
+  local history = History.New(store, function() return now end)
+  local key = Schema.ItemKey(10, 0)
+  record(history, A, key, 100, now)
+  local item = history:Item(A, key)
+  for index = 1, 20 do item.recent[#item.recent + 1] = { t = now, price = index } end
+  local bucket = item.days[math.floor(now / DAY)]
+  for index = 1, 24 do bucket.p[#bucket.p + 1] = 100; bucket.depth[#bucket.depth + 1] = 1 end
+  history:Prune(now)
+  T.Eq(#item.recent, 1)
+  T.Eq(item.recent[1].price, 20, "newest kept")
+  T.Eq(#bucket.p, 8)
+  T.Eq(#bucket.depth, 8)
 end)

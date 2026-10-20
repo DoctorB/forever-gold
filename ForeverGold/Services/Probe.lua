@@ -53,15 +53,22 @@ function Probe:Candidates()
         -- Lots of 2+, or stackable items (the search may show bigger lots
         -- than the replicate); commodities are left out, unknown ones kept.
         local stackable = (info.stackCount or 1) > 1
-        if (listing.quantity > 1 or stackable) and listing.buyoutTotal and not listing.divisible and not seenL[itemID]
-          and self.ah:IsCommodity(itemID) ~= true then
+        -- Two or more single-unit auctions at the same price: the search may
+        -- group them into one row (then its price would be per unit).
+        local samePrice = 0
+        for _, other in ipairs(view.listings) do
+          if other.quantity == 1 and other.buyoutTotal == listing.buyoutTotal then samePrice = samePrice + 1 end
+        end
+        local grouped = listing.quantity == 1 and samePrice >= 2
+        if (listing.quantity > 1 or stackable or grouped) and listing.buyoutTotal and not listing.divisible
+          and not seenL[itemID] and self.ah:IsCommodity(itemID) ~= true then
           seenL[itemID] = true
           local replicate = {}
           for _, other in ipairs(view.listings) do
             if other.buyoutTotal then replicate[#replicate + 1] = { quantity = other.quantity, total = other.buyoutTotal } end
           end
           lots[#lots + 1] = { itemID = itemID, itemKey = itemKey, name = info.name, link = listing.link, replicate = replicate,
-            multi = listing.quantity > 1, stackCount = info.stackCount }
+            multi = listing.quantity > 1 or grouped, grouped = grouped, stackCount = info.stackCount }
         end
       end
     end
@@ -191,17 +198,27 @@ function Probe:RunLot(c)
   end
   self:WhenReady(function()
     self:Search(c.itemID, Schema.SuffixOf(c.itemKey), level, nil, function(listings)
+      -- total: a row of q units costs what a replicate lot of q costs, or
+      --        what q single replicate auctions cost together;
+      -- unit:  a row of q units costs what one unit costs in the replicate
+      --        (q single auctions grouped into one row at the unit price).
       local total, unit, mismatch = 0, 0, 0
       for _, row in ipairs(listings or {}) do
-        for _, lot in ipairs(c.replicate) do
-          if row.quantity > 1 and row.buyoutTotal then
+        if row.quantity > 1 and row.buyoutTotal then
+          local rowTotal, rowUnit = false, false
+          for _, lot in ipairs(c.replicate) do
             if row.quantity == lot.quantity then
-              if row.buyoutTotal == lot.total then total = total + 1 end
-              if row.buyoutTotal * row.quantity == lot.total then unit = unit + 1 end
+              if row.buyoutTotal == lot.total then rowTotal = true end
+              if row.buyoutTotal * row.quantity == lot.total then rowUnit = true end
+            elseif lot.quantity == 1 then
+              if row.buyoutTotal == lot.total then rowUnit = true end
+              if row.buyoutTotal == lot.total * row.quantity then rowTotal = true end
             elseif row.buyoutTotal == lot.total then
               mismatch = mismatch + 1
             end
           end
+          if rowTotal and not rowUnit then total = total + 1 end
+          if rowUnit and not rowTotal then unit = unit + 1 end
         end
       end
       self.report.votes.total = self.report.votes.total + total
@@ -213,7 +230,7 @@ function Probe:RunLot(c)
       end
       self:Log({ kind = "lots", itemID = c.itemID, name = c.name, replicate = table.concat(replicate, " "),
         rows = listings and #listings or "no_answer", sample = listings and rowsText(listings) or nil,
-        votesTotal = total, votesUnit = unit, sizeMismatch = mismatch, stackCount = c.stackCount,
+        votesTotal = total, votesUnit = unit, sizeMismatch = mismatch, stackCount = c.stackCount, grouped = c.grouped,
         commodity = tostring(commodity) })
       self:Next()
     end)
