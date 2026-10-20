@@ -17,7 +17,8 @@ diagnostica (26/26 simboli, 8/8 eventi), UI e demo, **persistenza verificata**
 (`/reload`, relog, riavvio), prima replica reale (2.081 chiavi, 29.449 aste,
 204.636 unità in ~31 s), seconda scansione completa (31.058 righe, 0 scarti,
 38 s), indice 0-based verificato, cooldown della replica misurato fra
-13 min 34 s e 16 min, varianti come bonus ID. Dettagli in
+13 min 34 s e 16 min, varianti come bonus ID, buyout della replica = totale
+dello stack (verificato), AH moderna a commodity. Dettagli in
 `docs/API-AUDIT.md`.
 
 Prossimo gate: una scansione con lo scanner aggiornato per leggere dal file
@@ -53,7 +54,7 @@ campioni con la finestra AH; misura del cooldown.
 
 ## Prove eseguite (2026-10-20, Windows, Lua 5.1.5)
 
-- `lua5.1 tests/runner.lua` → **108 passed, 0 failed**: casi deterministici
+- `lua5.1 tests/runner.lua` → **109 passed, 0 failed**: casi deterministici
   della §13 (vendor 300, unitario 500, profondità 600, esempio §8 900/11.053,
   prezzo assente, deposito, DE 100/50%, crafting 2 craft/4 output, storico non
   condiviso, ciclo di conversione, import malformato/oversize), proprietà
@@ -70,7 +71,7 @@ campioni con la finestra AH; misura del cooldown.
   dopo 10 giorni (budget 20 MB); picco heap +50 MB di garbage durante la
   valutazione (da misurare in gioco).
 - `scripts/build.ps1` → `release/ForeverGold-0.1.0-alpha.1.zip`, 47 file,
-  SHA-256 `974c4a716112740f8d143b6a3494a2b22635bf2797dcf6759aba44d33902cd17`.
+  SHA-256 `15b222b6c5501958767cee01d5bef94766efd07ccb5bd5953a41f0fd4bb012ce`.
 
 Nessuna prova in gioco è stata eseguita: i mock non dimostrano il
 comportamento del server.
@@ -80,7 +81,8 @@ comportamento del server.
 - Nessuna semantica del client verificata (`Capabilities.VERIFIED` tutto
   `false`): esito delle scansioni sempre "osservazione parziale"; vendor mai
   "confermato"; rivendita sempre "speculativa" (commissione scenario).
-- Buyout della replica assunto come totale dello stack.
+- Righe della replica delle commodity trattate come lotti interi (acquisto
+  parziale non ancora modellato).
 - Nessuna azione assistita; "Prepara" produce solo un riepilogo.
 - Grafico storico non ancora presente (la scheda Storico è testuale).
 - Icona TGA generata ma non referenziata dal TOC.
@@ -91,7 +93,7 @@ comportamento del server.
 
 | Blocker | Dato o prova minima |
 | --- | --- |
-| Semantica `buyoutPrice` della replica | 2–3 dei `samples` salvati con la scansione confrontati con la finestra AH |
+| Commodity nella replica | verifica di `C_AuctionHouse.GetItemKeyInfo` (`isCommodity`) su un oggetto noto |
 | Indice e completezza della replica | trace di `/fg scan` (in `ForeverGold.lua` dopo `/reload`) con righe lette vs mostrate dall'AH |
 | Cooldown della replica | > 76 s osservato; ritentare `/fg scan` dopo 5, 10, 15 minuti |
 | Suffissi degli oggetti | i `links` salvati con la scansione (nessun suffisso visto su 2.081 chiavi) |

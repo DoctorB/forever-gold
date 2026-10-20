@@ -15,7 +15,7 @@ Capabilities.STATUSES = {
 -- evidence recorded in docs/API-AUDIT.md.
 Capabilities.VERIFIED = {
   replicate = false, -- ReplicateItems delivers the AH and we read it fully
-  replicateBuyoutIsTotal = false, -- buyoutPrice is the whole stack, not per unit
+  replicateBuyoutIsTotal = true, -- 2026-10-20, build 70450: 8/8 samples exact multiples of count, unit prices match the AH browse view
   replicateIndexBase = true, -- 2026-10-20, build 70450: 0-based, 31,058 rows read with no discard
   commoditySearch = false,
   itemSearch = false,

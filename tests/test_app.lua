@@ -41,7 +41,7 @@ T.Case("scan feeds history and a vendor opportunity with denominators", function
   local o = results.list[1]
   T.Eq(o.strategy, "vendor")
   T.Eq(o.profit, 300)
-  T.Eq(o.class, "prudent", "buyout meaning unverified: not 'confirmed'")
+  T.Eq(o.class, "vendor_confirmed", "buyout meaning verified in game")
   T.Eq(o.allocation, "no_budget")
   T.Eq(results.excluded.insufficient_history, 2)
   local market = app.store:Market(app:MarketKey())
@@ -208,4 +208,20 @@ T.Case("scanner memory is seeded with the bounds measured in game", function()
   T.Eq(app.scanner.memory.lowerBound, ns.Services.Scanner.MEASURED.lowerBound)
   T.Eq(app.scanner.memory.upperBound, ns.Services.Scanner.MEASURED.upperBound)
   T.Eq(app.store.db.scanner, app.scanner.memory)
+end)
+
+T.Case("without the verified buyout meaning a vendor margin is only prudent", function()
+  local app, ns, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
+  local verified = ns.Core.Capabilities.VERIFIED
+  verified.replicateBuyoutIsTotal = false
+  local ok, err = pcall(function()
+    app:OnEvent("AUCTION_HOUSE_SHOW")
+    app.scanner:Start()
+    ah.delivered = true
+    app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+    clock.advance(30)
+    T.Eq(app.opportunities.results.list[1].class, "prudent")
+  end)
+  verified.replicateBuyoutIsTotal = true
+  if not ok then error(err, 0) end
 end)
