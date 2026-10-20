@@ -49,9 +49,12 @@ Verifiche in gioco sulla build 1.60.1.70450 e primo acquisto assistito.
   ricerche, salta le offerte sparite o rincarate e si ferma al limite di
   spesa o a un esito incerto. Ogni acquisto resta un clic sullo stesso
   pulsante, come richiede il gioco.
-- Scheda Portafoglio: guadagno realizzato, speso e incassato, oggetti ancora
-  da vendere al mercante con il loro valore, esiti incerti, elenco degli
-  acquisti dal più recente.
+- Scheda Portafoglio in tabella: riquadri con guadagno realizzato, speso,
+  incassato e valore ancora da vendere; tabella degli acquisti (data,
+  oggetto, quantità, pagato, venduti, incassato, guadagno, in borsa, stato).
+- Scheda Storico in tabella: riepilogo, tabella delle scansioni e tabella
+  dei prezzi registrati (riferimento, giorni di dati, minimo, in vendita);
+  esporta/importa in un riquadro che si apre solo quando serve.
 
 ## [0.1.0-alpha.1] - 2026-10-20
 

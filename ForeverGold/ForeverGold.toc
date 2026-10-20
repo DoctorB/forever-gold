@@ -46,6 +46,7 @@ Services\Portfolio.lua
 Services\Batch.lua
 Core\App.lua
 UI\Widgets.lua
+UI\Table.lua
 UI\Main.lua
 UI\Details.lua
 UI\PurchasePanel.lua

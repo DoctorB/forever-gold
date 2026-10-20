@@ -342,9 +342,9 @@ T.Case("portfolio: realized gain counts sold units; the rest is inventory", func
   T.Eq(report.entries[1].name, "Axe", "newest first")
 end)
 
-T.Case("portfolio tab shows the real gain after a purchase and a merchant visit", function()
+T.Case("portfolio table: cards and rows after a purchase and a merchant visit", function()
   local s = setup({ bags = {} })
-  s.ns.Core.Capabilities.VERIFIED.sellPrice = false
+  local Panel = s.ns.UI.Panels.portfolio
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
   p:Prepare()
@@ -353,16 +353,45 @@ T.Case("portfolio tab shows the real gain after a purchase and a merchant visit"
   s.wallet.money = s.wallet.money - 1100
   s.bags[101] = 30
   s.app:OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
-  local text = s.ns.UI.Panels.portfolio.Summary(s.app)
-  T.Ok(text:find("Still to sell: 30 items (paid 11s 0c, a merchant pays 15s 0c", 1, true) ~= nil, text)
+  local report = s.ns.Services.Portfolio.Report(s.app.store.db.ledger)
+  local cards = Panel.Cards(report)
+  T.Eq(cards[4].label, "Still to sell (30 items)")
+  T.Eq(cards[4].value, "15s 0c")
+  local row = Panel.Rows(report, function() return "20/10 14:00" end)[1]
+  T.Eq(row.cells[2], "Linen")
+  T.Eq(row.cells[4], "11s 0c")
+  T.Eq(row.cells[7], "-", "no gain before selling")
+  T.Eq(row.cells[9], s.ns.L.PORT_STATUS_bags)
   s.app:OnEvent("MERCHANT_SHOW")
   s.bags[101] = 0
   s.wallet.money = s.wallet.money + 1500
   s.app:OnEvent("MERCHANT_CLOSED")
-  text = s.ns.UI.Panels.portfolio.Summary(s.app)
-  T.Ok(text:find("^Realized gain: |c%x+%+4s 0c|r") ~= nil, text)
-  T.Ok(text:find("Nothing left to sell.", 1, true) ~= nil, text)
-  T.Ok(text:find("sold 30 for 15s 0c", 1, true) ~= nil, text)
+  report = s.ns.Services.Portfolio.Report(s.app.store.db.ledger)
+  cards = Panel.Cards(report)
+  T.Eq(cards[1].value, "+4s 0c")
+  T.Eq(cards[2].value, "11s 0c")
+  T.Eq(cards[3].value, "15s 0c")
+  row = Panel.Rows(report, function() return "" end)[1]
+  T.Eq(row.cells[5], "30")
+  T.Eq(row.cells[6], "15s 0c")
+  T.Eq(row.cells[7], "+4s 0c")
+  T.Eq(row.cells[8], "0")
+  T.Eq(row.cells[9], s.ns.L.PORT_STATUS_sold)
+end)
+
+T.Case("history tables: scans newest first, prices with days and reference", function()
+  local s = setup()
+  local Panel = s.ns.UI.Panels.history
+  local scans = Panel.ScanRows(s.app)
+  T.Eq(#scans, 1)
+  T.Eq(scans[1].cells[2], s.ns.L.MODE_replicate)
+  T.Eq(scans[1].cells[4], "3")
+  local prices = Panel.PriceRows(s.app)
+  T.Eq(#prices, 1)
+  T.Eq(prices[1].cells[1], "Linen")
+  T.Eq(prices[1].cells[2], "-", "no reference with one day of data")
+  T.Eq(prices[1].cells[3], "1")
+  T.Ok(Panel.SummaryLine(s.app):find("1 items with prices", 1, true) ~= nil, Panel.SummaryLine(s.app))
 end)
 
 local BATCH_ROWS = {
