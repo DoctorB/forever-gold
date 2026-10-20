@@ -659,3 +659,19 @@ T.Case("AH search test: variants and multi-unit lots probed read-only, results s
   T.Eq(s.ah.spendCalls, 0, "read-only")
   T.Eq(lines[#lines][1], "done")
 end)
+
+T.Case("variant items are searched with the Forever key: level and bonus ID + 1580", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
+    link = "|Hitem:201::::::::20:1486::1:1:12742:::::|h[Green Sword]|h" } } })
+  s.app.client.env.C_Item.GetDetailedItemLevelInfo = function() return 25 end
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 9, level = 25 } }
+  p:Prepare()
+  T.Eq(s.ah.lastSearch.itemLevel, 25)
+  T.Eq(s.ah.lastSearch.itemSuffix, 14322)
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 25, itemSuffix = 14322, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "located", "found at the first try, no browse")
+  T.Eq(s.ah.browseCalls, nil)
+  T.Eq(s.ns.Compat.AuctionHouse.SuffixForBonus("12720.12800"), nil, "several bonus IDs: no guess")
+end)

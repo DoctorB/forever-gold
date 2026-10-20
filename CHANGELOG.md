@@ -60,6 +60,8 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
 - Merchant purchases accept a lot with more units at no higher price, once
   the meaning of multi-unit item-search prices is verified; until then such
   lots stay excluded (a lower `PlaceBid` could become a bid).
+- Variant items are searched directly with Forever's key (effective item
+  level, item suffix = bonus ID + 1580, measured with the AH search test).
 - "AH search test" (Settings, `/fg probe`): read-only probe of variant items
   (built key, browse by name, server keys) and of multi-unit lots (replicate
   vs item search, per-lot / per-unit votes), saved in the diagnostics.

@@ -192,6 +192,18 @@ function AuctionHouse:SendSearch(itemID, suffix, itemLevel, key)
   return true, key
 end
 
+-- On Forever the AH item key of a random-variant item is its effective item
+-- level plus itemSuffix = bonus ID + 1580 (measured 2026-10-20, build 70450:
+-- 13 keys from browse results over 4 items all match). Returns the suffix,
+-- or nil when the variant is not a single bonus ID.
+AuctionHouse.BONUS_SUFFIX_OFFSET = 1580
+
+function AuctionHouse.SuffixForBonus(bonus)
+  local id = type(bonus) == "string" and tonumber(bonus:match("^(%d+)$")) or nil
+  if not id then return nil end
+  return id + AuctionHouse.BONUS_SUFFIX_OFFSET
+end
+
 -- Read-only browse by name, as the native AH window does; results arrive
 -- with AUCTION_HOUSE_BROWSE_RESULTS_UPDATED and carry the server's exact keys.
 function AuctionHouse:SendBrowse(name)

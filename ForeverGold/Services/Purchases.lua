@@ -162,6 +162,9 @@ function Purchases:Send(current)
     return true
   end
   current.itemLevel = self.client.ItemLevel and self.client:ItemLevel(plan.link) or nil
+  -- Variant items: build the server's key directly (bonus ID + offset).
+  local _, _, bonus = Schema.VariantFromLink(plan.link)
+  current.suffix = ns.Compat.AuctionHouse.SuffixForBonus(bonus)
   return self:Locate(current, nil)
 end
 
@@ -209,13 +212,14 @@ function Purchases:Locate(current, key)
   local plan = current.plan
   current.step = (current.step or 0) + 1
   local step = current.step
-  local ok, reason = self.scanner:Search(plan.itemID, Schema.SuffixOf(plan.itemKey), function(_, listings)
+  local suffix = current.suffix or Schema.SuffixOf(plan.itemKey)
+  local ok, reason = self.scanner:Search(plan.itemID, suffix, function(_, listings)
     if not alive(self, current, { locating = true }) then return end
     local best, matched, cheapest = matchLots(plan, listings)
     if self.trace then
       self.trace("purchase_locate", { rows = #listings, matched = matched, cheapest = cheapest,
         wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
-        level = current.itemLevel, key = key and keyText(key) or nil,
+        level = current.itemLevel, suffix = suffix, key = key and keyText(key) or nil,
         firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity })
     end
     if best then
