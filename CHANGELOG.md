@@ -54,6 +54,12 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   being skipped; each offer is skipped at most once and a pending quote is no
   longer cancelled by the queue; offers already found gone stay out of the
   queue; variant items (bonus IDs) are searched with their item level.
+- Variant items the direct search cannot reach are located like the native
+  AH window does: a browse by name returns the server's exact item keys, then
+  each key of the same item is searched (at most 5); keys are traced.
+- Merchant purchases accept a lot with more units at no higher price, once
+  the meaning of multi-unit item-search prices is verified; until then such
+  lots stay excluded (a lower `PlaceBid` could become a bid).
 - Portfolio tab as a table: cards with realized gain, spent, received and
   value still to sell; purchases table (date, item, quantity, paid, sold,
   received, gain, in bags, status).

@@ -5,7 +5,7 @@
 --
 -- Callbacks set by the scanner (all optional):
 --   onShow(), onClose(), onReplicateUpdate(), onThrottleReady(), onThrottleDropped(),
---   onCommodityResults(itemID), onItemResults(itemKeyTable), onItemKeyInfo(itemID),
+--   onCommodityResults(itemID), onItemResults(itemKeyTable), onItemKeyInfo(itemID), onBrowseResults(),
 --   onPurchase(event, ...) for quote and purchase outcome events
 local _, ns = ...
 
@@ -54,6 +54,8 @@ function AuctionHouse:OnEvent(event, ...)
     fire(self, "onThrottleReady")
   elseif event == "AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED" then
     fire(self, "onThrottleDropped")
+  elseif event == "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" then
+    fire(self, "onBrowseResults")
   elseif event == "ITEM_KEY_ITEM_INFO_RECEIVED" then
     local itemID = ...
     if type(itemID) == "number" and self.commodity[itemID] == "pending" then
@@ -176,14 +178,39 @@ end
 
 -- Targeted read-only search (used for quote refresh before an assisted
 -- action). Returns ok, reason.
--- itemLevel: needed for items whose variant is a bonus ID (0 otherwise).
-function AuctionHouse:SendSearch(itemID, suffix, itemLevel)
+-- itemLevel: for items whose variant is a bonus ID (0 otherwise); key: an
+-- exact client ItemKey (from browse results) that replaces the built one.
+function AuctionHouse:SendSearch(itemID, suffix, itemLevel, key)
   local c = self.client
-  local okKey, key = c:Call("C_AuctionHouse", "MakeItemKey", itemID, itemLevel or 0, suffix or 0, 0)
-  if not okKey or type(key) ~= "table" then return false, "item_key" end
+  if type(key) ~= "table" then
+    local okKey
+    okKey, key = c:Call("C_AuctionHouse", "MakeItemKey", itemID, itemLevel or 0, suffix or 0, 0)
+    if not okKey or type(key) ~= "table" then return false, "item_key" end
+  end
   local ok, err = c:Call("C_AuctionHouse", "SendSearchQuery", key, {}, true)
   if not ok then return false, tostring(err) end
   return true, key
+end
+
+-- Read-only browse by name, as the native AH window does; results arrive
+-- with AUCTION_HOUSE_BROWSE_RESULTS_UPDATED and carry the server's exact keys.
+function AuctionHouse:SendBrowse(name)
+  local ok, err = self.client:Call("C_AuctionHouse", "SendBrowseQuery",
+    { searchString = name, sorts = {}, filters = {}, itemClassFilters = {} })
+  return ok, err
+end
+
+-- { { itemKey = table, totalQuantity, minPrice } }
+function AuctionHouse:ReadBrowseResults()
+  local ok, results = self.client:Call("C_AuctionHouse", "GetBrowseResults")
+  if not ok or type(results) ~= "table" then return {} end
+  local list = {}
+  for _, result in ipairs(results) do
+    if type(result) == "table" and type(result.itemKey) == "table" then
+      list[#list + 1] = { itemKey = result.itemKey, totalQuantity = result.totalQuantity, minPrice = result.minPrice }
+    end
+  end
+  return list
 end
 
 -- Whether an item trades as a commodity (partial purchase at a unit price):

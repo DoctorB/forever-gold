@@ -161,44 +161,123 @@ function Purchases:Send(current)
     end)
     return true
   end
-  local itemLevel = self.client.ItemLevel and self.client:ItemLevel(plan.link) or nil
-  current.itemLevel = itemLevel
+  current.itemLevel = self.client.ItemLevel and self.client:ItemLevel(plan.link) or nil
+  return self:Locate(current, nil)
+end
+
+-- Best auction in search results for the plan. For a merchant sale a lot
+-- with more units at no higher price is never worse (the replicate and the
+-- search may count a lot differently); resale needs the same lot.
+local function matchLots(plan, listings)
+  local best, matched, cheapest = nil, 0, nil
+  for _, listing in ipairs(listings) do
+    local sameItem = listing.itemKey == plan.itemKey
+      or (plan.anyVariant and Schema.ItemIDOf(listing.itemKey) == plan.itemID)
+    local enough = plan.anyVariant and listing.quantity >= plan.lot.quantity or listing.quantity == plan.lot.quantity
+    if listing.buyoutTotal and (not cheapest or listing.buyoutTotal < cheapest) then cheapest = listing.buyoutTotal end
+    if listing.buyable and listing.auctionID ~= nil and sameItem and enough
+      and listing.buyoutTotal <= plan.lot.buyoutTotal then
+      matched = matched + 1
+      if not best or listing.buyoutTotal < best.buyoutTotal then best = listing end
+    end
+  end
+  return best, matched, cheapest
+end
+
+-- Runs fn once the AH can take a request (spending nothing meanwhile).
+function Purchases:WhenReady(current, fn, tries)
+  tries = tries or 0
+  if not (self.current == current and current.state == "locating") then return end
+  if (self.isReady and self.isReady() == false) or (self.scanner and self.scanner:IsActive()) then
+    if tries >= Purchases.READY_TRIES then
+      set(self, "rejected", "throttled")
+      return
+    end
+    self.scheduler:After(1, function() self:WhenReady(current, fn, tries + 1) end)
+    return
+  end
+  fn()
+end
+
+local function keyText(key)
+  return string.format("%s/%s/%s", tostring(key.itemLevel), tostring(key.itemSuffix), tostring(key.battlePetSpeciesID))
+end
+
+-- Locates the auction with a direct search (built key, or an exact key
+-- from browse results). Steps are bounded and each has its own timeout.
+function Purchases:Locate(current, key)
+  local plan = current.plan
+  current.step = (current.step or 0) + 1
+  local step = current.step
   local ok, reason = self.scanner:Search(plan.itemID, Schema.SuffixOf(plan.itemKey), function(_, listings)
     if not alive(self, current, { locating = true }) then return end
-    local best, matched, cheapest = nil, 0, nil
-    for _, listing in ipairs(listings) do
-      local sameItem = listing.itemKey == plan.itemKey
-        or (plan.anyVariant and Schema.ItemIDOf(listing.itemKey) == plan.itemID)
-      if listing.buyoutTotal and (not cheapest or listing.buyoutTotal < cheapest) then cheapest = listing.buyoutTotal end
-      if listing.buyable and listing.auctionID ~= nil and sameItem
-        and listing.quantity == plan.lot.quantity and listing.buyoutTotal <= plan.lot.buyoutTotal then
-        matched = matched + 1
-        if not best or listing.buyoutTotal < best.buyoutTotal then best = listing end
-      end
-    end
+    local best, matched, cheapest = matchLots(plan, listings)
     if self.trace then
       self.trace("purchase_locate", { rows = #listings, matched = matched, cheapest = cheapest,
-        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey, level = itemLevel,
+        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
+        level = current.itemLevel, key = key and keyText(key) or nil,
         firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity })
     end
     if best then
-      current.auction = { auctionID = best.auctionID, amount = best.buyoutTotal }
+      current.auction = { auctionID = best.auctionID, amount = best.buyoutTotal, quantity = best.quantity }
       set(self, "located")
+    elseif current.browseKeys and #current.browseKeys > 0 then
+      local nextKey = table.remove(current.browseKeys, 1)
+      self:WhenReady(current, function() self:Locate(current, nextKey) end)
+    elseif #listings == 0 and not current.browsed and plan.anyVariant and plan.name then
+      -- No row at all: the built key does not reach this variant.
+      self:WhenReady(current, function() self:BrowseFallback(current) end)
     else
       set(self, "rejected", "lot_gone")
     end
-  end, itemLevel)
+  end, current.itemLevel, key)
   if not ok then
     set(self, "rejected", reason)
     return false, reason
   end
-  set(self, "locating")
-  -- The search may get no answer (or another search may replace it): stop
+  if current.state ~= "locating" then set(self, "locating") end
+  -- A step may get no answer (or another search may replace it): stop
   -- waiting instead of leaving the panel on "waiting for the server".
   self.scheduler:After(Purchases.QUOTE_TIMEOUT + 2, function()
-    if alive(self, current, { locating = true }) then set(self, "rejected", "no_answer") end
+    if alive(self, current, { locating = true }) and current.step == step then set(self, "rejected", "no_answer") end
   end)
   return true
+end
+
+-- Variant items the direct search cannot find: browse by name like the
+-- native AH window and try the server's own keys for this item (at most 5).
+function Purchases:BrowseFallback(current)
+  local plan = current.plan
+  current.browsed = true
+  current.step = (current.step or 0) + 1
+  local step = current.step
+  local ok = self.scanner:Browse(plan.name, function(results)
+    if not alive(self, current, { locating = true }) then return end
+    local keys, texts = {}, {}
+    for _, result in ipairs(results) do
+      if result.itemKey.itemID == plan.itemID and #keys < 5 then
+        keys[#keys + 1] = result.itemKey
+        texts[#texts + 1] = keyText(result.itemKey)
+      end
+    end
+    if self.trace then
+      self.trace("purchase_browse", { results = #results, sameItem = #keys, keys = table.concat(texts, ",") })
+    end
+    if #keys == 0 then
+      set(self, "rejected", "lot_gone")
+      return
+    end
+    current.browseKeys = keys
+    local first = table.remove(current.browseKeys, 1)
+    self:WhenReady(current, function() self:Locate(current, first) end)
+  end)
+  if not ok then
+    set(self, "rejected", "lot_gone")
+    return
+  end
+  self.scheduler:After(Purchases.QUOTE_TIMEOUT + 2, function()
+    if alive(self, current, { locating = true }) and current.step == step then set(self, "rejected", "no_answer") end
+  end)
 end
 
 -- Client events about quotes and purchases (from the AH adapter).
@@ -291,6 +370,11 @@ function Purchases:Finish(status)
   local paid = expected
   if status == "done" and current.moneyBefore and moneyAfter and current.moneyBefore - moneyAfter > 0 then
     paid = current.moneyBefore - moneyAfter
+  end
+  -- An auction may hold more units than planned (merchant sales accept it).
+  if current.auction and current.auction.quantity and current.auction.quantity ~= plan.quantity then
+    plan.quantity = current.auction.quantity
+    if plan.sellPrice then plan.expectedRevenue = plan.sellPrice * plan.quantity end
   end
   local ledger = self.store.db.ledger
   ledger[#ledger + 1] = {

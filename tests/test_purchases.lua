@@ -555,3 +555,61 @@ T.Case("variant items are searched with their item level", function()
   T.Eq(s.ah.lastSearch.itemID, 201)
   T.Eq(s.ah.lastSearch.itemLevel, 25)
 end)
+
+T.Case("variant auction not reached by the built key: browse finds the server key", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
+    link = "|Hitem:201::::::::20:1486::1:1:12720:::::|h[Green Sword]|h" } } })
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 501, level = 22 } }
+  s.ah.browse = {
+    { itemKey = { itemID = 999, itemLevel = 5, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 10 },
+    { itemKey = { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 1300 },
+  }
+  local function results(level)
+    s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = level, itemSuffix = 0, battlePetSpeciesID = 0 })
+  end
+  p:Prepare()
+  results(0) -- the built key (level 0) sees no row
+  T.Eq(p.current.state, "locating")
+  s.clock.advance(1)
+  T.Eq(s.ah.browseCalls, 1, "browse by name")
+  T.Eq(s.ah.lastBrowse.searchString, "Green Sword")
+  s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  s.clock.advance(1)
+  T.Eq(s.ah.lastSearch.itemLevel, 22, "searched with the server key")
+  results(22)
+  T.Eq(p.current.state, "located")
+  T.Eq(p.current.auction.auctionID, 501)
+  local browse
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do if e.k == "purchase_browse" then browse = e end end
+  T.Eq(browse.sameItem, 1)
+  T.Eq(browse.keys, "22/0/0")
+end)
+
+T.Case("multi-unit auction: refused while the search price meaning is unverified", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.ah.items[201] = { { quantity = 2, buyout = 200, auctionID = 77 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "rejected", "a lower PlaceBid could become a bid, not a buyout")
+  T.Eq(s.ah.spendCalls, 0)
+end)
+
+T.Case("vendor auction with more units at no higher price is accepted once verified", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  s.ns.Core.Capabilities.VERIFIED.itemSearchBuyoutIsTotal = true
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.ah.items[201] = { { quantity = 2, buyout = 200, auctionID = 77 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "located")
+  p:Confirm()
+  s.app:OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 77)
+  local entry = s.app.store.db.ledger[1]
+  T.Eq(entry.quantity, 2)
+  T.Eq(entry.remaining, 2)
+end)

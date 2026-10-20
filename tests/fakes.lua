@@ -78,15 +78,25 @@ function Fakes.AuctionHouse(rows)
       containsAccountItem = false }
   end
   function api.HasFullCommoditySearchResults() return ah.fullCommodity end
-  function api.GetNumItemSearchResults(itemKey) return #(ah.items[itemKey.itemID] or {}) end
+  -- Item rows may carry a level: a key with another item level does not see them.
+  local function itemRows(itemKey)
+    local rows = {}
+    for _, row in ipairs(ah.items[itemKey.itemID] or {}) do
+      if (row.level or 0) == (itemKey.itemLevel or 0) then rows[#rows + 1] = row end
+    end
+    return rows
+  end
+  function api.GetNumItemSearchResults(itemKey) return #itemRows(itemKey) end
   function api.GetItemSearchResultInfo(itemKey, index)
-    local row = (ah.items[itemKey.itemID] or {})[index]
+    local row = itemRows(itemKey)[index]
     if not row then return nil end
     return { itemKey = itemKey, owners = {}, totalNumberOfOwners = 1, timeLeft = 1, auctionID = row.auctionID,
       quantity = row.quantity, buyoutAmount = row.buyout, containsOwnerItem = false, containsAccountItem = false,
       containsSocketedItem = false }
   end
   function api.HasFullItemSearchResults() return true end
+  function api.SendBrowseQuery(query) ah.browseCalls = (ah.browseCalls or 0) + 1 ah.lastBrowse = query end
+  function api.GetBrowseResults() return ah.browse or {} end
   function api.GetItemKeyInfo(itemKey)
     local status = ah.commodityItems[itemKey.itemID]
     if status == nil then return nil end

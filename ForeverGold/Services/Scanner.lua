@@ -70,6 +70,7 @@ function Scanner.New(deps, opts)
     onThrottleDropped = function() self:Trace("throttle_dropped", { state = self.state }) end,
     onCommodityResults = function(itemID) self:OnCommodityResults(itemID) end,
     onItemResults = function(itemKey) self:OnItemResults(itemKey) end,
+    onBrowseResults = function() self:OnBrowseResults() end,
   })
   return self
 end
@@ -512,7 +513,7 @@ end
 
 -- Targeted read-only search for one item, e.g. to refresh a quote.
 -- callback(snapshot, listings) on results. Returns ok, reason.
-function Scanner:Search(itemID, suffix, callback, itemLevel)
+function Scanner:Search(itemID, suffix, callback, itemLevel, key)
   if self:IsActive() then return false, "busy" end
   if not self.adapter:IsOpen() then return false, "ah_closed" end
   if not self.adapter:GetCapabilities().targetedSearch then return false, "unsupported" end
@@ -521,7 +522,7 @@ function Scanner:Search(itemID, suffix, callback, itemLevel)
   local task = { mode = "search", itemID = itemID, attempts = 1, callback = callback }
   self.task = task
   self.snapshot = newSnapshot(self, "search", Schema.ItemKey(itemID, suffix or 0))
-  local ok, err = self.adapter:SendSearch(itemID, suffix, itemLevel)
+  local ok, err = self.adapter:SendSearch(itemID, suffix, itemLevel, key)
   if not ok then
     fail(self, task, "request_failed:" .. tostring(err))
     return false, "request_failed"
@@ -531,4 +532,38 @@ function Scanner:Search(itemID, suffix, callback, itemLevel)
     if current(self, task) then fail(self, task, "no_response") end
   end)
   return true
+end
+
+-- Read-only browse by name (used to find the server's exact keys of
+-- variant items). callback(results) on the results. Returns ok, reason.
+function Scanner:Browse(name, callback)
+  if self:IsActive() then return false, "busy" end
+  if not self.adapter:IsOpen() then return false, "ah_closed" end
+  if self.adapter:IsReady() == false then return false, "throttled" end
+  self.scheduler:Invalidate()
+  local task = { mode = "browse", callback = callback }
+  self.task = task
+  local ok, err = self.adapter:SendBrowse(name)
+  if not ok then
+    self.task = nil
+    return false, "request_failed:" .. tostring(err)
+  end
+  setState(self, "REQUESTED")
+  task.timeoutTimer = self.scheduler:After(self.opts.searchTimeout, function()
+    if current(self, task) then
+      self.task = nil
+      setState(self, "FAILED", "no_response")
+    end
+  end)
+  return true
+end
+
+function Scanner:OnBrowseResults()
+  local task = self.task
+  if not task or task.mode ~= "browse" then return end
+  if task.timeoutTimer then task.timeoutTimer.Cancel() end
+  local results = self.adapter:ReadBrowseResults()
+  self.task = nil
+  setState(self, "IDLE", "browse_done")
+  task.callback(results)
 end
