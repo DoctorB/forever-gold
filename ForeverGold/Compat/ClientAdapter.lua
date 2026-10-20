@@ -156,6 +156,14 @@ function ClientAdapter:FormatTime(t)
   return ""
 end
 
+-- Effective item level of an item link, or nil.
+function ClientAdapter:ItemLevel(link)
+  if type(link) ~= "string" then return nil end
+  local ok, level = self:Call("C_Item", "GetDetailedItemLevelInfo", link)
+  if ok and type(level) == "number" and level > 0 then return level end
+  return nil
+end
+
 -- Player money in copper, or nil.
 function ClientAdapter:Money()
   local ok, money = self:Call(nil, "GetMoney")

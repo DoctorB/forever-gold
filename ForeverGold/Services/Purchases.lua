@@ -22,11 +22,14 @@ ns.Services.Purchases = Purchases
 Purchases.QUOTE_TIMEOUT = 10
 Purchases.CONFIRM_TIMEOUT = 20
 
--- deps: { purchase (Compat/Purchase), client, scanner, scheduler, clock, bus, store, trace?(kind, data) }
+Purchases.READY_TRIES = 15 -- seconds of waiting for the AH throttle before giving up
+
+-- deps: { purchase (Compat/Purchase), client, scanner, scheduler, clock, bus, store, trace?(kind, data),
+--         isReady?() -> true/false/nil (AH throttle system) }
 function Purchases.New(deps)
   return setmetatable({
     purchase = deps.purchase, client = deps.client, scanner = deps.scanner, scheduler = deps.scheduler,
-    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, current = nil,
+    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, isReady = deps.isReady, current = nil,
   }, { __index = Purchases })
 end
 
@@ -39,7 +42,7 @@ function Purchases.Plan(opportunity, money, cap)
   local itemID = opportunity.itemID or Schema.ItemIDOf(opportunity.itemKey)
   local plan = {
     itemKey = opportunity.itemKey, itemID = itemID, name = opportunity.name, strategy = opportunity.strategy,
-    sellPrice = opportunity.sellPrice, budget = budget, quantity = 0, expectedTotal = 0,
+    sellPrice = opportunity.sellPrice, budget = budget, quantity = 0, expectedTotal = 0, link = nil,
     -- A merchant pays the same for every variant of an item: for vendor
     -- purchases any variant will do; resale needs the exact one.
     anyVariant = opportunity.strategy == "vendor",
@@ -67,6 +70,7 @@ function Purchases.Plan(opportunity, money, cap)
         plan.lot = { quantity = lot.quantity, buyoutTotal = lot.cost }
         -- Merged variants: the lot's own item key identifies the auction.
         if lot.listing and lot.listing.itemKey then plan.itemKey = lot.listing.itemKey end
+        plan.link = lot.listing and lot.listing.link
         plan.quantity, plan.expectedTotal = lot.quantity, lot.cost
         break
       end
@@ -117,9 +121,33 @@ end
 
 -- Step 2 (spends nothing): a quote for commodities, a read-only search for
 -- individual auctions.
+-- Step 2 entry point: waits (spending nothing) while the AH throttle system
+-- is not ready, instead of failing; the request goes out once it is.
 function Purchases:Prepare()
   local current = self.current
-  if not current or current.state ~= "planned" then return false, "not_planned" end
+  if not current or (current.state ~= "planned" and current.state ~= "waiting") then return false, "not_planned" end
+  if self.isReady and self.isReady() == false or (self.scanner and self.scanner:IsActive()) then
+    current.waited = (current.waited or 0) + 1
+    if current.waited > Purchases.READY_TRIES then
+      set(self, "rejected", "throttled")
+      return false, "throttled"
+    end
+    if current.state ~= "waiting" then set(self, "waiting") end
+    self.scheduler:After(1, function()
+      if alive(self, current, { waiting = true }) then self:Prepare() end
+    end)
+    return true
+  end
+  return self:Send(current)
+end
+
+-- The AH signals readiness: resume a waiting purchase at once.
+function Purchases:OnReady()
+  local current = self.current
+  if current and current.state == "waiting" then self:Prepare() end
+end
+
+function Purchases:Send(current)
   local plan = current.plan
   if plan.kind == "commodity" then
     local ok, err = self.purchase:StartCommodity(plan.itemID, plan.quantity)
@@ -133,6 +161,8 @@ function Purchases:Prepare()
     end)
     return true
   end
+  local itemLevel = self.client.ItemLevel and self.client:ItemLevel(plan.link) or nil
+  current.itemLevel = itemLevel
   local ok, reason = self.scanner:Search(plan.itemID, Schema.SuffixOf(plan.itemKey), function(_, listings)
     if not alive(self, current, { locating = true }) then return end
     local best, matched, cheapest = nil, 0, nil
@@ -148,7 +178,7 @@ function Purchases:Prepare()
     end
     if self.trace then
       self.trace("purchase_locate", { rows = #listings, matched = matched, cheapest = cheapest,
-        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
+        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey, level = itemLevel,
         firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity })
     end
     if best then
@@ -157,7 +187,7 @@ function Purchases:Prepare()
     else
       set(self, "rejected", "lot_gone")
     end
-  end)
+  end, itemLevel)
   if not ok then
     set(self, "rejected", reason)
     return false, reason
@@ -283,7 +313,7 @@ function Purchases:Cancel(reason)
   if current.plan.kind == "commodity" and (current.state == "quoting" or current.state == "quoted") then
     self.purchase:CancelCommodity()
   end
-  if current.state == "planned" or current.state == "quoting" or current.state == "quoted"
+  if current.state == "planned" or current.state == "waiting" or current.state == "quoting" or current.state == "quoted"
     or current.state == "locating" or current.state == "located" then
     set(self, "cancelled", reason)
   end

@@ -49,6 +49,11 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   that vanished or got dearer and stops at the spending limit or on an
   uncertain outcome. Each purchase is still one click on the same button, as
   the game requires.
+- "Buy all" fixes after the first run in game: a purchase waits (up to 15 s,
+  resuming on the AH ready event) while the AH throttle is busy instead of
+  being skipped; each offer is skipped at most once and a pending quote is no
+  longer cancelled by the queue; offers already found gone stay out of the
+  queue; variant items (bonus IDs) are searched with their item level.
 - Portfolio tab as a table: cards with realized gain, spent, received and
   value still to sell; purchases table (date, item, quantity, paid, sold,
   received, gain, in bags, status).

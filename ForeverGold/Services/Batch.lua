@@ -12,18 +12,22 @@ local Money = ns.Economy.Money
 local Batch = {}
 ns.Services.Batch = Batch
 
--- deps: { purchases, client, bus, clock }
+-- deps: { purchases, client, bus, clock, stale?() -> { [itemID] = true } }
 function Batch.New(deps)
   return setmetatable({
-    purchases = deps.purchases, client = deps.client, bus = deps.bus, clock = deps.clock, active = false,
+    purchases = deps.purchases, client = deps.client, bus = deps.bus, clock = deps.clock, stale = deps.stale,
+    active = false,
   }, { __index = Batch })
 end
 
--- Vendor offers worth queueing, best first (prudent profit, then ROI).
-function Batch.Queue(list)
+-- Vendor offers worth queueing, best first (prudent profit, then ROI);
+-- offers a purchase attempt already found gone are left out.
+function Batch.Queue(list, stale)
   local queue = {}
   for _, o in ipairs(list or {}) do
-    if o.strategy == "vendor" and o.class ~= "speculative" and o.profit > 0 then queue[#queue + 1] = o end
+    if o.strategy == "vendor" and o.class ~= "speculative" and o.profit > 0 and not (stale and stale[o.itemID]) then
+      queue[#queue + 1] = o
+    end
   end
   table.sort(queue, function(a, b)
     if a.profit ~= b.profit then return a.profit > b.profit end
@@ -41,7 +45,7 @@ end
 function Batch:Start(list, cap)
   if self.active then return false, "busy" end
   if not Money.IsCopper(cap) or cap <= 0 then return false, "no_cap" end
-  local queue = Batch.Queue(list)
+  local queue = Batch.Queue(list, self.stale and self.stale())
   if #queue == 0 then return false, "nothing" end
   self.active, self.queue, self.index, self.cap = true, queue, 0, cap
   self.spent, self.expected, self.bought, self.skipped = 0, 0, 0, 0
@@ -65,11 +69,17 @@ function Batch:Next()
       self:Stop("cap")
       return
     end
-    self.current = opportunity
-    local started = self.purchases:Begin(opportunity, left)
-    if started and self.purchases:Prepare() then
-      publish(self)
-      return
+    local stale = self.stale and self.stale()
+    if not (stale and stale[opportunity.itemID]) then
+      local started = self.purchases:Begin(opportunity, left)
+      if started then
+        self.current, self.purchase = opportunity, started
+        publish(self)
+        -- Any outcome, an immediate refusal included, arrives through
+        -- OnPurchase, which moves on: this call must not move on again.
+        self.purchases:Prepare()
+        return
+      end
     end
     self.skipped = self.skipped + 1
   end
@@ -77,7 +87,8 @@ end
 
 -- Follows the purchase state machine (wired by Core/App).
 function Batch:OnPurchase(current)
-  if not self.active or not current or current.plan.itemKey == nil then return end
+  -- Only the purchase this batch started counts (not one replaced by it).
+  if not self.active or not current or current ~= self.purchase then return end
   local state = current.state
   if state == "quoted" or state == "located" then
     self.ready = true

@@ -59,7 +59,7 @@ function PurchasePanel.Model(view)
   local state = current.state
   if state == "planned" then
     model.quote, model.cancel = true, true
-  elseif state == "quoting" or state == "locating" then
+  elseif state == "quoting" or state == "locating" or state == "waiting" then
     lines[#lines + 1] = L("PB_WAIT")
     model.cancel = true
   elseif state == "quoted" then
@@ -179,7 +179,7 @@ function PurchasePanel.UpdateBatchButton()
   if not button then return end
   local app = ns.app
   local Main = ns.UI.Main
-  local offers = #ns.Services.Batch.Queue(Main.Visible(Main.Results(), Main.filters))
+  local offers = #ns.Services.Batch.Queue(Main.Visible(Main.Results(), Main.filters), app.opportunities.stale)
   local canStart = app.ah:IsOpen() and not app.scanner:IsActive() and not Main.demoResults
   local text, enabled = PurchasePanel.BatchModel(app.batch, offers, app.store:Settings().maxPurchase, canStart)
   button:SetText(text)
@@ -196,7 +196,7 @@ function PurchasePanel.BatchStart()
   end
   settings.assistedBuy = true
   local list = Main.Visible(Main.Results(), Main.filters)
-  local count = #ns.Services.Batch.Queue(list)
+  local count = #ns.Services.Batch.Queue(list, app.opportunities.stale)
   local ok, reason = app.batch:Start(list, settings.maxPurchase)
   if ok then
     ns.Print(string.format(L("BATCH_START_CHAT"), count, fmt(settings.maxPurchase)))

@@ -285,6 +285,7 @@ local function readRow(self, task, index)
     buyoutTotal = buyout, bid = row.bidAmount, divisible = false,
     seen = self.clock(), source = "replicate", scanId = snapshot.id, index = index,
     complete = row.hasAllInfo and suffix ~= nil,
+    link = (bonus and bonus ~= "") and row.link or nil,
   })
   if not listing then
     discard(snapshot, why)
@@ -511,7 +512,7 @@ end
 
 -- Targeted read-only search for one item, e.g. to refresh a quote.
 -- callback(snapshot, listings) on results. Returns ok, reason.
-function Scanner:Search(itemID, suffix, callback)
+function Scanner:Search(itemID, suffix, callback, itemLevel)
   if self:IsActive() then return false, "busy" end
   if not self.adapter:IsOpen() then return false, "ah_closed" end
   if not self.adapter:GetCapabilities().targetedSearch then return false, "unsupported" end
@@ -520,7 +521,7 @@ function Scanner:Search(itemID, suffix, callback)
   local task = { mode = "search", itemID = itemID, attempts = 1, callback = callback }
   self.task = task
   self.snapshot = newSnapshot(self, "search", Schema.ItemKey(itemID, suffix or 0))
-  local ok, err = self.adapter:SendSearch(itemID, suffix)
+  local ok, err = self.adapter:SendSearch(itemID, suffix, itemLevel)
   if not ok then
     fail(self, task, "request_failed:" .. tostring(err))
     return false, "request_failed"

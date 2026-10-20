@@ -61,8 +61,10 @@ function App:Load(saved)
     purchase = ns.Compat.Purchase.New(self.client), client = self.client, scanner = self.scanner,
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, bus = self.bus, store = self.store,
     trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
+    isReady = function() return self.ah:IsReady() end,
   })
-  self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock })
+  self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
+    stale = function() return self.opportunities.stale end })
   self.bus:Subscribe("purchase.state", function(current) self.batch:OnPurchase(current) end)
   self.vendorCheck = ns.Services.VendorCheck.New({
     client = self.client, store = self.store, clock = clock,
@@ -71,6 +73,11 @@ function App:Load(saved)
   -- Callbacks beyond the scanner's own: commodity info and purchase events.
   self.ah.callbacks.onItemKeyInfo = function(itemID) self.bus:Publish("items.resolved", itemID) end
   self.ah.callbacks.onPurchase = function(event, ...) self.purchases:OnEvent(event, ...) end
+  local scannerReady = self.ah.callbacks.onThrottleReady
+  self.ah.callbacks.onThrottleReady = function()
+    scannerReady()
+    self.purchases:OnReady()
+  end
   self:Subscribe()
   self.loaded = true
   self:RestoreView()
@@ -79,7 +86,7 @@ end
 
 -- Listing fields kept across /reload (plain data only).
 local VIEW_FIELDS = { "marketKey", "itemKey", "quantity", "buyoutTotal", "unitPrice", "divisible", "auctionID", "source",
-  "scanId", "complete", "buyable", "own", "seen", "id" }
+  "scanId", "complete", "buyable", "own", "seen", "id", "link" }
 
 -- Saves the opportunities and the auctions behind them, so the list
 -- survives /reload and relog while the replicate is cooling down.

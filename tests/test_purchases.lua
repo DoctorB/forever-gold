@@ -478,3 +478,80 @@ T.Case("buy all: closing the AH stops the run", function()
   T.NotOk(batch.active)
   T.Eq(s.ah.spendCalls, 0)
 end)
+
+T.Case("purchase waits for the AH throttle instead of failing", function()
+  local s = setup()
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  s.ah.ready = false
+  T.Ok(p:Prepare())
+  T.Eq(p.current.state, "waiting")
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, nil, "nothing sent while throttled")
+  s.ah.ready = true
+  s.app:OnEvent("AUCTION_HOUSE_THROTTLED_SYSTEM_READY")
+  T.Eq(p.current.state, "quoting")
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 1)
+end)
+
+T.Case("purchase gives up after waiting too long for the throttle", function()
+  local s = setup()
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  s.ah.ready = false
+  p:Prepare()
+  s.clock.advance(20)
+  T.Eq(p.current.state, "rejected")
+  T.Eq(p.current.reason, "throttled")
+end)
+
+T.Case("buy all: an immediate refusal skips once and never cancels the next quote", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local api = s.ah.api
+  local original = api.StartCommoditiesPurchase
+  api.StartCommoditiesPurchase = function(itemID, ...)
+    if itemID == 101 then error("refused") end
+    return original(itemID, ...)
+  end
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 5000)
+  T.Eq(batch.skipped, 1)
+  T.Eq(s.app.purchases.current.plan.itemID, 103)
+  T.Eq(s.app.purchases.current.state, "quoting")
+  T.Eq(s.ah.calls.CancelCommoditiesPurchase, nil, "no quote cancelled by the batch")
+  quoteAndClick(s, 15, 450)
+  T.Eq(s.app.purchases.current.plan.itemID, 102, "then the next one")
+end)
+
+T.Case("buy all: a busy AH between purchases waits, it does not skip", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 5000)
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 35, 700)
+  s.app.purchases:Confirm()
+  s.ah.ready = false
+  s.app:OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
+  T.Eq(s.app.purchases.current.state, "waiting")
+  T.Eq(batch.skipped, 0)
+  s.ah.ready = true
+  s.clock.advance(2)
+  T.Eq(s.app.purchases.current.state, "quoting")
+  T.Eq(s.app.purchases.current.plan.itemID, 103)
+end)
+
+T.Case("buy all: offers found gone stay out of the queue", function()
+  local s = setup({ rows = BATCH_ROWS })
+  s.app.opportunities:MarkStale(101)
+  s.app.batch:Start(s.app.opportunities.results.list, 5000)
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
+end)
+
+T.Case("variant items are searched with their item level", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
+    link = "|Hitem:201::::::::20:1486::1:1:12730:::::|h[Green Sword]|h" } } })
+  s.app.client.env.C_Item.GetDetailedItemLevelInfo = function(link) return link:find("12730", 1, true) and 25 or nil end
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  T.Eq(s.ah.lastSearch.itemID, 201)
+  T.Eq(s.ah.lastSearch.itemLevel, 25)
+end)

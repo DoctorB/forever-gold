@@ -176,9 +176,10 @@ end
 
 -- Targeted read-only search (used for quote refresh before an assisted
 -- action). Returns ok, reason.
-function AuctionHouse:SendSearch(itemID, suffix)
+-- itemLevel: needed for items whose variant is a bonus ID (0 otherwise).
+function AuctionHouse:SendSearch(itemID, suffix, itemLevel)
   local c = self.client
-  local okKey, key = c:Call("C_AuctionHouse", "MakeItemKey", itemID, 0, suffix or 0, 0)
+  local okKey, key = c:Call("C_AuctionHouse", "MakeItemKey", itemID, itemLevel or 0, suffix or 0, 0)
   if not okKey or type(key) ~= "table" then return false, "item_key" end
   local ok, err = c:Call("C_AuctionHouse", "SendSearchQuery", key, {}, true)
   if not ok then return false, tostring(err) end
