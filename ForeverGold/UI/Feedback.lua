@@ -123,7 +123,7 @@ function Feedback.FeeTestLines(kind, state)
     local durations = p.durations or { p.duration }
     if #durations > 0 then
       local hours = {}
-      for i, d in ipairs(durations) do hours[i] = ({ 12, 24, 48 })[d] end
+      for i, d in ipairs(durations) do hours[i] = ns.Services.FeeTest.HOURS[d] end
       line = line .. " " .. string.format(L("FT_DEPOSIT_OK"), table.concat(hours, "/"))
     else
       line = line .. " " .. L("FT_DEPOSIT_DIFF")

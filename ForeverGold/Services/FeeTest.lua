@@ -1,7 +1,7 @@
 -- FeeTest: guided measurement of the AH deposit and fee with an item the
 -- player chooses. ForeverGold never posts: the player posts the item from
 -- the native AH window; this service only observes.
---   armed    deposits asked to the server for 12/24/48 h (read-only)
+--   armed    deposits asked to the server for 2/8/24 h (read-only)
 --   posted   bag count drops while armed: deposit paid = gold before - after
 --   sold     seller invoices in the mailbox: sale price, refunded deposit and
 --            the AH cut ("consignment") -> fee measured
@@ -15,7 +15,8 @@ local FeeTest = {}
 ns.Services.FeeTest = FeeTest
 
 FeeTest.DEFAULT_ITEM = 2840 -- Copper Bar
-FeeTest.DURATIONS = { 1, 2, 3 } -- 12, 24, 48 hours in the AH UI
+FeeTest.DURATIONS = { 1, 2, 3 } -- AH duration indexes
+FeeTest.HOURS = { 2, 8, 24 } -- hours shown by the Forever AH UI (8 h is the default)
 
 -- deps: { client, ah, items, opportunities, store, clock, printer?(kind, data) }
 function FeeTest.New(deps)

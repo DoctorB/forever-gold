@@ -328,7 +328,7 @@ L.PROBE_REFUSED_busy = "Test ricerche AH: aspetta che finisca la scansione o il 
 L.PROBE_REFUSED_ah_closed = "Test ricerche AH: apri prima la casa d'aste."
 
 L.BTN_FEETEST = "Test commissione e deposito"
-L.FT_ARMED = "Test commissione pronto con %d x %s. Deposito indicato dal server: 12 h %s, 24 h %s, 48 h %s. Ora mettili TUTTI all'asta tu dalla finestra AH (scheda Vendi); ForeverGold non mette nulla all'asta."
+L.FT_ARMED = "Test commissione pronto con %d x %s. Deposito indicato dal server: 2 h %s, 8 h %s, 24 h %s. Ora mettili TUTTI all'asta tu dalla finestra AH (scheda Vendi); ForeverGold non mette nulla all'asta."
 L.FT_PRICE = "Prezzo consigliato: %s l'uno (il minimo attuale) o poco meno, così si vendono presto."
 L.FT_PRICE_UNKNOWN = "Prezzo: circa il minimo attuale, così si vendono presto."
 L.FT_POSTED = "Deposito pagato: %s per %d x %s."

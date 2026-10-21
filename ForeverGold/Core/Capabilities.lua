@@ -24,8 +24,8 @@ Capabilities.VERIFIED = {
   itemSearchBuyoutIsTotal = false,
   sellPrice = true, -- 2026-10-20, build 70450: 8 Pyrite sold for exactly 8 x sellPrice (vendor check)
   persistence = true, -- 2026-10-20, build 70450: re-read after /reload, relog and restart
-  fee = false, -- AH cut measured on a real sale
-  deposit = false,
+  fee = true, -- 2026-10-21, build 70450: 20 Copper Bars sold for 1160, AH cut 58 = 5.00%, deposit refunded
+  deposit = true, -- 2026-10-20, build 70450: 100 paid for 20 Copper Bars at 8 h = CalculateCommodityDeposit at posting
 }
 
 function Capabilities.New()

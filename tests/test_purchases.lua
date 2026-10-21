@@ -738,7 +738,7 @@ end)
 T.Case("fee test: deposit measured at posting, fee from the sale invoice", function()
   ITEMS[2840] = { name = "Copper Bar", sellPrice = 50 }
   local s = setup({ bags = { [2840] = 20 }, money = 9676 })
-  s.ah.depositPerUnit = 3 -- 12 h: 60, 24 h: 120, 48 h: 180 for 20 bars
+  s.ah.depositPerUnit = 3 -- 2 h: 60, 8 h: 120, 24 h: 180 for 20 bars
   s.ns.Core.Capabilities.VERIFIED.deposit, s.ns.Core.Capabilities.VERIFIED.fee = false, false
   local test = s.app.feeTest
   T.Ok(test:Start())
@@ -752,7 +752,7 @@ T.Case("fee test: deposit measured at posting, fee from the sale invoice", funct
   s.app:OnEvent("PLAYER_MONEY")
   T.Eq(state.stage, "armed")
   T.Eq(state.count, 18)
-  -- Now posts the 18 bars for 24 h: 108 copper deposit.
+  -- Now posts the 18 bars for 8 h: 108 copper deposit.
   s.bags[2840] = 0
   s.wallet.money = s.wallet.money - 108
   s.app:OnEvent("AUCTION_HOUSE_AUCTION_CREATED", 4242)
@@ -783,7 +783,7 @@ end)
 T.Case("fee test: a deposit matching two quotes leaves the duration open", function()
   ITEMS[2840] = { name = "Copper Bar", sellPrice = 50 }
   local s = setup({ bags = { [2840] = 20 }, money = 9676 })
-  s.ah.depositPerUnit, s.ah.minDeposit = 2, 100 -- 20 bars: 12 h 100, 24 h 100, 48 h 120
+  s.ah.depositPerUnit, s.ah.minDeposit = 2, 100 -- 20 bars: 2 h 100, 8 h 100, 24 h 120 (as measured in game)
   s.ns.Core.Capabilities.VERIFIED.deposit = false
   T.Ok(s.app.feeTest:Start())
   local state = s.app.feeTest:State()
@@ -796,7 +796,7 @@ T.Case("fee test: a deposit matching two quotes leaves the duration open", funct
   T.Ok(s.ns.Core.Capabilities.IsVerified("deposit"))
   T.Eq(s.app.store.db.verifiedRuntime.deposit.duration, nil)
   local line = s.ns.UI.Feedback.FeeTestLines("posted", state)[1]
-  T.Ok(line:find("12/24 h", 1, true), line)
+  T.Ok(line:find("2/8 h", 1, true), line)
 end)
 
 T.Case("fee test refuses without the item or with the AH closed", function()

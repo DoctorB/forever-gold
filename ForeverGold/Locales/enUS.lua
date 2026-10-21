@@ -330,7 +330,7 @@ L.PROBE_REFUSED_busy = "AH search test: wait for the current scan or test to fin
 L.PROBE_REFUSED_ah_closed = "AH search test: open the Auction House first."
 
 L.BTN_FEETEST = "Fee and deposit test"
-L.FT_ARMED = "Fee test ready with %d x %s. Deposit quoted by the server: 12 h %s, 24 h %s, 48 h %s. Now post ALL of them yourself from the AH window (Sell tab); ForeverGold does not post anything."
+L.FT_ARMED = "Fee test ready with %d x %s. Deposit quoted by the server: 2 h %s, 8 h %s, 24 h %s. Now post ALL of them yourself from the AH window (Sell tab); ForeverGold does not post anything."
 L.FT_PRICE = "Suggested price: %s each (the current lowest) or a little less, so they sell soon."
 L.FT_PRICE_UNKNOWN = "Price: about the current lowest, so they sell soon."
 L.FT_POSTED = "Deposit paid: %s for %d x %s."

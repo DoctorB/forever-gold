@@ -27,6 +27,11 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
 
 ### Changed
 
+- AH fee (5.00%) and deposit verified in game with 20 Copper Bars: the fee
+  is no longer a scenario (default `feeBp` 500, verified), the deposit paid
+  matched the server quote at posting and was refunded with the sale.
+- AH durations shown as 2 / 8 / 24 h, as in the Forever AH window (they
+  were reported as 12 / 24 / 48 h).
 - Item key includes bonus IDs: on Forever item variants arrive that way.
 - Full scan: no automatic re-request; the measured cooldown is used to avoid
   pointless requests.
@@ -68,7 +73,7 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
   reads the seller invoices in the mailbox and computes the real AH fee,
   which then replaces the 5% scenario. Nothing is posted by the add-on.
   When the deposit paid matches several quotes (small lots hit the minimum
-  deposit, e.g. 100 copper for both 12 and 24 h), all matching durations are
+  deposit, e.g. 100 copper for both 2 and 8 h), all matching durations are
   reported and none is recorded as the posting duration.
 - Multi-unit item-search rows priced per unit (verified in game: the search
   groups single auctions at one price); they are observed, not bought.

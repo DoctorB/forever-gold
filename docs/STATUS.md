@@ -27,7 +27,8 @@ gain +3s 30c on 19s 45c spent. Both purchase paths (commodity quote and
 individual auction) and the vendor price are verified in game.
 
 Next gate: a "Buy all" run in game, then the first AH resale once three days
-of price history exist (needs the real AH fee and deposit).
+of price history exist. AH fee (5.00%) and deposit verified on 2026-10-21
+(20 Copper Bars); resale still needs a per-item deposit source.
 
 ## Implemented
 
@@ -86,8 +87,10 @@ Mocks prove our logic only; in-game evidence is listed in `docs/API-AUDIT.md`.
 
 ## Limits
 
-- Replicate completeness, AH fee and deposits not verified: scans end as
-  "partial observation"; resale is always "speculative".
+- Replicate completeness not verified: scans end as
+  "partial observation"; resale stays "speculative" until a per-item deposit
+  is known (`depositPerUnit` is not filled yet; deposits scale with the hours
+  above a 100 copper minimum, and only the quote at posting time is reliable).
 - "Buy all" not yet tested in game.
 - No price chart yet (History shows tables).
 - TGA icon generated but not referenced by the TOC.
@@ -99,6 +102,6 @@ Mocks prove our logic only; in-game evidence is listed in `docs/API-AUDIT.md`.
 | Blocker | Minimum data or test |
 | --- | --- |
 | Replicate completeness | rows read compared with what the AH window shows for a few items |
-| AH fee and deposit | one real AH sale by the owner (posted price, deposit, gold received) |
 | Resale ranking | three days of price history (collected automatically by regular scans) |
+| Resale deposit | a per-item deposit estimate (e.g. quotes at posting for a few items and durations) |
 | "Buy all" | one run in game with a small spending limit |

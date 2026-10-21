@@ -57,13 +57,13 @@ T.Case("every tab builds and refreshes; demo rows and details render", function(
   end)
 end)
 
-T.Case("details text expands the resale formula with scenario labels", function()
+T.Case("details text expands the resale formula with the verified fee", function()
   withClient(function(ns)
     local results = ns.app:Demo()
     local resale
     for _, o in ipairs(results.list) do if o.strategy == "resale" then resale = o end end
     local text = ns.UI.Details.Text(resale)
-    T.Ok(text:find(ns.L.SCENARIO, 1, true) ~= nil, "fee shown as scenario")
+    T.Ok(text:find(string.format(ns.L.DETAIL_RESALE_F, "5.0%", ns.L.VERIFIED), 1, true) ~= nil, "fee shown as verified")
     T.Ok(text:find(ns.L.DETAIL_DISCLAIMER, 1, true) ~= nil)
     T.Ok(text:find("x (1 - 5.0%)", 1, true) ~= nil, "formula expanded")
   end)

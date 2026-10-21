@@ -22,8 +22,8 @@ posts or cancels auctions.
   (`quantity × vendor price − buyout`, no AH fee). Margins below 25 copper or
   5% are hidden (configurable); variants of the same item are merged.
 - **AH resale**: lots below the local price reference, with real depth (sum
-  of the price levels, never "lowest price × quantity"), AH fee (5% scenario
-  until measured), deposits, a prudent buffer and a quantity limited by the
+  of the price levels, never "lowest price × quantity"), AH fee (5%, verified
+  in game), deposits, a prudent buffer and a quantity limited by the
   observed liquidity. Without enough history it only shows a scenario.
 - **Local price history** per market and item variant: one sample per day,
   7/30-day windows; listed prices and depth, never "sold volume".
@@ -76,7 +76,8 @@ price is not a guaranteed future sale.
 - The full scan uses `C_AuctionHouse.ReplicateItems`, available about every
   15 minutes (measured between 14 min 27 s and 15 min 38 s); completeness is
   not declared, so the result stays "partial observation".
-- AH fee and deposits are declared scenarios: resale stays speculative.
+- AH fee (5%) and deposits are verified in game, but a per-item deposit is not
+  estimated yet: resale stays speculative.
 - Assisted purchase is experimental; selling to merchants and relisting stay
   manual.
 
