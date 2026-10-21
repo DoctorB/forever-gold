@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/ForeverGold-CurseForge.png" alt="ForeverGold logo" width="160">
+  <img src="docs/ForeverGold-CurseForge.png" alt="Forever Gold logo" width="160">
 </p>
 
-# ForeverGold
+# Forever Gold
 
 Auction House **analysis** add-on for **World of Warcraft: Forever**. It finds
 money-making opportunities and explains why they may pay off: effective
@@ -30,7 +30,7 @@ posts or cancels auctions.
 - **Assisted purchase** (experimental, off by default): in an opportunity's
   details, "1. Get quote" asks the server for the current price without
   spending; "2. Buy: spend X" is enabled only if the quote fits the plan,
-  the spending limit and your gold. After you sell to a merchant, ForeverGold
+  the spending limit and your gold. After you sell to a merchant, Forever Gold
   compares the gold received with what was expected.
 - **Buy all**: queues the vendor offers within the spending limit and
   prepares each purchase by itself; you press the same button once per
@@ -45,7 +45,7 @@ posts or cancels auctions.
 
 1. Extract the ZIP into `World of Warcraft\_classic_beta_\Interface\AddOns\`
    (you must end up with `AddOns\ForeverGold\ForeverGold.toc`).
-2. Enable ForeverGold in the add-on list.
+2. Enable Forever Gold in the add-on list.
 
 Backup and rollback: copy `WTF\Account\<account>\SavedVariables\ForeverGold.lua`
 before updating; to go back, delete the add-on folder and restore the file.

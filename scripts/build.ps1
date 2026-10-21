@@ -82,8 +82,14 @@ New-Item -ItemType Directory -Path $stageAddon -Force | Out-Null
 $files = New-Object System.Collections.Generic.List[string]
 $files.Add("$addonName.toc")
 foreach ($entry in $entries) { $files.Add(($entry -replace '\\', '/')) }
-$media = Join-Path $addonDir "Media/ForeverGold.tga"
-if (Test-Path -LiteralPath $media) { $files.Add("Media/ForeverGold.tga") }
+# The icon named by ## IconTexture ships as a .tga next to the TOC entries.
+if ($fields['IconTexture']) {
+  $prefix = "Interface\AddOns\$addonName\"
+  if (-not $fields['IconTexture'].StartsWith($prefix)) { Fail "IconTexture outside the add-on: $($fields['IconTexture'])" }
+  $icon = ($fields['IconTexture'].Substring($prefix.Length) -replace '\\', '/') + ".tga"
+  if (-not (Test-ExactPath $addonDir $icon)) { Fail "IconTexture file missing or with different case: $icon" }
+  $files.Add($icon)
+}
 foreach ($relative in $files) {
   $from = Join-Path $addonDir $relative
   $to = Join-Path $stageAddon $relative

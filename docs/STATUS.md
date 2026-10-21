@@ -93,7 +93,8 @@ Mocks prove our logic only; in-game evidence is listed in `docs/API-AUDIT.md`.
   above a 100 copper minimum, and only the quote at posting time is reliable).
 - "Buy all" not yet tested in game.
 - No price chart yet (History shows tables).
-- TGA icon generated but not referenced by the TOC.
+- Add-on list icon (`## IconTexture`) not yet seen in game for Forever Gold
+  (same TGA layout as the icon verified with Forever One Button).
 - luacheck not available locally: informational in CI; the blocking lint is
   the bytecode globals check.
 

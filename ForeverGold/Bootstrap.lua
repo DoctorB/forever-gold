@@ -21,7 +21,7 @@ function ns.Print(message)
   if not frame and type(DEFAULT_CHAT_FRAME) == "table" then
     frame = DEFAULT_CHAT_FRAME
   end
-  local line = "|cffe6b422ForeverGold|r: " .. tostring(message)
+  local line = "|cffe6b422Forever Gold|r: " .. tostring(message)
   if frame and type(frame.AddMessage) == "function" then
     frame:AddMessage(line)
   elseif type(print) == "function" then

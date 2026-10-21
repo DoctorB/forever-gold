@@ -29,7 +29,7 @@ local function onItem(tooltip)
   local ok, _, link = pcall(tooltip.GetItem, tooltip)
   if not ok or type(link) ~= "string" or app.client:IsSecret(link) then return end
   local okLine, line = pcall(Tooltips.Line, app, link)
-  if okLine and line then tooltip:AddLine("|cffe6b422ForeverGold|r " .. line, 0.9, 0.9, 0.9) end
+  if okLine and line then tooltip:AddLine("|cffe6b422Forever Gold|r " .. line, 0.9, 0.9, 0.9) end
 end
 
 function Tooltips.Install(env)

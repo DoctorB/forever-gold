@@ -318,7 +318,7 @@ function Main.RefreshTable()
   local app = ns.app
   local results = Main.Results()
   frame.status:SetText(Main.StatusLine(app, results))
-  frame.title:SetText("ForeverGold " .. ns.VERSION .. (Main.demoResults and ("  " .. W.Color(L("DEMO_BANNER"), W.WARN)) or ""))
+  frame.title:SetText("Forever Gold " .. ns.VERSION .. (Main.demoResults and ("  " .. W.Color(L("DEMO_BANNER"), W.WARN)) or ""))
   local list = Main.Visible(results, Main.filters)
   local maxOffset = math.max(0, #list - (Main.visibleRows or 1))
   if Main.offset > maxOffset then Main.offset = maxOffset end

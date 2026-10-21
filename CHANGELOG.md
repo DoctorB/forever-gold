@@ -27,6 +27,9 @@ In-game verification on build 1.60.1.70450 and first assisted purchases.
 
 ### Changed
 
+- The add-on is called "Forever Gold" in the AddOns list, window, chat and
+  tooltips, and shows its icon in the AddOns list (`## IconTexture`). Folder,
+  saved data and `/fg` are unchanged.
 - AH fee (5.00%) and deposit verified in game with 20 Copper Bars: the fee
   is no longer a scenario (default `feeBp` 500, verified), the deposit paid
   matched the server quote at posting and was refunded with the sale.

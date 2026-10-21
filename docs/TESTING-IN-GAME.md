@@ -22,6 +22,7 @@ you want to go back to the previous data, restore the backup of `ForeverGold.lua
 
 | # | Action | Expected result | To record |
 | --- | --- | --- | --- |
+| 1.0 | Full client restart, AddOns list at character selection | "Forever Gold" with the gold infinity icon instead of the question mark | screenshot |
 | 1.1 | Login | no Lua errors | any errors (with `/console scriptErrors 1`) |
 | 1.2 | `/fg diagnostics` | summary in chat: build, symbols present, events registered/rejected | chat text (or screenshot) |
 | 1.3 | `/fg` | window with 5 tabs; resizable; ESC closes it | screenshot at two resolutions/UI scales |

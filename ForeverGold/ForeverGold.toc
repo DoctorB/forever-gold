@@ -1,5 +1,6 @@
 ## Interface: 16001
-## Title: ForeverGold
+## Title: Forever Gold
+## IconTexture: Interface\AddOns\ForeverGold\Media\ForeverGold
 ## Notes: Auction House analysis for WoW Forever: vendor and resale opportunities with costs, depth, prudent scenarios and confidence reasons. Optional assisted buying, one click per purchase.
 ## Notes-itIT: Analisi della casa d'aste per WoW Forever: opportunità vendor e rivendita con costi, profondità, scenari prudenti e motivi della confidenza. Acquisto assistito opzionale, un clic per acquisto.
 ## Author: DoctorB
