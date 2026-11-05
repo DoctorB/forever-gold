@@ -11,7 +11,8 @@ reliability and constraints. **It never buys on its own**: the optional
 assisted purchase needs your click for every single purchase. It never
 posts or cancels auctions.
 
-> Status: `0.1.0-alpha.2`, alpha partly tested in game on build 1.60.1.70450
+> Status: `0.1.0-alpha.2`, alpha partly tested in game on the beta build 1.60.1.70450,
+> not yet on the live client
 > (persistence, full scan, auction prices, vendor prices, assisted purchases
 > of commodities and individual auctions). What is verified, and how, is in
 > [`docs/API-AUDIT.md`](docs/API-AUDIT.md).
@@ -43,7 +44,7 @@ posts or cancels auctions.
 
 ## Installation
 
-1. Extract the ZIP into `World of Warcraft\_classic_beta_\Interface\AddOns\`
+1. Extract the ZIP into `World of Warcraft\_forever_\Interface\AddOns\`
    (you must end up with `AddOns\ForeverGold\ForeverGold.toc`).
 2. Enable Forever Gold in the add-on list.
 

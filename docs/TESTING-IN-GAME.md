@@ -8,9 +8,9 @@ gold and only on your clicks.
 ## Installing the alpha
 
 1. Close the game or stay at the character screen.
-2. Back up `World of Warcraft\_classic_beta_\WTF\Account\<account>\SavedVariables\ForeverGold.lua` if it exists.
+2. Back up `World of Warcraft\_forever_\WTF\Account\<account>\SavedVariables\ForeverGold.lua` if it exists.
 3. Extract `release\ForeverGold-0.1.0-alpha.2.zip` into
-   `World of Warcraft\_classic_beta_\Interface\AddOns\` (the result must be
+   `World of Warcraft\_forever_\Interface\AddOns\` (the result must be
    `AddOns\ForeverGold\ForeverGold.toc`).
 4. Launch, enable **ForeverGold** in the addon list, log in with a character.
 
