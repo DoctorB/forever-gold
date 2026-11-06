@@ -177,6 +177,7 @@ T.Case("waiting shows elapsed time; silence explains the cooldown; refusal says 
     ah.delivered = false
     -- No prior measurement: forget the seeded bounds.
     ns.app.scanner.memory.lowerBound, ns.app.scanner.memory.upperBound = nil, nil
+    ns.app.scanner.opts.timeout = 60 -- keeps the pacing check below in range
     clock.advance(400)
     ns.UI.Commands.Handle("scan")
     clock.advance(5)

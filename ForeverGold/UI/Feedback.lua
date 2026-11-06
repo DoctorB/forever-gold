@@ -74,6 +74,7 @@ function Feedback.StateLine(app, state, reason, snapshot)
     return L("FB_THROTTLED")
   elseif state == "RECEIVING" then
     if reason == "client_replica" then return L("FB_CLIENT_REPLICA") end
+    if reason == "late_answer" then return L("FB_LATE_ANSWER") end
     return L("FB_RECEIVING")
   elseif state == "COMPLETE" or state == "PARTIAL" then
     local c = snapshot.counts

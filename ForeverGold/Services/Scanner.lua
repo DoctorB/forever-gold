@@ -28,7 +28,13 @@ Scanner.ACTIVE = { REQUESTED = true, RECEIVING = true, NORMALIZING = true, THROT
 -- as the starting measurement; every attempt keeps refining it.
 Scanner.MEASURED = { lowerBound = 867, upperBound = 938, source = "2026-10-20 build 70450" }
 Scanner.DEFAULTS = {
-  timeout = 60, -- seconds without any replicate event: no response
+  -- Seconds without any replicate event before giving up. Live build 70790
+  -- (2026-11-06): a request at 18:12:01 was answered at 18:14:29, 148 s
+  -- later, after the old 60 s timeout had already given up.
+  timeout = 300,
+  -- An answer arriving this long after a request we gave up on is still
+  -- read, automatically, while the AH is open.
+  lateWindow = 900,
   settle = 2, -- seconds without new update events before reading
   -- No automatic re-request after a silent server: in game (2026-10-20) a
   -- silent replicate meant cooldown, and re-requesting may extend it.
@@ -258,7 +264,7 @@ function Scanner:Start(request)
     self.task = task
     self.snapshot = newSnapshot(self, "replicate", "all")
     self.snapshot.origin = "client_replica"
-    setState(self, "RECEIVING", "client_replica")
+    setState(self, "RECEIVING", request.late and "late_answer" or "client_replica")
     beginNormalize(self, task)
     return true
   end
@@ -400,6 +406,18 @@ function Scanner:OnReplicateUpdate()
     local n = self.ignoredUpdates
     if n == 1 or n == 10 or n == 100 or n == 1000 or n == 10000 then
       self:Trace("replicate_update_ignored", { state = self.state, count = n })
+    end
+    -- Answer to the last request we gave up on: record it as answered (the
+    -- cooldown runs from that request) and read it once updates settle.
+    local memory = self.memory
+    local silent = memory.lastSilent
+    if not task and silent and silent > (memory.lastSuccess or 0)
+      and self.clock() - silent <= self.opts.lateWindow and self.adapter:IsOpen() then
+      observe(self, true, silent)
+      self:Trace("late_answer", { after = self.clock() - silent })
+      self.scheduler:After(self.opts.settle, function()
+        if not self:IsActive() then self:Start({ mode = "replicate", late = true }) end
+      end)
     end
     return
   end

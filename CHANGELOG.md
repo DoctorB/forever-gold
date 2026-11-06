@@ -10,6 +10,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   request made outside the add-on) without a new server request; the scan
   button is enabled for it even during the cooldown. A replica already read
   is not read again.
+- The replica request waits up to 5 minutes instead of 60 seconds: on the
+  live client the server answered after 148 s. An answer that arrives after
+  the add-on gave up is recorded and read automatically while the AH is open.
 
 ## [0.1.0-alpha.2] - 2026-10-20
 
