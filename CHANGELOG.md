@@ -2,15 +2,6 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer versions.
 
-## [Unreleased]
-
-### Fixed
-
-- An AH answer arriving after the timeout no longer counts as a silent
-  request too: in game a 327 s answer raised the measured cooldown to
-  31 minutes. Saved data with that error is repaired on load, and the wait
-  never exceeds the longest cooldown already measured.
-
 ## [0.1.0-alpha.3] - 2026-11-06
 
 Verified in game on the live build 1.60.1.70790: three full scans (about
