@@ -104,23 +104,40 @@ local VIEW_FIELDS = { "marketKey", "itemKey", "quantity", "buyoutTotal", "unitPr
 
 -- Saves the opportunities and the auctions behind them, so the list
 -- survives /reload and relog while the replicate is cooling down.
+-- Per item only the auctions in an opportunity's lots and the cheapest
+-- VIEW_CHEAPEST buyable ones are kept: on the live server one item had 3,285
+-- auctions and the saved view grew to about 95,000 lines.
+App.VIEW_CHEAPEST = 50
+
+local function unitCost(listing)
+  if not listing.buyable or not listing.buyoutTotal or (listing.quantity or 0) <= 0 then return math.huge end
+  return listing.buyoutTotal / listing.quantity
+end
+
 function App:SaveView()
   local results = self.opportunities.results
   if not results or results.demo or not results.snapshot then return end
-  local keys = {}
+  local keys, used = {}, {}
   for _, o in ipairs(results.list) do
     keys[o.itemKey] = true
     for _, lot in ipairs(o.lots or {}) do
-      if lot.listing and lot.listing.itemKey then keys[lot.listing.itemKey] = true end
+      local listing = lot.listing
+      if listing and listing.itemKey then keys[listing.itemKey] = true end
+      if listing and listing.id then used[listing.id] = true end
     end
   end
   local listings = {}
   for itemKey in pairs(keys) do
     local view = self.opportunities.latest[itemKey]
-    for _, listing in ipairs(view and view.listings or {}) do
-      local copy = {}
-      for _, field in ipairs(VIEW_FIELDS) do copy[field] = listing[field] end
-      listings[#listings + 1] = copy
+    local order = {}
+    for _, listing in ipairs(view and view.listings or {}) do order[#order + 1] = listing end
+    table.sort(order, function(a, b) return unitCost(a) < unitCost(b) end)
+    for rank, listing in ipairs(order) do
+      if rank <= App.VIEW_CHEAPEST or (listing.id and used[listing.id]) then
+        local copy = {}
+        for _, field in ipairs(VIEW_FIELDS) do copy[field] = listing[field] end
+        listings[#listings + 1] = copy
+      end
     end
   end
   local s = results.snapshot

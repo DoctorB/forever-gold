@@ -272,6 +272,29 @@ T.Case("opportunities survive /reload while the replicate cools down", function(
   T.Eq(again.scanner:Cooldown().remaining > 0, true, "cooldown remembered")
 end)
 
+T.Case("the saved view keeps the opportunity's lots and the cheapest auctions only", function()
+  -- 200 single Linen auctions: 20 below the vendor price, 180 above it.
+  local rows = {}
+  for index = 1, 200 do rows[index] = { itemID = 101, count = 1, buyout = index <= 20 and 30 or 60 + index } end
+  local app, _, clock, ah = Fakes.App({ rows = rows, items = ITEMS })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  T.Ok(app.scanner:Start())
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(60)
+  T.Eq(#app.opportunities.results.list, 1)
+  local saved = app.store.db.lastView.listings
+  T.Eq(#saved, app.VIEW_CHEAPEST, "200 auctions trimmed to the cheapest")
+  local cheap = 0
+  for _, listing in ipairs(saved) do
+    if listing.buyoutTotal == 30 then cheap = cheap + 1 end
+  end
+  T.Eq(cheap, 20, "every auction in the opportunity is kept")
+  local again = Fakes.App({ saved = app.store.db, items = ITEMS, clock = clock })
+  clock.advance(5)
+  T.Eq(again.opportunities.results.list[1].profit, app.opportunities.results.list[1].profit, "same profit after /reload")
+end)
+
 T.Case("a scan records how long each pipeline phase took", function()
   local app, _, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
   app:OnEvent("AUCTION_HOUSE_SHOW")

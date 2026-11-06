@@ -49,17 +49,24 @@ Checked on 2026-11-06 at 19:24 (API-AUDIT row 19):
       unlikely; the 17:27 silence (AH closed after 169 s, before a late answer
       could arrive) is most likely just the late answer.
 
-Changed after that check (not yet seen in game): grouping of the raw listings
-runs as a chunked `group` phase, and the history finish no longer re-groups
-the listings; `history` and `evaluate` timings name the slowest step
-(`slowestMs`, `slowestKey`, `slowestRows`).
+Checked on 2026-11-06 at 20:01 (API-AUDIT row 20), with grouping chunked
+(`8eefe9a`):
+- [x] `history_begin` 0 ms, `group` longest frame 5.3 ms, `history_finish`
+      37 ms (was 83).
+- [x] Remaining hitches are single heavy item keys, not garbage collection:
+      58 ms for 3,002 auctions (history), 50–54 ms for 4,479 auctions
+      (evaluation). One or two frames per scan; **accepted for now**,
+      splitting the work inside one item is the next step only if the owner
+      notices it.
+- [x] Saved file 5.24 MB: 2.3 MB of it was the view kept for `/reload`
+      (all auctions of each item with an opportunity).
+
+Changed after that check (not yet seen in game): the saved view keeps only
+the auctions in an opportunity's lots plus the 50 cheapest per item.
 
 Next scan, then `/reload`:
-- [ ] `history_begin` and `history_finish` well under 50 ms; `group`
-      `worstMs` near the frame budget.
-- [ ] `history` / `evaluate`: if `slowestMs` is close to `worstMs`, one heavy
-      item key (see `slowestRows`) causes the hitch and needs splitting; if
-      not, it is a garbage collection pause.
+- [ ] Saved file well below 5 MB (`lastView` was 2.3 MB).
+- [ ] Opportunities still shown after `/reload` with the same gains.
 - [ ] Then update `docs/TESTING-IN-GAME.md` 2.1/2.2 and decide whether
       alpha.3 is done.
 

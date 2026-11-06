@@ -15,6 +15,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   the add-on gave up is recorded and read automatically while the AH is open.
 - After a scan, grouping the ~160,000 listings is spread over frames: in
   game it blocked one frame for 214 ms, and saving history another 83 ms.
+- The opportunities kept across `/reload` save only the auctions they use
+  plus the 50 cheapest per item, instead of every auction of the item: on
+  the live server this was 2.3 MB of a 5.2 MB saved file.
 
 ### Added
 
