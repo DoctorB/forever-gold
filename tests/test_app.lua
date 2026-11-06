@@ -271,3 +271,24 @@ T.Case("opportunities survive /reload while the replicate cools down", function(
   T.Ok(results.snapshot.restored)
   T.Eq(again.scanner:Cooldown().remaining > 0, true, "cooldown remembered")
 end)
+
+T.Case("a scan records how long each pipeline phase took", function()
+  local app, _, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  T.Ok(app.scanner:Start())
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(30)
+  local seen = {}
+  for _, timing in ipairs(app.store.db.diagnostics.timings or {}) do
+    seen[timing.phase] = timing
+    T.Ok(type(timing.worstMs) == "number" and timing.worstMs >= 0, timing.phase)
+    T.Ok(timing.busyMs >= timing.worstMs, timing.phase)
+  end
+  for _, phase in ipairs({ "replicate_read", "history_begin", "history", "history_finish",
+    "evaluate_begin", "evaluate", "evaluate_finish" }) do
+    T.Ok(seen[phase] ~= nil, "missing " .. phase)
+  end
+  T.Eq(seen.replicate_read.rows, 3)
+  T.Ok(seen.replicate_read.frames >= 1)
+end)

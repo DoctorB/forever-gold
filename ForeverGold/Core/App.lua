@@ -50,6 +50,7 @@ function App:Load(saved)
     marketKey = function() return self:MarketKey() end,
     build = function() return self.client:BuildInfo().version end,
     trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
+    timing = function(phase, fields) self.diagnostics:Timing(phase, fields) end,
     memory = self:ScannerMemory(),
   }, { budgetMs = settings.frameBudgetMs })
   self.opportunities = ns.Services.Opportunities.New({
@@ -185,21 +186,43 @@ function App:Progress(phase, done, total, mode)
   self.bus:Publish("pipeline.progress", phase, done, total, mode)
 end
 
+-- Runs fn in one go and records how long it blocked the frame.
+function App:Timed(phase, rows, fn)
+  local preciseMs = self.schedulerEnv.preciseMs
+  local started = preciseMs()
+  local a, b = fn()
+  local spent = preciseMs() - started
+  self.diagnostics:Timing(phase, { rows = rows, frames = 1, worstMs = spent, busyMs = spent })
+  return a, b
+end
+
+-- Records a chunked phase from its scheduler handle.
+function App:ChunkTiming(phase, handle, startedAt)
+  self.diagnostics:Timing(phase, { rows = handle.steps, frames = handle.frames, worstMs = handle.worstMs,
+    busyMs = handle.busyMs, wall = self.clock() - startedAt })
+end
+
 function App:Process(snapshot, listings)
   local work, budget = self.work, self.store:Settings().frameBudgetMs
   work:Invalidate()
   self.processing = true
-  if snapshot.mode == "replicate" then snapshot.buyoutVotes = ns.Services.Diagnostics.BuyoutVotes(listings) end
-  local job = self.history:BeginRecord(snapshot, listings)
+  local job = self:Timed("history_begin", #listings, function()
+    if snapshot.mode == "replicate" then snapshot.buyoutVotes = ns.Services.Diagnostics.BuyoutVotes(listings) end
+    return self.history:BeginRecord(snapshot, listings)
+  end)
   local total = #job.order
+  local startedAt = self.clock()
   self:Progress("history", 0, total, snapshot.mode)
   work:Chunk(1, total, budget, function(index)
     ns.Data.History.RecordStep(job, index)
     if index % PROGRESS_EVERY == 0 then self:Progress("history", index, total, snapshot.mode) end
-  end, function(done)
+  end, function(done, handle)
     if not done then return end
-    ns.Data.History.FinishRecord(job)
-    self.opportunities:Ingest(snapshot, listings)
+    self:ChunkTiming("history", handle, startedAt)
+    self:Timed("history_finish", #listings, function()
+      ns.Data.History.FinishRecord(job)
+      self.opportunities:Ingest(snapshot, listings)
+    end)
     self:EvaluateChunked(function()
       -- A user scan is summarised by UI/Feedback; notices are for the rest.
       if snapshot.mode == "replicate" then return end
@@ -213,17 +236,22 @@ end
 function App:EvaluateChunked(after, mode)
   local work, opportunities = self.work, self.opportunities
   self.processing = true
-  local job = opportunities:BeginEvaluate()
+  local job = self:Timed("evaluate_begin", nil, function() return opportunities:BeginEvaluate() end)
   local total = #job.keys
+  local startedAt = self.clock()
   self:Progress("evaluate", 0, total, mode)
   work:Chunk(1, total, self.store:Settings().frameBudgetMs, function(index)
     opportunities:EvaluateStep(job, index)
     if index % PROGRESS_EVERY == 0 then self:Progress("evaluate", index, total, mode) end
-  end, function(done)
+  end, function(done, handle)
     if not done then return end
     self.processing = false
-    local results = opportunities:FinishEvaluate(job)
-    self:SaveView()
+    self:ChunkTiming("evaluate", handle, startedAt)
+    local results = self:Timed("evaluate_finish", total, function()
+      local finished = opportunities:FinishEvaluate(job)
+      self:SaveView()
+      return finished
+    end)
     self:Progress("done", total, total, mode)
     if after then after(results) end
   end)

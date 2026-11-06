@@ -14,6 +14,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   live client the server answered after 148 s. An answer that arrives after
   the add-on gave up is recorded and read automatically while the AH is open.
 
+### Added
+
+- Performance measurement of every scan phase (replica read, history,
+  evaluation): rows, frames, longest frame and total time, saved in
+  `ForeverGoldDB.diagnostics.timings`.
+
 ## [0.1.0-alpha.2] - 2026-10-20
 
 In-game verification on build 1.60.1.70450 and first assisted purchases.

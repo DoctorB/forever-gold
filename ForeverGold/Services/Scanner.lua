@@ -61,7 +61,7 @@ Scanner.DEFAULTS = {
 function Scanner.New(deps, opts)
   local self = setmetatable({}, { __index = Scanner })
   self.adapter, self.scheduler, self.clock, self.bus = deps.adapter, deps.scheduler, deps.clock, deps.bus
-  self.marketKey, self.build, self.trace = deps.marketKey, deps.build, deps.trace
+  self.marketKey, self.build, self.trace, self.timing = deps.marketKey, deps.build, deps.trace, deps.timing
   self.memory = deps.memory or {}
   self.memory.observations = self.memory.observations or {}
   self.opts = {}
@@ -354,13 +354,18 @@ beginNormalize = function(self, task)
   task.incomplete = {}
   self:Trace("normalize", { rows = count, base = base, updates = task.updates })
   local read, every = 0, self.opts.progressEvery
+  local readStarted = self.clock()
   progress(self, "read", 0, count)
   self.scheduler:Chunk(base, base + count - 1, self.opts.budgetMs, function(index)
     readRow(self, task, index)
     read = read + 1
     if read % every == 0 or read == count then progress(self, "read", read, count) end
-  end, function(completed)
+  end, function(completed, handle)
     if not completed or not current(self, task) then return end
+    if self.timing and handle then
+      self.timing("replicate_read", { rows = count, frames = handle.frames, worstMs = handle.worstMs,
+        busyMs = handle.busyMs, wall = self.clock() - readStarted })
+    end
     local pending = task.incomplete
     task.incompleteLeft = #pending
     if #pending == 0 then

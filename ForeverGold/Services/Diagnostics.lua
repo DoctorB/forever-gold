@@ -36,6 +36,24 @@ function Diagnostics:Trace(kind, data)
   while #trace > Diagnostics.TRACE_LIMIT do table.remove(trace, 1) end
 end
 
+Diagnostics.TIMING_LIMIT = 40
+
+-- Performance of one pipeline phase, measured in game: rows handled, frames
+-- used, longest single frame and total CPU time in ms, wall time in s.
+-- Kept in ForeverGoldDB.diagnostics.timings (bounded, newest last).
+-- fields: { rows?, frames?, worstMs, busyMs, wall? }
+function Diagnostics:Timing(phase, fields)
+  local diag = self.store.db.diagnostics
+  diag.timings = diag.timings or {}
+  local list = diag.timings
+  local function ms(value) return value and math.floor(value * 10 + 0.5) / 10 or nil end
+  list[#list + 1] = {
+    t = self.clock(), phase = phase, rows = fields.rows, frames = fields.frames,
+    worstMs = ms(fields.worstMs), busyMs = ms(fields.busyMs), wall = fields.wall,
+  }
+  while #list > Diagnostics.TIMING_LIMIT do table.remove(list, 1) end
+end
+
 function Diagnostics:Run()
   local client, capabilities = self.client, self.capabilities
   client:Detect(capabilities)

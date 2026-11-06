@@ -41,28 +41,37 @@ function Scheduler:Backoff(attempt, base, cap)
 end
 
 -- Calls step(index) for index = first..last, spending at most budgetMs per
--- frame; continues on the next frame through after(0). done(completed) is
--- called once, with false when cancelled. Returns a handle with :Cancel().
+-- frame; continues on the next frame through after(0). done(completed,
+-- handle) is called once, with false when cancelled. Returns a handle with
+-- :Cancel(); it also measures the work: frames, worstMs (longest frame),
+-- busyMs (all frames together), steps.
 function Scheduler:Chunk(first, last, budgetMs, step, done)
   local index = first
-  local handle = { cancelled = false, frames = 0 }
+  local handle = { cancelled = false, frames = 0, worstMs = 0, busyMs = 0, steps = last - first + 1 }
   local generation = self.generation
   function handle.Cancel() handle.cancelled = true end
+  local function account(started)
+    local spent = self.env.preciseMs() - started
+    handle.busyMs = handle.busyMs + spent
+    if spent > handle.worstMs then handle.worstMs = spent end
+  end
   local function tick()
     if handle.cancelled or generation ~= self.generation then
-      if done then done(false) end
+      if done then done(false, handle) end
       return
     end
     handle.frames = handle.frames + 1
     local started = self.env.preciseMs()
     repeat
       if index > last then
-        if done then done(true) end
+        account(started)
+        if done then done(true, handle) end
         return
       end
       step(index)
       index = index + 1
     until self.env.preciseMs() - started >= budgetMs
+    account(started)
     self.env.after(0, tick)
   end
   tick()
