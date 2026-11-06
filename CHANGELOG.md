@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ## [0.1.0-alpha.3] - 2026-11-06
 
+Verified in game on the live build 1.60.1.70790: three full scans (about
+158,000 rows, answers after 171–203 s), history and opportunities kept
+across `/reload`.
+
 ### Changed
 
 - Scan reads an AH replica the client already holds (a late answer or a

@@ -1,6 +1,6 @@
 # ForeverGold — status
 
-Updated: 2026-11-06 · version `0.1.0-alpha.3` · **alpha partly tested in game** (live build 1.60.1.70790 from 2026-11-06)
+Updated: 2026-11-06 · version `0.1.0-alpha.3` · **alpha.3 verified in game** on the live build 1.60.1.70790 (scan, history, `/reload`); "Buy all" still untested
 
 ## Current phase
 
@@ -30,7 +30,7 @@ Next gate: a "Buy all" run in game, then the first AH resale once three days
 of price history exist. AH fee (5.00%) and deposit verified on 2026-10-21
 (20 Copper Bars); resale still needs a per-item deposit source.
 
-## TODO — next in-game check (live client 1.60.1.70790)
+## alpha.3 in-game check (live client 1.60.1.70790) — closed
 
 Opened 2026-11-06. Background in `docs/API-AUDIT.md` rows 17–19: on the live
 server the replica answers up to about 3 min late (timeout now 300 s) and
@@ -70,12 +70,14 @@ Checked on 2026-11-06 at 20:28 (API-AUDIT row 21), owner away from the PC:
 - [x] Saved view 1.1 MB (was 2.3), file 4.21 MB (was 5.24).
 - [x] `docs/TESTING-IN-GAME.md` 2.1/2.2 updated.
 
-Still open:
-- [ ] Owner, by eye: the Opportunities tab still lists the same gains after
-      `/reload` (covered offline by a test, not yet seen in game).
-- [ ] `evaluate_finish` grew to 40–45 ms (sorting for the saved view);
-      below the 50 ms threshold, worth a cheaper selection if it grows.
-- [ ] Decide whether alpha.3 is done (owner).
+Closed on 2026-11-06 by the owner:
+- [x] The Opportunities tab lists the same gains after `/reload`.
+- [x] The remaining 50–70 ms frames on the heaviest items are accepted;
+      revisit only if they are noticed while playing.
+- [x] **alpha.3 done.**
+
+Watch list: `evaluate_finish` grew to 40–45 ms (sorting for the saved
+view), still below 50 ms; answer delays reached 203 s of the 300 s timeout.
 
 ## Implemented
 
