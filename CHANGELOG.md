@@ -23,6 +23,14 @@ across `/reload`.
   plus the 50 cheapest per item, instead of every auction of the item: on
   the live server this was 2.3 MB of a 5.2 MB saved file.
 
+### Fixed
+
+- An AH answer arriving after the timeout no longer counts as a silent
+  request too: in game a 327 s answer raised the measured cooldown to
+  31 minutes. Saved data with that error is repaired on load, and the wait
+  never exceeds the longest cooldown already measured (found after the
+  alpha.3 check, before any package was built).
+
 ### Added
 
 - Performance measurement of every scan phase (replica read, history,
