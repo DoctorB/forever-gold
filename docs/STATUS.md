@@ -64,11 +64,18 @@ Checked on 2026-11-06 at 20:01 (API-AUDIT row 20), with grouping chunked
 Changed after that check (not yet seen in game): the saved view keeps only
 the auctions in an opportunity's lots plus the 50 cheapest per item.
 
-Next scan, then `/reload`:
-- [ ] Saved file well below 5 MB (`lastView` was 2.3 MB).
-- [ ] Opportunities still shown after `/reload` with the same gains.
-- [ ] Then update `docs/TESTING-IN-GAME.md` 2.1/2.2 and decide whether
-      alpha.3 is done.
+Checked on 2026-11-06 at 20:28 (API-AUDIT row 21), owner away from the PC:
+- [x] Answered after 203 s (longest so far, still inside 300 s), pipeline
+      completed unattended.
+- [x] Saved view 1.1 MB (was 2.3), file 4.21 MB (was 5.24).
+- [x] `docs/TESTING-IN-GAME.md` 2.1/2.2 updated.
+
+Still open:
+- [ ] Owner, by eye: the Opportunities tab still lists the same gains after
+      `/reload` (covered offline by a test, not yet seen in game).
+- [ ] `evaluate_finish` grew to 40–45 ms (sorting for the saved view);
+      below the 50 ms threshold, worth a cheaper selection if it grows.
+- [ ] Decide whether alpha.3 is done (owner).
 
 ## Implemented
 

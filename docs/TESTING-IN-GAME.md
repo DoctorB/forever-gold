@@ -38,7 +38,13 @@ only build, symbols, events, counts and trace; no seller names).
 | # | Action | Expected result | To record |
 | --- | --- | --- | --- |
 | 2.1 | Open the AH, `/fg scan` | state: requested → receiving → reading → "partial observation (completeness not yet verified)" | total time, rows, keys, units shown in the status bar |
-| 2.2 | During the scan | no noticeable game freeze | FPS before/during (even approximate) |
+| 2.2 | During the scan | no noticeable game freeze | FPS before/during (even approximate); `/reload` then read `diagnostics.timings` (longest frame per phase) |
+
+Live server 1.60.1.70790, 2026-11-06 (API-AUDIT rows 19–21): 2.1 passed
+three times with the AH kept open (answers after 171–203 s, about 158,000
+rows, read in 35 s). 2.2 measured: replica read and grouping stay at most
+11 ms per frame; one or two frames of 50–70 ms remain per scan on the items
+with 3,000–4,500 auctions.
 | 2.3 | `/fg scan` right after | refusal or `no_response`: shows whether a cooldown exists | message and elapsed time |
 | 2.4 | After the scan, `/reload` | every scan saves 8 multi-unit rows and 6 raw item strings with the snapshot | compare 2–3 rows (which I will point out from the file) with the AH window: total or per-unit price? → flag `replicateBuyoutIsTotal` |
 | 2.5 | Search a material by hand in the native AH | the Opportunities tab updates the item (passive observation) | whether the item is a commodity or an individual auction |
