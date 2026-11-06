@@ -76,6 +76,11 @@ Closed on 2026-11-06 by the owner:
       revisit only if they are noticed while playing.
 - [x] **alpha.3 done.**
 
+"Buy all" first try on live (API-AUDIT row 23): safe (nothing spent), but
+13 of 15 searches and quotes got no answer within 10 s. Next, before trying
+again: trace the throttled-message events and each request's answer time,
+and make the search and quote timeouts longer (they were sized on beta).
+
 Watch list: `evaluate_finish` grew to 40–45 ms (sorting for the saved
 view), still below 50 ms; answer delays reached 327 s, past the 300 s
 timeout (read as a late answer; the cooldown error this caused is fixed,
