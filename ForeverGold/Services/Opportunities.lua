@@ -48,19 +48,32 @@ end
 
 -- Applies a finished snapshot: a replicate replaces the whole market view,
 -- an observation replaces one item key.
+-- Ingest in steps: BeginIngest, IngestListing per listing (spread over
+-- frames by the client), FinishIngest applies the result in one go.
+function Opportunities.BeginIngest(snapshot)
+  return { snapshot = snapshot, grouped = {} }
+end
+
+function Opportunities.IngestListing(job, listing)
+  local list = job.grouped[listing.itemKey]
+  if not list then
+    list = {}
+    job.grouped[listing.itemKey] = list
+  end
+  list[#list + 1] = listing
+end
+
 function Opportunities:Ingest(snapshot, listings)
+  local job = Opportunities.BeginIngest(snapshot)
+  for _, listing in ipairs(listings) do Opportunities.IngestListing(job, listing) end
+  self:FinishIngest(job)
+end
+
+function Opportunities:FinishIngest(job)
+  local snapshot, grouped = job.snapshot, job.grouped
   if snapshot.marketKey ~= self.marketKey then
     self.latest = {}
     self.marketKey = snapshot.marketKey
-  end
-  local grouped = {}
-  for _, listing in ipairs(listings) do
-    local list = grouped[listing.itemKey]
-    if not list then
-      list = {}
-      grouped[listing.itemKey] = list
-    end
-    list[#list + 1] = listing
   end
   if snapshot.mode == "replicate" then
     self.latest = {}

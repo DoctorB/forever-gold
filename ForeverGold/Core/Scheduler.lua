@@ -44,10 +44,11 @@ end
 -- frame; continues on the next frame through after(0). done(completed,
 -- handle) is called once, with false when cancelled. Returns a handle with
 -- :Cancel(); it also measures the work: frames, worstMs (longest frame),
--- busyMs (all frames together), steps.
+-- busyMs (all frames together), steps, and the slowest single step
+-- (slowestMs, slowestIndex).
 function Scheduler:Chunk(first, last, budgetMs, step, done)
   local index = first
-  local handle = { cancelled = false, frames = 0, worstMs = 0, busyMs = 0, steps = last - first + 1 }
+  local handle = { cancelled = false, frames = 0, worstMs = 0, busyMs = 0, steps = last - first + 1, slowestMs = 0 }
   local generation = self.generation
   function handle.Cancel() handle.cancelled = true end
   local function account(started)
@@ -62,6 +63,7 @@ function Scheduler:Chunk(first, last, budgetMs, step, done)
     end
     handle.frames = handle.frames + 1
     local started = self.env.preciseMs()
+    local before, nowMs = started, started
     repeat
       if index > last then
         account(started)
@@ -69,8 +71,11 @@ function Scheduler:Chunk(first, last, budgetMs, step, done)
         return
       end
       step(index)
+      nowMs = self.env.preciseMs()
+      if nowMs - before > handle.slowestMs then handle.slowestMs, handle.slowestIndex = nowMs - before, index end
+      before = nowMs
       index = index + 1
-    until self.env.preciseMs() - started >= budgetMs
+    until nowMs - started >= budgetMs
     account(started)
     self.env.after(0, tick)
   end

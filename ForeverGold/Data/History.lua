@@ -25,25 +25,27 @@ end
 -- Recording is split in steps (one item key each) so the client can spread
 -- a large snapshot over several frames; Record runs all steps at once.
 -- snapshot: { id, marketKey, coverage, finished }
--- listings: normalized listings (Schema.NewListing)
+-- listings: normalized listings (Schema.NewListing); optional, the client
+-- adds them one at a time with AddListing to spread a large scan over frames.
 function History:BeginRecord(snapshot, listings)
   local now = snapshot.finished or self.clock()
   local job = {
     snapshot = snapshot, now = now, day = math.floor(now / DAY), byItem = {}, order = {}, updated = 0,
     market = self.store:Market(snapshot.marketKey, true), partial = snapshot.coverage ~= "full_verified",
   }
-  for _, listing in ipairs(listings) do
-    if listing.buyable and listing.marketKey == snapshot.marketKey then
-      local list = job.byItem[listing.itemKey]
-      if not list then
-        list = {}
-        job.byItem[listing.itemKey] = list
-        job.order[#job.order + 1] = listing.itemKey
-      end
-      list[#list + 1] = listing
-    end
-  end
+  for _, listing in ipairs(listings or {}) do History.AddListing(job, listing) end
   return job
+end
+
+function History.AddListing(job, listing)
+  if not listing.buyable or listing.marketKey ~= job.snapshot.marketKey then return end
+  local list = job.byItem[listing.itemKey]
+  if not list then
+    list = {}
+    job.byItem[listing.itemKey] = list
+    job.order[#job.order + 1] = listing.itemKey
+  end
+  list[#list + 1] = listing
 end
 
 function History.RecordStep(job, index)

@@ -50,6 +50,8 @@ function Diagnostics:Timing(phase, fields)
   list[#list + 1] = {
     t = self.clock(), phase = phase, rows = fields.rows, frames = fields.frames,
     worstMs = ms(fields.worstMs), busyMs = ms(fields.busyMs), wall = fields.wall,
+    -- The single slowest step: tells a heavy item from a garbage collection pause.
+    slowestMs = ms(fields.slowestMs), slowestKey = fields.slowestKey, slowestRows = fields.slowestRows,
   }
   while #list > Diagnostics.TIMING_LIMIT do table.remove(list, 1) end
 end
@@ -106,20 +108,35 @@ end
 -- buyout / count is closer to the singles' median price than buyout itself,
 -- "unit" otherwise; unclear stacks (both far, > 50%) do not vote.
 -- listings: normalized listings whose buyoutTotal holds the raw buyout.
+-- Also in steps for large scans: BuyoutVotesBegin, BuyoutVotesAdd per
+-- listing, BuyoutVotesFinish.
 function Diagnostics.BuyoutVotes(listings)
-  local singles, stacks = {}, {}
-  for _, listing in ipairs(listings) do
-    if listing.source == "replicate" and listing.buyoutTotal and listing.complete then
-      local key = listing.itemKey
-      if listing.quantity == 1 then
-        singles[key] = singles[key] or {}
-        table.insert(singles[key], listing.buyoutTotal)
-      else
-        stacks[key] = stacks[key] or {}
-        table.insert(stacks[key], listing)
-      end
+  local tally = Diagnostics.BuyoutVotesBegin()
+  for _, listing in ipairs(listings) do Diagnostics.BuyoutVotesAdd(tally, listing) end
+  return Diagnostics.BuyoutVotesFinish(tally)
+end
+
+function Diagnostics.BuyoutVotesBegin()
+  return { singles = {}, stacks = {} }
+end
+
+function Diagnostics.BuyoutVotesAdd(tally, listing)
+  if listing.source == "replicate" and listing.buyoutTotal and listing.complete then
+    local key = listing.itemKey
+    if listing.quantity == 1 then
+      local list = tally.singles[key] or {}
+      tally.singles[key] = list
+      list[#list + 1] = listing.buyoutTotal
+    else
+      local list = tally.stacks[key] or {}
+      tally.stacks[key] = list
+      list[#list + 1] = listing
     end
   end
+end
+
+function Diagnostics.BuyoutVotesFinish(tally)
+  local singles, stacks = tally.singles, tally.stacks
   local votes = { items = 0, total = 0, unit = 0, unclear = 0 }
   for key, list in pairs(stacks) do
     if singles[key] then

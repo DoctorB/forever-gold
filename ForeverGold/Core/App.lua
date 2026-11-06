@@ -190,38 +190,66 @@ end
 function App:Timed(phase, rows, fn)
   local preciseMs = self.schedulerEnv.preciseMs
   local started = preciseMs()
-  local a, b = fn()
+  local a, b, c = fn()
   local spent = preciseMs() - started
   self.diagnostics:Timing(phase, { rows = rows, frames = 1, worstMs = spent, busyMs = spent })
-  return a, b
+  return a, b, c
 end
 
--- Records a chunked phase from its scheduler handle.
-function App:ChunkTiming(phase, handle, startedAt)
+-- Records a chunked phase from its scheduler handle; describe(index)
+-- returns the key and row count of the slowest step.
+function App:ChunkTiming(phase, handle, startedAt, describe)
+  local slowestKey, slowestRows
+  if describe and handle.slowestIndex then slowestKey, slowestRows = describe(handle.slowestIndex) end
   self.diagnostics:Timing(phase, { rows = handle.steps, frames = handle.frames, worstMs = handle.worstMs,
-    busyMs = handle.busyMs, wall = self.clock() - startedAt })
+    busyMs = handle.busyMs, wall = self.clock() - startedAt, slowestMs = handle.slowestMs,
+    slowestKey = slowestKey, slowestRows = slowestRows })
 end
 
+-- Every pass over the raw listings (about 160,000 on the live server) is
+-- chunked: grouping for history, for the market view and for the buyout
+-- evidence happens in one "group" phase; history then runs per item key.
 function App:Process(snapshot, listings)
   local work, budget = self.work, self.store:Settings().frameBudgetMs
+  local History, Diagnostics = ns.Data.History, ns.Services.Diagnostics
   work:Invalidate()
   self.processing = true
-  local job = self:Timed("history_begin", #listings, function()
-    if snapshot.mode == "replicate" then snapshot.buyoutVotes = ns.Services.Diagnostics.BuyoutVotes(listings) end
-    return self.history:BeginRecord(snapshot, listings)
+  local job, ingest, votes = self:Timed("history_begin", #listings, function()
+    return self.history:BeginRecord(snapshot), ns.Services.Opportunities.BeginIngest(snapshot),
+      snapshot.mode == "replicate" and Diagnostics.BuyoutVotesBegin() or nil
   end)
+  local groupStarted = self.clock()
+  self:Progress("history", 0, #listings, snapshot.mode)
+  work:Chunk(1, #listings, budget, function(index)
+    local listing = listings[index]
+    History.AddListing(job, listing)
+    ns.Services.Opportunities.IngestListing(ingest, listing)
+    if votes then Diagnostics.BuyoutVotesAdd(votes, listing) end
+  end, function(grouped, groupHandle)
+    if not grouped then return end
+    self:ChunkTiming("group", groupHandle, groupStarted)
+    self:RecordHistory(snapshot, job, ingest, votes)
+  end)
+end
+
+function App:RecordHistory(snapshot, job, ingest, votes)
+  local History = ns.Data.History
   local total = #job.order
   local startedAt = self.clock()
   self:Progress("history", 0, total, snapshot.mode)
-  work:Chunk(1, total, budget, function(index)
-    ns.Data.History.RecordStep(job, index)
+  self.work:Chunk(1, total, self.store:Settings().frameBudgetMs, function(index)
+    History.RecordStep(job, index)
     if index % PROGRESS_EVERY == 0 then self:Progress("history", index, total, snapshot.mode) end
   end, function(done, handle)
     if not done then return end
-    self:ChunkTiming("history", handle, startedAt)
-    self:Timed("history_finish", #listings, function()
-      ns.Data.History.FinishRecord(job)
-      self.opportunities:Ingest(snapshot, listings)
+    self:ChunkTiming("history", handle, startedAt, function(index)
+      local key = job.order[index]
+      return key, key and #job.byItem[key] or nil
+    end)
+    self:Timed("history_finish", total, function()
+      if votes then snapshot.buyoutVotes = ns.Services.Diagnostics.BuyoutVotesFinish(votes) end
+      History.FinishRecord(job)
+      self.opportunities:FinishIngest(ingest)
     end)
     self:EvaluateChunked(function()
       -- A user scan is summarised by UI/Feedback; notices are for the rest.
@@ -246,7 +274,11 @@ function App:EvaluateChunked(after, mode)
   end, function(done, handle)
     if not done then return end
     self.processing = false
-    self:ChunkTiming("evaluate", handle, startedAt)
+    self:ChunkTiming("evaluate", handle, startedAt, function(index)
+      local key = job.keys[index]
+      local view = key and opportunities.latest[key]
+      return key, view and #view.listings or nil
+    end)
     local results = self:Timed("evaluate_finish", total, function()
       local finished = opportunities:FinishEvaluate(job)
       self:SaveView()

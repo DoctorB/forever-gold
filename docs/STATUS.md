@@ -32,29 +32,36 @@ of price history exist. AH fee (5.00%) and deposit verified on 2026-10-21
 
 ## TODO — next in-game check (live client 1.60.1.70790)
 
-Opened 2026-11-06. Background in `docs/API-AUDIT.md` rows 17–18: on the live
-server the replica answers up to about 2.5 min late (60 s timeout was too
-short, now 300 s) and scans are about 160,000 rows, 5× the beta. Commits
-`f201d85`, `3be46f4`, `fd28a39` are installed but **not yet verified in game**.
+Opened 2026-11-06. Background in `docs/API-AUDIT.md` rows 17–19: on the live
+server the replica answers up to about 3 min late (timeout now 300 s) and
+scans are about 160,000 rows, 5× the beta.
 
-Owner, in game:
-1. `/reload`, open the AH, press Scan, keep the AH open until "scan finished"
-   (up to 5 min of waiting; at least ~15 min after the last answered scan).
-2. Note the chat lines (requested → arriving / "answered late" → finished in N s).
-3. `/reload` to write `SavedVariables\ForeverGold.lua`.
+The game now runs on the home PC: install to and read SavedVariables from
+`\\ARIANOLOVER\World of Warcraft\_forever_\` (account `DOTTORB`).
 
-Then, from the saved file (`_forever_\WTF\Account\DOTTORB\SavedVariables\ForeverGold.lua`):
-- [ ] `diagnostics.trace`: the request is answered inside the 300 s timeout,
-      or read through `late_answer`; record the answer delay in API-AUDIT.
-- [ ] `diagnostics.timings`: for `replicate_read`, `history`, `evaluate`
-      check `worstMs` (longest frame); for `history_begin`, `history_finish`,
-      `evaluate_begin`, `evaluate_finish` (one-shot blocks) check `busyMs`.
-      Anything above ~50 ms is a visible hitch: split that step into chunks.
-- [ ] Saved file size (3.0 MB after one 160k-row scan) and growth per scan.
-- [ ] Still open: why the very first request (17:27, new character, AH closed
-      after 169 s) got no answer; check whether keeping the AH open is enough.
-- [ ] When verified: update this section, `docs/TESTING-IN-GAME.md` 2.1/2.2
-      and the CHANGELOG, then decide whether alpha.3 is done.
+Checked on 2026-11-06 at 19:24 (API-AUDIT row 19):
+- [x] Request answered inside the timeout: 171 s, AH kept open.
+- [x] Timings read: replica read fine (8 ms longest frame); hitches in
+      grouping before history (214 ms), history finish (83 ms), single history
+      steps (69 ms) and evaluation steps (53 ms).
+- [x] Saved file: 3.37 MB, +287 KB per scan.
+- [x] The first request after login was answered, so a login cooldown is
+      unlikely; the 17:27 silence (AH closed after 169 s, before a late answer
+      could arrive) is most likely just the late answer.
+
+Changed after that check (not yet seen in game): grouping of the raw listings
+runs as a chunked `group` phase, and the history finish no longer re-groups
+the listings; `history` and `evaluate` timings name the slowest step
+(`slowestMs`, `slowestKey`, `slowestRows`).
+
+Next scan, then `/reload`:
+- [ ] `history_begin` and `history_finish` well under 50 ms; `group`
+      `worstMs` near the frame budget.
+- [ ] `history` / `evaluate`: if `slowestMs` is close to `worstMs`, one heavy
+      item key (see `slowestRows`) causes the hitch and needs splitting; if
+      not, it is a garbage collection pause.
+- [ ] Then update `docs/TESTING-IN-GAME.md` 2.1/2.2 and decide whether
+      alpha.3 is done.
 
 ## Implemented
 

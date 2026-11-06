@@ -285,10 +285,14 @@ T.Case("a scan records how long each pipeline phase took", function()
     T.Ok(type(timing.worstMs) == "number" and timing.worstMs >= 0, timing.phase)
     T.Ok(timing.busyMs >= timing.worstMs, timing.phase)
   end
-  for _, phase in ipairs({ "replicate_read", "history_begin", "history", "history_finish",
+  for _, phase in ipairs({ "replicate_read", "history_begin", "group", "history", "history_finish",
     "evaluate_begin", "evaluate", "evaluate_finish" }) do
     T.Ok(seen[phase] ~= nil, "missing " .. phase)
   end
   T.Eq(seen.replicate_read.rows, 3)
   T.Ok(seen.replicate_read.frames >= 1)
+  T.Eq(seen.group.rows, 3, "every raw listing goes through the chunked group phase")
+  T.Ok(seen.history.slowestKey ~= nil and seen.history.slowestRows >= 1, "slowest history step named")
+  T.Ok(seen.evaluate.slowestKey ~= nil, "slowest evaluate step named")
+  T.Ok(app.store.db.markets[app:MarketKey()].snapshots[1].buyoutVotes ~= nil, "buyout evidence still recorded")
 end)

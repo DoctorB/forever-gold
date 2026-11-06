@@ -13,12 +13,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 - The replica request waits up to 5 minutes instead of 60 seconds: on the
   live client the server answered after 148 s. An answer that arrives after
   the add-on gave up is recorded and read automatically while the AH is open.
+- After a scan, grouping the ~160,000 listings is spread over frames: in
+  game it blocked one frame for 214 ms, and saving history another 83 ms.
 
 ### Added
 
 - Performance measurement of every scan phase (replica read, history,
   evaluation): rows, frames, longest frame and total time, saved in
-  `ForeverGoldDB.diagnostics.timings`.
+  `ForeverGoldDB.diagnostics.timings`, with the slowest single step and its
+  item key.
 
 ## [0.1.0-alpha.2] - 2026-10-20
 
