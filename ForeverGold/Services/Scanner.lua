@@ -64,6 +64,7 @@ function Scanner.New(deps, opts)
   self.marketKey, self.build, self.trace, self.timing = deps.marketKey, deps.build, deps.trace, deps.timing
   self.memory = deps.memory or {}
   self.memory.observations = self.memory.observations or {}
+  Scanner.RepairMemory(self.memory)
   self.opts = {}
   for key, value in pairs(Scanner.DEFAULTS) do self.opts[key] = value end
   for key, value in pairs(opts or {}) do self.opts[key] = value end
@@ -162,19 +163,58 @@ local attempt, beginNormalize
 -- longer than X (lowerBound); an answered one at +Y proves it is at most Y
 -- (upperBound). After a silent request the next one waits silentPause, so
 -- the server is not hammered and each attempt narrows the measurement.
+-- A late answer (after the timeout) turns the request's silent observation
+-- into an answered one and withdraws the lower bound it had raised: live
+-- 70790 (2026-11-06) answered after 327 s, and the wrong bound (1,854 s,
+-- above the 938 s upper bound) made the next scan wait 31 minutes.
 local function observe(self, answered, requestedAt)
   local memory = self.memory
+  local list = memory.observations
+  if answered then
+    for _, entry in ipairs(list) do
+      if entry.t == requestedAt and not entry.answered then
+        entry.answered, entry.late = true, true
+        if memory.lowerBound == entry.since then memory.lowerBound = entry.prevLower end
+        local since = entry.since
+        if since and (not memory.upperBound or since < memory.upperBound) then memory.upperBound = since end
+        memory.lastSuccess = requestedAt
+        return
+      end
+    end
+  end
   local since = memory.lastSuccess and (requestedAt - memory.lastSuccess) or nil
+  local entry = { t = requestedAt, answered = answered, since = since }
   if answered then
     if since and (not memory.upperBound or since < memory.upperBound) then memory.upperBound = since end
     memory.lastSuccess = requestedAt
   else
     memory.lastSilent = requestedAt
+    entry.prevLower = memory.lowerBound
     if since and (not memory.lowerBound or since > memory.lowerBound) then memory.lowerBound = since end
   end
-  local list = memory.observations
-  list[#list + 1] = { t = requestedAt, answered = answered, since = since }
+  list[#list + 1] = entry
   while #list > 20 do table.remove(list, 1) end
+end
+
+-- Saved data from 0.1.0-alpha.3 can hold a request recorded twice, silent
+-- then answered late, with the silent one's bound still applied: drop the
+-- silent twin and rebuild the lower bound from the remaining silences.
+function Scanner.RepairMemory(memory)
+  local list = memory.observations or {}
+  local answeredAt, kept, dropped = {}, {}, false
+  for _, entry in ipairs(list) do
+    if entry.answered then answeredAt[entry.t] = true end
+  end
+  for _, entry in ipairs(list) do
+    if not entry.answered and answeredAt[entry.t] then dropped = true else kept[#kept + 1] = entry end
+  end
+  if not dropped then return false end
+  local lower = memory.seed and Scanner.MEASURED.lowerBound or nil
+  for _, entry in ipairs(kept) do
+    if not entry.answered and entry.since and (not lower or entry.since > lower) then lower = entry.since end
+  end
+  memory.observations, memory.lowerBound = kept, lower
+  return true
 end
 
 -- { lastSuccess, lowerBound, upperBound, remaining, kind } at time now.
@@ -185,7 +225,10 @@ function Scanner:Cooldown(now)
   local info = { lastSuccess = memory.lastSuccess, lowerBound = memory.lowerBound, upperBound = memory.upperBound, remaining = 0 }
   now = now or self.clock()
   if memory.lastSuccess and memory.lowerBound then
-    local left = memory.lastSuccess + memory.lowerBound - now
+    -- An answer at +upperBound proves the cooldown is never longer.
+    local bound = memory.lowerBound
+    if memory.upperBound and memory.upperBound < bound then bound = memory.upperBound end
+    local left = memory.lastSuccess + bound - now
     if left > 0 then info.remaining, info.kind = left, "measured" end
   end
   if memory.lastSilent and (not memory.lastSuccess or memory.lastSilent > memory.lastSuccess) then

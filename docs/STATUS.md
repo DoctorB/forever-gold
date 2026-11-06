@@ -77,7 +77,9 @@ Closed on 2026-11-06 by the owner:
 - [x] **alpha.3 done.**
 
 Watch list: `evaluate_finish` grew to 40–45 ms (sorting for the saved
-view), still below 50 ms; answer delays reached 203 s of the 300 s timeout.
+view), still below 50 ms; answer delays reached 327 s, past the 300 s
+timeout (read as a late answer; the cooldown error this caused is fixed,
+API-AUDIT row 22).
 
 ## Implemented
 

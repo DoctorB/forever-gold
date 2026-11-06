@@ -427,6 +427,58 @@ T.Case("an answer after the timeout is recorded and read automatically", functio
   T.Eq(#s.snapshots, 1)
 end)
 
+T.Case("a late answer withdraws the silence it was first recorded as", function()
+  local s = setup(rows(3))
+  s.scanner.memory.lowerBound, s.scanner.memory.upperBound = 867, 938
+  s.event("AUCTION_HOUSE_SHOW")
+  s.scanner:Start()
+  s.deliver()
+  s.clock.advance(30)
+  s.ah.delivered = false
+  s.clock.advance(1824) -- live 70790: next request 1,854 s after the last answer
+  T.Ok(s.scanner:Start())
+  local requested = s.clock.now()
+  s.clock.advance(s.scanner.opts.timeout + 1)
+  T.Eq(s.scanner.memory.lowerBound, 1854, "silent for now")
+  s.clock.advance(26) -- answered 327 s after the request
+  s.ah.rows = rows(4) -- a new replica (the same size counts as already read)
+  s.deliver(5)
+  s.clock.advance(60)
+  local memory = s.scanner.memory
+  T.Eq(memory.lowerBound, 867, "the late answer withdraws the silent bound")
+  T.Eq(memory.lastSuccess, requested)
+  local twins = 0
+  for _, entry in ipairs(memory.observations) do if entry.t == requested then twins = twins + 1 end end
+  T.Eq(twins, 1, "one observation per request")
+  T.Eq(#s.snapshots, 2)
+  -- Next scan: waits the 867 s lower bound from the late-answered request.
+  T.Eq(s.scanner:Cooldown().remaining, requested + 867 - s.clock.now())
+end)
+
+T.Case("saved memory with a silent twin of a late answer is repaired on load", function()
+  -- Shape found in game on 2026-11-06 (19:55:03 request answered at +327 s).
+  local memory = {
+    seed = "2026-10-20 build 70450", lowerBound = 1854, upperBound = 938, lastSuccess = 5000, lastSilent = 1000,
+    observations = {
+      { t = 100, answered = true },
+      { t = 1000, answered = false, since = 900 },
+      { t = 1000, answered = true, since = 900 },
+      { t = 5000, answered = true, since = 4000 },
+    },
+  }
+  local s = setup(rows(1))
+  local repaired = Scanner.New({
+    adapter = s.adapter, scheduler = s.scheduler, clock = s.clock.now, bus = s.bus, memory = memory,
+    marketKey = function() return "m" end, build = function() return "1.60.1" end,
+  })
+  T.Eq(#memory.observations, 3)
+  T.Eq(memory.lowerBound, 867, "back to the measured seed")
+  T.Ok(repaired ~= nil)
+  -- Even an inconsistent bound never waits beyond the proven upper bound.
+  memory.lowerBound = 5000
+  T.Ok(repaired:Cooldown(5000).remaining <= 938)
+end)
+
 T.Case("a late answer with the AH closed is left for the next scan", function()
   local s = setup(rows(4))
   s.event("AUCTION_HOUSE_SHOW")
