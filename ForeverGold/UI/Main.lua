@@ -99,7 +99,7 @@ end
 function Main.Hint(app, results, visible)
   if results and results.demo then return L("HINT_DEMO") end
   if app and app.batch and app.batch.active then return L("HINT_BATCH") end
-  local wait = app and app.scanner and app.scanner:Cooldown().remaining or 0
+  local wait = app and app.scanner and app.scanner:Wait() or 0
   if not results or results.counts.itemKeys == 0 then
     if wait > 0 then return string.format(L("HINT_WAIT"), Main.Wait(wait)) end
     return L("HINT_SCAN")
@@ -187,7 +187,7 @@ function Main.UpdateProgress()
   else
     frame.progressBar:Hide()
   end
-  local wait = (not active and app and app.scanner) and app.scanner:Cooldown().remaining or 0
+  local wait = (not active and app and app.scanner) and app.scanner:Wait() or 0
   frame.scanButton:SetEnabled(not active and wait <= 0)
   if active then
     frame.scanButton:SetText(L("BTN_SCANNING"))

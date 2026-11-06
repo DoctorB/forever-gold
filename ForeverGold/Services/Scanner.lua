@@ -149,7 +149,7 @@ end
 
 -- Replicate --------------------------------------------------------------
 
-local attempt
+local attempt, beginNormalize
 
 -- Replicate cooldown, measured instead of assumed. Relative to the last
 -- request that got an answer: a silent request at +X proves the cooldown is
@@ -224,6 +224,25 @@ attempt = function(self, task)
   end)
 end
 
+-- Row count of a replica already held by the client that this session has
+-- not read yet (an answer that came after our timeout, or a request made
+-- outside the add-on), or nil. Seen in game 2026-11-06 (build 70790): after
+-- a manual ReplicateItems the client kept 86,016 rows the add-on ignored.
+-- A replica we already read keeps its row count, so it is not read again.
+function Scanner:ClientReplica()
+  if self:IsActive() or not self.adapter:IsOpen() then return nil end
+  if not self.adapter:GetCapabilities().replicate then return nil end
+  local count = self.adapter:NumReplicate()
+  if not count or count <= 0 or count == self.lastReadCount then return nil end
+  return count
+end
+
+-- Seconds before the scan button can do anything useful.
+function Scanner:Wait()
+  if self:ClientReplica() then return 0 end
+  return self:Cooldown().remaining
+end
+
 -- request: { mode = "replicate" }. Returns ok, reason (, seconds left).
 function Scanner:Start(request)
   request = request or { mode = "replicate" }
@@ -231,6 +250,18 @@ function Scanner:Start(request)
   if not self.adapter:IsOpen() then return false, "ah_closed" end
   if request.mode ~= "replicate" then return false, "unsupported_mode" end
   if not self.adapter:GetCapabilities().replicate then return false, "unsupported" end
+  if self:ClientReplica() then
+    -- Read what the client already holds: no server request, no cooldown
+    -- spent. Its age is unknown, so the snapshot says where it came from.
+    self.scheduler:Invalidate()
+    local task = { mode = "replicate", attempts = 0, updates = 0, lateUpdates = 0, rounds = 0, byIndex = {}, client = true }
+    self.task = task
+    self.snapshot = newSnapshot(self, "replicate", "all")
+    self.snapshot.origin = "client_replica"
+    setState(self, "RECEIVING", "client_replica")
+    beginNormalize(self, task)
+    return true
+  end
   local cooldown = self:Cooldown()
   if cooldown.remaining > 0 then return false, "cooldown", cooldown.remaining, cooldown.kind end
   self.scheduler:Invalidate()
@@ -302,7 +333,7 @@ local function readIndexes(self, task, indexes, done)
   end, done)
 end
 
-local function beginNormalize(self, task)
+beginNormalize = function(self, task)
   if not current(self, task) then return end
   setState(self, "NORMALIZING")
   local count = self.adapter:NumReplicate()
@@ -310,6 +341,7 @@ local function beginNormalize(self, task)
     fail(self, task, "count_unavailable")
     return
   end
+  self.lastReadCount = count
   local base = self.adapter:DetectIndexBase(count)
   local snapshot = self.snapshot
   snapshot.indexBase, snapshot.counts.rows = base, count

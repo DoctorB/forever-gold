@@ -11,8 +11,8 @@ reliability and constraints. **It never buys on its own**: the optional
 assisted purchase needs your click for every single purchase. It never
 posts or cancels auctions.
 
-> Status: `0.1.0-alpha.2`, alpha partly tested in game on the beta build 1.60.1.70450,
-> not yet on the live client
+> Status: `0.1.0-alpha.3`, alpha partly tested in game on the beta build 1.60.1.70450,
+> first scan checks on the live client 1.60.1.70790 in progress
 > (persistence, full scan, auction prices, vendor prices, assisted purchases
 > of commodities and individual auctions). What is verified, and how, is in
 > [`docs/API-AUDIT.md`](docs/API-AUDIT.md).

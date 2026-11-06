@@ -1,6 +1,6 @@
 # ForeverGold — status
 
-Updated: 2026-10-20 · version `0.1.0-alpha.2` · **alpha partly tested in game**
+Updated: 2026-11-06 · version `0.1.0-alpha.3` · **alpha partly tested in game** (live build 1.60.1.70790 from 2026-11-06)
 
 ## Current phase
 

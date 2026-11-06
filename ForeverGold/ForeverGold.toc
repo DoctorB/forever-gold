@@ -4,7 +4,7 @@
 ## Notes: Auction House analysis for WoW Forever: vendor and resale opportunities with costs, depth, prudent scenarios and confidence reasons. Optional assisted buying, one click per purchase.
 ## Notes-itIT: Analisi della casa d'aste per WoW Forever: opportunità vendor e rivendita con costi, profondità, scenari prudenti e motivi della confidenza. Acquisto assistito opzionale, un clic per acquisto.
 ## Author: DoctorB
-## Version: 0.1.0-alpha.2
+## Version: 0.1.0-alpha.3
 ## SavedVariables: ForeverGoldDB
 ## X-License: MIT
 

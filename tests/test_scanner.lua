@@ -369,3 +369,37 @@ T.Case("the user's own searches are observed while the replicate waits", functio
   T.Eq(s.snapshots[1].snapshot.mode, "observed_search")
   T.Eq(s.scanner.state, "REQUESTED", "replicate still waiting")
 end)
+
+T.Case("replica already in the client is read without a server request", function()
+  local s = setup(rows(12))
+  s.ah.delivered = true -- answered to a request made outside the add-on
+  s.scanner.memory.lastSilent = s.clock.now() - 10 -- inside the silent pause
+  s.event("AUCTION_HOUSE_SHOW")
+  T.Eq(s.scanner:Wait(), 0)
+  T.Ok(s.scanner:Start())
+  T.Eq(s.ah.replicateCalls, 0)
+  T.Eq(s.states[1], "RECEIVING:client_replica")
+  s.clock.advance(30)
+  T.Eq(#s.snapshots, 1)
+  T.Eq(s.snapshots[1].snapshot.origin, "client_replica")
+  T.Eq(#s.snapshots[1].listings, 12)
+  -- The same replica is not read twice: the next press asks the server.
+  T.Ok(s.scanner:Wait() > 0)
+  T.Eq(select(2, s.scanner:Start()), "cooldown")
+  s.scanner.memory.lastSilent = nil
+  T.Ok(s.scanner:Start())
+  T.Eq(s.ah.replicateCalls, 1)
+end)
+
+T.Case("a new client replica with a different size is read again", function()
+  local s = setup(rows(5))
+  s.ah.delivered = true
+  s.event("AUCTION_HOUSE_SHOW")
+  s.scanner:Start()
+  s.clock.advance(30)
+  T.Eq(s.scanner:ClientReplica(), nil)
+  s.ah.rows = rows(7)
+  T.Eq(s.scanner:ClientReplica(), 7)
+  s.event("AUCTION_HOUSE_CLOSED")
+  T.Eq(s.scanner:ClientReplica(), nil)
+end)

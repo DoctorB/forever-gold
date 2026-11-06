@@ -2,6 +2,15 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer versions.
 
+## [0.1.0-alpha.3] - 2026-11-06
+
+### Changed
+
+- Scan reads an AH replica the client already holds (a late answer or a
+  request made outside the add-on) without a new server request; the scan
+  button is enabled for it even during the cooldown. A replica already read
+  is not read again.
+
 ## [0.1.0-alpha.2] - 2026-10-20
 
 In-game verification on build 1.60.1.70450 and first assisted purchases.
