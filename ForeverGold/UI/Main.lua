@@ -257,7 +257,10 @@ function Main.ApplyView()
   home:ClearAllPoints()
   home:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, advanced and -74 or -32)
   home:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 22)
-  frame.viewButton:SetText(L(advanced and "BTN_SIMPLE" or "BTN_ADVANCED"))
+  -- In the advanced view the "To do" tab leads back; the button would
+  -- cover the last tab (seen in game 2026-11-08).
+  if advanced then frame.viewButton:Hide() else frame.viewButton:Show() end
+  frame.viewButton:SetText(L("BTN_ADVANCED"))
   if not advanced then Main.tab = "home" end
 end
 
@@ -581,7 +584,10 @@ function Main.Ensure()
   frame.tabs, frame.panels = {}, {}
   local previous
   for _, name in ipairs(Main.TABS) do
-    local tab = W.Button(frame, L("TAB_" .. name), 120, function() Main.SelectTab(name) end)
+    -- 7 tabs fit the minimum width (820). "To do" goes back to the simple view.
+    local tab = W.Button(frame, L("TAB_" .. name), 108, function()
+      if name == "home" then Main.SetAdvanced(false) else Main.SelectTab(name) end
+    end)
     if previous then
       tab:SetPoint("LEFT", previous, "RIGHT", 4, 0)
     else

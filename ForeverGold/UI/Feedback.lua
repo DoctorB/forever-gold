@@ -79,9 +79,7 @@ function Feedback.StateLine(app, state, reason, snapshot)
   elseif state == "COMPLETE" or state == "PARTIAL" then
     local c = snapshot.counts
     local seconds = (snapshot.finished or 0) - (snapshot.started or 0)
-    local line = string.format(L("FB_DONE"), seconds, c.itemKeys, c.valid, c.units)
-    if state == "PARTIAL" then line = line .. " " .. L("STATE_PARTIAL") .. ": " .. reasonText(reason) end
-    return line
+    return string.format(L("FB_DONE"), seconds, c.itemKeys, c.valid, c.units)
   elseif state == "FAILED" and reason == "no_response" then
     return string.format(L("FB_NO_RESPONSE"), app.scanner.opts.timeout, Feedback.CooldownText(app))
   elseif state == "FAILED" then

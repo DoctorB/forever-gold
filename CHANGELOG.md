@@ -118,6 +118,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- "To do" screen: the Advanced button no longer covers the gold line or the
+  last tab (in the advanced view the "To do" tab leads back); gains of the
+  recipes to learn are no longer cut.
+- Chat lines in plain words: no more "new attempt 2 of 1", item keys or
+  rows after a scan.
 - AH deposit rounded down like the server (merchant price 306, 24 h: 183,
   not 184); quotes already checked are compared again.
 - A purchase found gone was cleared by a late duplicate answer of the

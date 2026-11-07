@@ -197,7 +197,8 @@ local function newRow(panel, withButton)
   else
     row.gain:SetPoint("RIGHT", row, "RIGHT", -142, 0)
   end
-  row.gain:SetWidth(90)
+  -- "+63s 9c a batch" was cut at 90 px.
+  row.gain:SetWidth(withButton and 90 or 170)
   row.text:SetPoint("RIGHT", row.gain, "LEFT", -8, 0)
   row:SetScript("OnEnter", function() showTip(row, row.tip) end)
   row:SetScript("OnLeave", hideTip)
@@ -209,7 +210,8 @@ function Home.Build(panel)
   panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
   panel.title:SetText(L("HOME_TITLE"))
   panel.money = W.Text(panel, "GameFontNormal", "RIGHT")
-  panel.money:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -2)
+  -- Left of the "Advanced" button (UI/Main.lua), which covered it in game.
+  panel.money:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -124, -2)
   panel.fresh = W.Text(panel, "GameFontHighlightSmall")
   panel.fresh:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -22)
   panel.fresh:SetPoint("RIGHT", panel, "RIGHT", -150, 0)

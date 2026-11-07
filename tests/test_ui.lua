@@ -121,8 +121,8 @@ T.Case("scan with the window closed: a few chat lines tell what happens", functi
     clock.advance(60)
     local text = table.concat(ns.printed, "\n", before + 1)
     T.Ok(text:find(string.format(ns.L.FB_READING, 1), 1, true) ~= nil, "reading rows")
-    T.Ok(text:find("1 item keys, 1 rows, 20 units", 1, true) ~= nil, "outcome with counts: " .. text)
-    T.Ok(text:find("analysis done: 1 opportunities", 1, true) ~= nil, "analysis")
+    T.Ok(text:find("AH prices read in", 1, true) ~= nil, "plain outcome: " .. text)
+    T.Ok(text:find("1 offers found", 1, true) ~= nil, "analysis")
     T.Ok(#ns.printed - before <= 8, "few lines, got " .. (#ns.printed - before))
   end)
 end)
@@ -385,7 +385,7 @@ T.Case("one analysis summary in chat, with the count after item data arrives", f
     local function summaries()
       local n, last = 0, nil
       for _, line in ipairs(ns.printed) do
-        if line:find("analysis done", 1, true) then n, last = n + 1, line end
+        if line:find("offers found", 1, true) then n, last = n + 1, line end
       end
       return n, last
     end
@@ -395,7 +395,7 @@ T.Case("one analysis summary in chat, with the count after item data arrives", f
     clock.advance(10)
     local n, last = summaries()
     T.Eq(n, 1)
-    T.Ok(last:find("analysis done: 1 opportunities", 1, true) ~= nil, last)
+    T.Ok(last:find("1 offers found", 1, true) ~= nil, last)
   end)
 end)
 
@@ -498,10 +498,12 @@ T.Case("the window opens on the simple 'To do' screen; Advanced shows the tabs",
     T.Ok(home.empty:GetText():find("Open the auction house", 1, true), home.empty:GetText())
     frame.viewButton.scripts.OnClick()
     T.Ok(frame.tabs.opportunities:IsShown(), "tabs in the advanced view")
+    T.NotOk(frame.viewButton:IsShown(), "no button over the last tab")
     T.Eq(ns.app.store:Settings().advancedView, true, "remembered")
-    for _, tab in ipairs(Main.TABS) do Main.SelectTab(tab) end
-    frame.viewButton.scripts.OnClick()
+    for _, tab in ipairs(Main.TABS) do if tab ~= "home" then Main.SelectTab(tab) end end
+    frame.tabs.home.scripts.OnClick()
     T.Eq(Main.tab, "home")
-    T.NotOk(frame.tabs.history:IsShown())
+    T.NotOk(frame.tabs.history:IsShown(), "the To do tab goes back to the simple view")
+    T.Ok(frame.viewButton:IsShown())
   end)
 end)
