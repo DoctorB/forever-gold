@@ -96,6 +96,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Professions per character: skill and known recipes are kept for each
+  character (`characters["Name-Realm"]`), the recipe lists stay shared by
+  the account. In game a Rogue saw the Warrior's Blacksmithing recipes as
+  known, and its Cooking and First Aid replaced the Warrior's. Lists saved
+  before go to the character that has that profession at the same skill
+  (`GetProfessions`); the others come back when their window is opened.
+- Merchant trace: unchanged reads are traced once a minute (the client
+  repeats MERCHANT_UPDATE every few seconds while the window is open).
 - Deposit of stackable items that are not commodities: one auction per
   stack, not per unit. In game 20 Copper Rods were charged twenty minimum
   deposits and every Blacksmithing recipe left the Crafting tab.

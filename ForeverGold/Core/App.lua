@@ -41,7 +41,6 @@ function App:Load(saved)
   end)
   self.professions = ns.Compat.Professions.New(self.client)
   self.merchant = ns.Compat.Merchant.New(self.client)
-  ns.Data.Recipes.Load(self.store.db.recipes)
   -- The first probe (32108fc) saved a report named "unknown" when called
   -- with no window open; it held the previous window's recipes.
   local professions = self.store.db.diagnostics and self.store.db.diagnostics.professions
@@ -51,6 +50,7 @@ function App:Load(saved)
   self.diagnostics = ns.Services.Diagnostics.New({
     client = self.client, capabilities = self.capabilities, store = self.store, clock = clock, events = self.events,
   })
+  self:LoadRecipes() -- after diagnostics: a migration is traced
   local settings = self.store:Settings()
   self.scanner = ns.Services.Scanner.New({
     adapter = self.ah, scheduler = self.scheduler, clock = clock, bus = self.bus,
@@ -410,17 +410,103 @@ function App:ObserveProfession()
   local db = self.store.db
   db.recipes = db.recipes or {}
   local previous = db.recipes[report.name]
-  local changed = not previous or App.CatalogueSignature(previous.list) ~= App.CatalogueSignature(catalogue)
+  local owned = self:CharacterProfessions()
+  local mine = owned and owned[report.name]
+  local changed
+  if owned then
+    changed = not previous or not mine
+      or App.CatalogueSignature(previous.list, mine.learned) ~= App.CatalogueSignature(catalogue)
+  else
+    changed = not previous or App.CatalogueSignature(previous.list) ~= App.CatalogueSignature(catalogue)
+  end
+  local now = self.clock()
   db.recipes[report.name] = {
-    at = self.clock(), build = self.client:BuildInfo().build, skill = report.skill, maxSkill = report.maxSkill,
+    at = now, build = self.client:BuildInfo().build, skill = report.skill, maxSkill = report.maxSkill,
     list = catalogue,
   }
+  if owned then
+    owned[report.name] = { at = now, skill = report.skill, maxSkill = report.maxSkill,
+      learned = App.LearnedSet(catalogue) }
+  end
   -- Prices only change with a scan: re-price only when the recipes did.
   if changed then
-    ns.Data.Recipes.Load(db.recipes)
+    self:LoadRecipes()
     self:EvaluateCrafting()
   end
   return report, changed
+end
+
+-- Professions are per character, the account's SavedVariables are shared:
+-- in game a Rogue saw the Warrior's Blacksmithing recipes as known, and its
+-- own Cooking and First Aid replaced the Warrior's. The recipe lists stay
+-- shared (reagents and products do not depend on who crafts); skill and
+-- learned recipes live in ForeverGoldDB.characters["Name-Realm"].professions.
+function App:CharacterKey()
+  local ok, name = self.client:Call(nil, "UnitName", "player")
+  if not ok or self.client:IsSecret(name) or type(name) ~= "string" or name == "" then return nil end
+  return name .. "-" .. (self.client:MarketFields().realm or "?")
+end
+
+-- The current character's professions record, or nil when the character is
+-- not known yet (then the saved lists load as they are).
+function App:CharacterProfessions()
+  if self.character then return self.character.professions end
+  local key = self:CharacterKey()
+  if not key then return nil end
+  local db = self.store.db
+  db.characters = db.characters or {}
+  local record = db.characters[key] or {}
+  db.characters[key] = record
+  record.professions = record.professions or {}
+  if not record.migrated then
+    self:MigrateRecipes(record)
+    record.migrated = true
+  end
+  self.characterKey, self.character = key, record
+  return record.professions
+end
+
+-- Lists saved before the per-character record had no owner. A list is given
+-- to this character when it has that profession (GetProfessions) at the
+-- same skill and no other character claimed the same observation; the
+-- others wait for the profession window to be opened again.
+function App:MigrateRecipes(record)
+  local c, db = self.client, self.store.db
+  local result = { c:Call(nil, "GetProfessions") }
+  if result[1] ~= true then return 0 end
+  local moved = 0
+  for position = 2, table.maxn(result) do
+    local index = result[position]
+    if type(index) == "number" then
+      local ok, name, _, skill, maxSkill = c:Call(nil, "GetProfessionInfo", index)
+      local entry = ok and type(name) == "string" and db.recipes and db.recipes[name]
+      if entry and type(entry.list) == "table" and entry.skill == skill and not record.professions[name] then
+        local claimed = false
+        for _, other in pairs(db.characters or {}) do
+          local theirs = other ~= record and other.professions and other.professions[name]
+          if theirs and theirs.at == entry.at then claimed = true end
+        end
+        if not claimed then
+          record.professions[name] = { at = entry.at, skill = skill, maxSkill = maxSkill or entry.maxSkill,
+            learned = App.LearnedSet(entry.list) }
+          moved = moved + 1
+        end
+      end
+    end
+  end
+  self.diagnostics:Trace("recipes_migrated", { professions = moved })
+  return moved
+end
+
+function App:LoadRecipes()
+  return ns.Data.Recipes.Load(self.store.db.recipes, self:CharacterProfessions())
+end
+
+-- { [recipeID] = true } for the learned recipes of a list.
+function App.LearnedSet(list)
+  local set = {}
+  for _, recipe in ipairs(list or {}) do if recipe.learned then set[recipe.id] = true end end
+  return set
 end
 
 -- Merchant prices (Compat/Merchant), kept in ForeverGoldDB.merchant.prices
@@ -467,7 +553,12 @@ function App:ObserveMerchant()
     at = now, build = self.client:BuildInfo().build, rows = report.rows, priced = total, changed = changed,
     skipped = report.skipped, symbols = report.symbols, samples = report.samples,
   }
-  self.diagnostics:Trace("merchant", { rows = report.rows, priced = total, changed = changed })
+  -- In game MERCHANT_UPDATE repeats every few seconds while the window is
+  -- open (15 identical traces in 45 s): unchanged reads are traced once a minute.
+  if changed > 0 or now - (self.merchantTracedAt or -math.huge) >= 60 then
+    self.merchantTracedAt = now
+    self.diagnostics:Trace("merchant", { rows = report.rows, priced = total, changed = changed })
+  end
   if changed > 0 then self:EvaluateCrafting() end
   return changed
 end
@@ -477,12 +568,22 @@ end
 -- Returns true when the recipe was in a catalogue.
 function App:OnRecipeLearned(recipeID)
   self.diagnostics:Trace("recipe_learned", { recipeID = recipeID })
-  for _, entry in pairs(self.store.db.recipes or {}) do
+  local owned = self:CharacterProfessions()
+  for name, entry in pairs(self.store.db.recipes or {}) do
     for _, recipe in ipairs(entry.list or {}) do
       if recipe.id == recipeID then
-        if recipe.learned then return true end
-        recipe.learned = true
-        ns.Data.Recipes.Load(self.store.db.recipes)
+        if owned then
+          local mine = owned[name]
+          -- A profession this character has not shown yet: the window adds it.
+          if not mine then return true end
+          mine.learned = mine.learned or {}
+          if mine.learned[recipeID] then return true end
+          mine.learned[recipeID] = true
+        else
+          if recipe.learned then return true end
+          recipe.learned = true
+        end
+        self:LoadRecipes()
         self:EvaluateCrafting()
         return true
       end
@@ -512,9 +613,14 @@ function App:CraftingAfterBags()
 end
 
 -- Recipes and which of them are learned, as one comparable string.
-function App.CatalogueSignature(list)
+-- `learned` (a LearnedSet) replaces the flags saved in the list.
+function App.CatalogueSignature(list, learned)
   local parts = {}
-  for _, recipe in ipairs(list or {}) do parts[#parts + 1] = tostring(recipe.id) .. (recipe.learned and "+" or "-") end
+  for _, recipe in ipairs(list or {}) do
+    local known
+    if learned then known = learned[recipe.id] == true else known = recipe.learned end
+    parts[#parts + 1] = tostring(recipe.id) .. (known and "+" or "-")
+  end
   table.sort(parts)
   return table.concat(parts, ",")
 end
@@ -526,6 +632,8 @@ App.CRAFTING_KEEP = 10 -- rows per list kept in diagnostics
 
 function App:EvaluateCrafting()
   local results = self.opportunities.results
+  -- The character may be known only after login: bind it before pricing.
+  if not self.character and self:CharacterProfessions() then self:LoadRecipes() end
   if not results or results.demo or ns.Data.Recipes.status ~= "observed" then return false end
   local work = self.craftWork
   work:Invalidate()

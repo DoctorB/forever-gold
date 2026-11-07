@@ -26,13 +26,30 @@ end
 
 -- Rebuilds the registry from the saved observations:
 -- saved[profession] = { at, build, skill, maxSkill, list = { recipe, ... } }.
-function Recipes.Load(saved)
+-- The recipe lists are shared by the account's characters; `owned` is the
+-- current character's own record, owned[profession] = { at, skill, maxSkill,
+-- learned = { [recipeID] = true } }: only its professions are loaded, with
+-- its skill and its learned recipes. Without `owned` (character unknown)
+-- every list is loaded with the flags it was saved with.
+function Recipes.Load(saved, owned)
   Recipes.Clear()
   for name, entry in pairs(type(saved) == "table" and saved or {}) do
-    if type(entry) == "table" and type(entry.list) == "table" then
-      Recipes.professions[name] = { at = entry.at, skill = entry.skill, maxSkill = entry.maxSkill, count = #entry.list }
-      for _, recipe in ipairs(entry.list) do Recipes.Add(recipe) end
-      if not Recipes.observedAt or (entry.at or 0) > Recipes.observedAt then Recipes.observedAt = entry.at end
+    local mine = type(owned) == "table" and owned[name] or nil
+    if type(entry) == "table" and type(entry.list) == "table" and (owned == nil or type(mine) == "table") then
+      local source = mine or entry
+      Recipes.professions[name] = { at = source.at, skill = source.skill, maxSkill = source.maxSkill, count = #entry.list }
+      local learned = mine and type(mine.learned) == "table" and mine.learned or {}
+      for _, recipe in ipairs(entry.list) do
+        if mine then
+          local copy = {}
+          for key, value in pairs(recipe) do copy[key] = value end
+          copy.learned = learned[recipe.id] == true
+          Recipes.Add(copy)
+        else
+          Recipes.Add(recipe)
+        end
+      end
+      if not Recipes.observedAt or (source.at or 0) > Recipes.observedAt then Recipes.observedAt = source.at end
     end
   end
   return Recipes.status == "observed"

@@ -177,6 +177,9 @@ deposit quotes (8/8 at the minimum), Crafting tab, owned reagents, price
 chart seen working; per-unit deposit of stackable items fixed (D51); bag
 tooltips, bag refresh and "Buy all" not checked ("Buy all" waits: no gold
 to invest for now).
+Second look 2026-11-07 17:39-17:57 with a Rogue (API-AUDIT row 28):
+auto-scan answered, 25 deposit quotes all at the minimum; professions were
+shared by the account's characters, fixed per character (D52).
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 

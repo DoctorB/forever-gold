@@ -281,7 +281,7 @@ local CRAFT_RECIPES = {
   { id = 4, name = "Rare Bar", learned = false, reagents = { { 999, 1 } }, output = { 301, 1 } },
 }
 
-local function craftingApp(bags)
+local function craftingApp(bags, extra, saved)
   local trade = {
     GetBaseProfessionInfo = function() return { professionName = "Mining", skillLevel = 23, maxSkillLevel = 75 } end,
     GetAllRecipeIDs = function() return { 1, 2, 3, 4 } end,
@@ -301,7 +301,9 @@ local function craftingApp(bags)
   }
   local rows = { { itemID = 102, count = 10, buyout = 300 }, { itemID = 301, count = 1, buyout = 200 },
     { itemID = 301, count = 1, buyout = 210 }, { itemID = 301, count = 1, buyout = 220 } }
-  local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = { C_TradeSkillUI = trade }, bags = bags })
+  local globals = { C_TradeSkillUI = trade }
+  for key, value in pairs(extra or {}) do globals[key] = value end
+  local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = globals, bags = bags, saved = saved })
   ah.commodityItems[102] = true
   ah.commodityItems[301] = false
   app:OnEvent("AUCTION_HOUSE_SHOW")
@@ -1023,4 +1025,59 @@ T.Case("deposit: one auction per stack for items that are not commodities", func
   T.Eq(D.ForUnits(2, 25, false, nil, 20), 200, "a full stack and a partial one")
   T.Eq(D.ForUnits(1000, 3, false, nil, 1), 900, "gear: one auction each")
   T.Eq(D.ForUnits(2, 20, false), 2000, "unknown stack size: one per unit (the old behaviour)")
+end)
+
+T.Case("professions are per character on a shared account", function()
+  -- Seen in game 2026-11-07: a Rogue saw the Warrior's Blacksmithing as known.
+  local who = { name = "Warrior" }
+  local extra = { UnitName = function() return who.name end, GetRealmName = function() return "Realm" end }
+  local app, ns, clock = craftingApp(nil, extra)
+  app:ObserveProfession()
+  clock.advance(1)
+  local warriorKey = app:CharacterKey()
+  T.Eq(warriorKey:match("^[^-]+"), "Warrior")
+  local warrior = app.store.db.characters[warriorKey].professions.Mining
+  T.Eq(warrior.skill, 23)
+  local learnedBefore = #app.opportunities.results.crafting.learned
+  T.Ok(learnedBefore >= 1, "the Warrior knows Mining recipes")
+  app:OnEvent("NEW_RECIPE_LEARNED", 2)
+  clock.advance(1)
+  T.Eq(warrior.learned[2], true, "learned by the Warrior")
+  T.NotOk(app.store.db.recipes.Mining.list[2].learned, "the shared list keeps the flags it was seen with")
+  T.Eq(#app.opportunities.results.crafting.learned, learnedBefore + 1)
+
+  -- The Rogue logs in on the same account, without Mining.
+  who.name = "Rogue"
+  local rogue, ns2 = craftingApp(nil, extra, app.store.db)
+  local rogueKey = rogue:CharacterKey()
+  T.Ok(rogue.store.db.characters[rogueKey], "own record")
+  T.Eq(#ns2.Data.Recipes.List(), 0, "no Mining recipes for the Rogue")
+  T.Eq(next(ns2.Data.Recipes.professions), nil, "no Mining skill in the header")
+  T.Eq(rogue.store.db.characters[warriorKey].professions.Mining.learned[2], true, "the Warrior's record is kept")
+  T.Eq(ns.Data.Recipes.professions.Mining.skill, 23)
+end)
+
+T.Case("professions: lists saved before 1 character per record are given by skill", function()
+  local legacy = { schema = 2, recipes = {
+    Mining = { at = 5, skill = 23, maxSkill = 75, list = {
+      { id = 1, name = "Smelt", profession = "Mining", learned = true, outputs = { { itemID = 9, quantity = 1 } }, reagents = {} },
+    } },
+    Blacksmithing = { at = 6, skill = 15, maxSkill = 75, list = {
+      { id = 7, name = "Rod", profession = "Blacksmithing", learned = true, outputs = { { itemID = 8, quantity = 1 } }, reagents = {} },
+    } },
+  } }
+  local app, ns = Fakes.App({ saved = legacy, globals = {
+    UnitName = function() return "Rogue" end, GetRealmName = function() return "Realm" end,
+    GetProfessions = function() return 1, nil, nil, nil, 2 end,
+    GetProfessionInfo = function(index)
+      if index == 1 then return "Mining", 0, 23, 75 end
+      return "Cooking", 0, 8, 75
+    end,
+  } })
+  local mine = app.store.db.characters[app:CharacterKey()].professions
+  T.Eq(mine.Mining.learned[1], true, "same profession, same skill: given to this character")
+  T.Eq(mine.Blacksmithing, nil, "a profession this character does not have stays out")
+  T.Eq(mine.Cooking, nil, "nothing saved for Cooking")
+  T.Eq(#ns.Data.Recipes.List(), 1)
+  T.Eq(ns.Data.Recipes.byId[1].learned, true)
 end)
