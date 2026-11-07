@@ -36,6 +36,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   or merchant; the row tooltip marks merchant reagents. Recipes whose
   reagents only merchants sell (thread, flux, spices, water...) are priced
   once that merchant has been visited. Nothing is bought or sold.
+- Several crafts: every recipe is priced for 1 to 20 crafts and the count
+  with the largest total gain is shown ("Crafts" column; totals in the
+  row, one craft in the tooltip). Reagents are bought deeper into the AH
+  book; without price history the AH is assumed to take at most 5% of the
+  units already listed, and the rest goes to a merchant when it pays one.
+  The tooltip says what stops more crafts: reagents, AH demand, dearer
+  reagents or the 20 limit. Lists are sorted by the total gain.
 - Reagents you can make: a reagent with no price (not on the AH, no merchant
   seen) is costed by the cheapest recipe that produces it, up to three
   levels (e.g. Solid Grinding Stone from Solid Stone). If a step of the

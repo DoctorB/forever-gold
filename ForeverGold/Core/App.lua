@@ -476,7 +476,9 @@ function App:RecordCrafting(crafting)
     for index = 1, math.min(#list, App.CRAFTING_KEEP) do
       local row = list[index]
       out[index] = { recipeID = row.recipeID, name = row.name, profession = row.profession, quantity = row.quantity,
-        cost = row.cost, exit = row.exit, revenue = row.revenue, profit = row.profit, outputItemID = row.outputItemID }
+        cost = row.cost, exit = row.exit, revenue = row.revenue, profit = row.profit, outputItemID = row.outputItemID,
+        crafts = row.run and row.run.crafts, runCost = row.run and row.run.cost, runProfit = row.run and row.run.profit,
+        runExit = row.run and row.run.exit, limit = row.run and row.run.limit }
     end
     return out
   end

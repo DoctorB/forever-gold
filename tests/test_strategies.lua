@@ -227,3 +227,67 @@ T.Case("crafting chain: cycles and long chains stop, the recipe stays unpriced",
   T.Ok(deep, "three levels are allowed (902 <- 903 <- 904 <- ore)")
   T.Ok(result.excluded.reagent_not_on_ah >= 1)
 end)
+
+-- Several crafts. Ore: 5 at 30, then 5 at 60 (a dearer level).
+local function runMarket(itemID)
+  if itemID == 102 then
+    return { levels = { { quantity = 5, unitPrice = 30, divisible = true, buyable = true },
+      { quantity = 5, unitPrice = 60, divisible = true, buyable = true } } }
+  end
+  if itemID == 101 then return { levels = {}, sellPrice = 50 } end -- merchant only
+  if itemID == 301 then
+    -- 100 bars listed from 200: the AH takes 5% of them = 5 without history.
+    return { levels = { { quantity = 100, unitPrice = 200, divisible = true, buyable = true },
+      { quantity = 1, buyoutTotal = 210, divisible = false, buyable = true },
+      { quantity = 1, buyoutTotal = 220, divisible = false, buyable = true } }, sellPrice = 10 }
+  end
+  return { levels = {}, sellPrice = 0 }
+end
+
+T.Case("several crafts: stops where the reagents get dearer than the gain", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  -- 1 ore (30, then 60) -> 1 linen to a merchant for 50: +20 for 5 crafts, then -10 each.
+  local result = Crafting.EvaluateRecipes({ { id = 1, name = "Linen", learned = true,
+    outputs = { { itemID = 101, quantity = 1 } }, reagents = { { itemID = 102, quantity = 1 } } } },
+    runMarket, { feeBp = 500, bufferBp = 500 })
+  local run = result.learned[1].run
+  T.Eq(run.crafts, 5)
+  T.Eq(run.cost, 150)
+  T.Eq(run.profit, 100)
+  T.Eq(run.limit, "price")
+end)
+
+T.Case("several crafts: the AH takes only part, the rest goes to a merchant", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  -- 1 ore -> 1 bar. AH: 200 - 5% = 190, - 5% fee; at most 5 bars (5% of 102), then the merchant pays 10.
+  local result = Crafting.EvaluateRecipes({ { id = 2, name = "Bar", learned = true,
+    outputs = { { itemID = 301, quantity = 1 } }, reagents = { { itemID = 102, quantity = 1 } } } },
+    runMarket, { feeBp = 500, bufferBp = 500 })
+  local row = result.learned[1]
+  T.Eq(row.profit, 180 - 30 - 0, "one craft: 190 - 10 fee = 180 for 30")
+  local run = row.run
+  T.Eq(run.crafts, 5, "the sixth bar would go to a merchant for 10, below the ore")
+  T.Eq(run.sold, 5)
+  T.Eq(run.limit, "demand")
+  -- 5 x 190 = 950, fee 5% of the total = 48 (rounded up once): 902 - 150.
+  T.Eq(run.profit, 752)
+end)
+
+T.Case("several crafts: not enough reagents stops the count", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  -- 2 ore -> 1 linen... plus merchant pays 200: every craft pays, ten ore allow five crafts.
+  local market = function(itemID)
+    if itemID == 101 then return { levels = {}, sellPrice = 200 } end
+    return runMarket(itemID)
+  end
+  local result = Crafting.EvaluateRecipes({ { id = 3, name = "Linen", learned = true,
+    outputs = { { itemID = 101, quantity = 1 } }, reagents = { { itemID = 102, quantity = 2 } } } },
+    market, { feeBp = 500, bufferBp = 500 })
+  local run = result.learned[1].run
+  T.Eq(run.crafts, 5)
+  T.Eq(run.limit, "reagents")
+  T.Eq(run.cost, 5 * 30 + 5 * 60)
+end)

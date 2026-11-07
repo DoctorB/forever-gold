@@ -150,7 +150,12 @@ recipes (Green Iron Helm +89s 89c ... Plain Ol' Paletusk +9s 31c). Its
 summary was cut to one line (fixed). 357 of 688 recipes priced, 82 merchant
 prices; after a scan the pipeline ran three times as item data arrived
 (worst frame 43 ms).
-Next: several crafts at real depth, deposit.
+Several crafts added (not yet seen in game): 1 to 20 crafts priced per
+recipe, best total kept with the reason it stops; bench 0.59 s for 700
+recipes (was 0.20), slowest step unchanged (16 ms). On the real catalogue
+(approximate offline simulation) Copper Rod reaches the 20-craft limit at
+about +8s 85c; weapons and armour stay at one craft (AH demand).
+Next: deposit.
 
 ## Implemented
 

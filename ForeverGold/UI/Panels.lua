@@ -207,10 +207,13 @@ end
 local Professions = {}
 Panels.professions = Professions
 
+-- Totals of the best number of crafts (Strategies/Crafting.BestRun); one
+-- craft is in the tooltip.
 Professions.COLUMNS = {
-  { key = "prof", width = 0.13 }, { key = "recipe", width = 0.27 }, { key = "cost", width = 0.11, right = true },
-  { key = "exit", width = 0.14 }, { key = "revenue", width = 0.11, right = true },
-  { key = "gain", width = 0.11, right = true }, { key = "onah", width = 0.13, right = true },
+  { key = "prof", width = 0.12 }, { key = "recipe", width = 0.24 }, { key = "crafts", width = 0.07, right = true },
+  { key = "cost", width = 0.10, right = true }, { key = "exit", width = 0.12 },
+  { key = "revenue", width = 0.11, right = true }, { key = "gain", width = 0.11, right = true },
+  { key = "onah", width = 0.13, right = true },
 }
 Professions.KNOWN_ROWS = 6
 
@@ -271,14 +274,22 @@ function Professions.Rows(app, list)
       tip[#tip + 1] = string.format(L("CRAFT_TIP_COMPETITION"), row.listings, row.units or 0)
     end
     if row.alsoLearn then tip[#tip + 1] = string.format(L("CRAFT_TIP_ALSO_LEARN"), table.concat(row.alsoLearn, ", ")) end
-    if row.exit ~= "vendor" then tip[#tip + 1] = L("CRAFT_TIP_SPECULATIVE") end
-    local gain, gainColor = signed(row.profit)
+    local run = row.run or { crafts = 1, cost = row.cost, revenue = row.revenue, profit = row.profit, exit = row.exit }
+    tip[#tip + 1] = string.format(L("CRAFT_TIP_ONE"), fmt(row.cost), fmt(row.revenue), signed(row.profit))
+    if run.crafts > 1 or run.limit then
+      tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN"), run.crafts, fmt(run.cost), fmt(run.revenue), signed(run.profit))
+      if (run.vendorUnits or 0) > 0 then tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN_VENDOR"), run.vendorUnits) end
+      if (run.unsold or 0) > 0 then tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN_UNSOLD"), run.unsold) end
+      if run.limit then tip[#tip + 1] = L("CRAFT_LIMIT_" .. run.limit) end
+    end
+    if run.exit ~= "vendor" then tip[#tip + 1] = L("CRAFT_TIP_SPECULATIVE") end
+    local gain, gainColor = signed(run.profit)
     rows[#rows + 1] = {
       cells = {
-        row.profession or "?", name, fmt(row.cost), L("CRAFT_EXIT_SHORT_" .. row.exit), fmt(row.revenue), gain,
-        (row.listings and row.listings > 0) and tostring(row.units) or "-",
+        row.profession or "?", name, run.crafts .. "x", fmt(run.cost), L("CRAFT_EXIT_SHORT_" .. run.exit),
+        fmt(run.revenue), gain, (row.listings and row.listings > 0) and tostring(row.units) or "-",
       },
-      colors = { [4] = row.exit == "vendor" and W.EMERALD or W.GOLD, [6] = gainColor },
+      colors = { [5] = run.exit == "vendor" and W.EMERALD or W.GOLD, [7] = gainColor },
       tip = tip,
     }
   end

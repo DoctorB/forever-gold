@@ -59,7 +59,13 @@ end
 -- Returns { cost, quantity, complete, used = { { level, units, cost } } }.
 function Depth.BuyCost(levels, quantity, opts)
   if not Money.IsQuantity(quantity) then return nil, "invalid_quantity" end
-  local book = Depth.Book(levels, opts)
+  return Depth.BuyCostSorted(Depth.Book(levels, opts), quantity)
+end
+
+-- Same on a book already built with Depth.Book (sorted, validated): lets a
+-- caller price many quantities of one item without sorting each time.
+function Depth.BuyCostSorted(book, quantity)
+  if not Money.IsQuantity(quantity) then return nil, "invalid_quantity" end
   local result = { cost = 0, quantity = 0, complete = false, used = {} }
   for _, level in ipairs(book) do
     if result.quantity >= quantity then break end
