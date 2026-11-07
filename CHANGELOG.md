@@ -111,6 +111,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- An offer a purchase attempt already found gone can no longer be tried
+  again until the next scan (in game the same gone lot was tried three
+  times in 20 seconds).
+- Professions saved before the per-character record: given to the character
+  that has the profession at any skill (the first pass required the same
+  skill and missed Leatherworking and First Aid).
 - "Buy all" on an item that is not a commodity: when the search with the
   key built by the add-on gets no answer, it now browses by name like the
   AH window and searches again with the server's own keys, instead of

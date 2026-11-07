@@ -74,6 +74,7 @@ function App:Load(saved)
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, bus = self.bus, store = self.store,
     trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
     isReady = function() return self.ah:IsReady() end,
+    stale = function() return self.opportunities and self.opportunities.stale end,
   })
   self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
     stale = function() return self.opportunities.stale end })
@@ -477,43 +478,47 @@ function App:CharacterProfessions()
   local record = db.characters[key] or {}
   db.characters[key] = record
   record.professions = record.professions or {}
-  if not record.migrated then
+  -- Version 2: in game the first pass (same skill only) gave the Rogue
+  -- Skinning and Cooking but not Leatherworking and First Aid.
+  if record.migrated ~= 2 then
     self:MigrateRecipes(record)
-    record.migrated = true
+    record.migrated = 2
   end
   self.characterKey, self.character = key, record
   return record.professions
 end
 
 -- Lists saved before the per-character record had no owner. A list is given
--- to this character when it has that profession (GetProfessions) at the
--- same skill and no other character claimed the same observation; the
--- others wait for the profession window to be opened again.
+-- to this character when it has that profession (GetProfessions, any skill:
+-- the skill moves on between observations) and no other character claimed
+-- the same observation; the others wait for the profession window.
 function App:MigrateRecipes(record)
   local c, db = self.client, self.store.db
   local result = { c:Call(nil, "GetProfessions") }
   if result[1] ~= true then return 0 end
-  local moved = 0
+  local moved, seen = 0, {}
   for position = 2, table.maxn(result) do
     local index = result[position]
     if type(index) == "number" then
       local ok, name, _, skill, maxSkill = c:Call(nil, "GetProfessionInfo", index)
+      if ok and type(name) == "string" then seen[#seen + 1] = name .. " " .. tostring(skill) end
+      if type(skill) ~= "number" then skill = nil end
       local entry = ok and type(name) == "string" and db.recipes and db.recipes[name]
-      if entry and type(entry.list) == "table" and entry.skill == skill and not record.professions[name] then
+      if entry and type(entry.list) == "table" and not record.professions[name] then
         local claimed = false
         for _, other in pairs(db.characters or {}) do
           local theirs = other ~= record and other.professions and other.professions[name]
           if theirs and theirs.at == entry.at then claimed = true end
         end
         if not claimed then
-          record.professions[name] = { at = entry.at, skill = skill, maxSkill = maxSkill or entry.maxSkill,
+          record.professions[name] = { at = entry.at, skill = skill or entry.skill, maxSkill = maxSkill or entry.maxSkill,
             learned = App.LearnedSet(entry.list) }
           moved = moved + 1
         end
       end
     end
   end
-  self.diagnostics:Trace("recipes_migrated", { professions = moved })
+  self.diagnostics:Trace("recipes_migrated", { professions = moved, seen = table.concat(seen, ", ") })
   return moved
 end
 

@@ -1075,7 +1075,7 @@ T.Case("professions: lists saved before 1 character per record are given by skil
     end,
   } })
   local mine = app.store.db.characters[app:CharacterKey()].professions
-  T.Eq(mine.Mining.learned[1], true, "same profession, same skill: given to this character")
+  T.Eq(mine.Mining.learned[1], true, "same profession: given to this character")
   T.Eq(mine.Blacksmithing, nil, "a profession this character does not have stays out")
   T.Eq(mine.Cooking, nil, "nothing saved for Cooking")
   T.Eq(#ns.Data.Recipes.List(), 1)
@@ -1222,4 +1222,30 @@ T.Case("sell: an item a merchant pays more for is not listed", function()
   CRAFT_ITEMS[301].sellPrice = 10
   T.Eq(#plan.lots, 0)
   T.Eq(plan.skipped.merchant, 1)
+end)
+
+T.Case("professions: a list saved before is given even if the skill went up since", function()
+  -- In game the first migration skipped Leatherworking (skill moved on).
+  local legacy = { schema = 2, recipes = {
+    Leatherworking = { at = 5, skill = 38, maxSkill = 75, list = {
+      { id = 1, name = "Light Leather", profession = "Leatherworking", learned = true, outputs = { { itemID = 9, quantity = 1 } }, reagents = {} },
+    } },
+  }, characters = { ["Rogue-ClassicBetaPvE"] = { migrated = true, professions = {} } } }
+  local app, ns = Fakes.App({ saved = legacy, globals = {
+    UnitName = function() return "Rogue" end,
+    GetProfessions = function() return 1 end,
+    GetProfessionInfo = function() return "Leatherworking", 0, 41, 75 end,
+  } })
+  local mine = app.store.db.characters[app:CharacterKey()].professions
+  T.Eq(mine.Leatherworking.skill, 41, "the current skill")
+  T.Eq(mine.Leatherworking.learned[1], true)
+  T.Eq(app.store.db.characters[app:CharacterKey()].migrated, 2)
+end)
+
+T.Case("buy: an offer already found gone is not tried again before the next scan", function()
+  local app = Fakes.App({})
+  app.opportunities.stale[2883] = true
+  local current, reason = app.purchases:Begin({ itemID = 2883, itemKey = "i:2883:0", strategy = "vendor", lots = {} }, 5000)
+  T.Eq(current, nil)
+  T.Eq(reason, "gone_seen")
 end)

@@ -185,7 +185,9 @@ Recipes to learn are limited to the reachable skill (D53): trainer reading
 "Buy all" 18:26 (row 29): the built-key search got no answer; a browse by
 name with the server keys now follows (to check in game).
 Sell tab (D54): one auction per click for crafted items in the bags; not
-posted in game yet.
+posted in game yet (19:29: nothing to sell).
+Targeted searches answered at once at 18:59 (row 30): "Buy all" reaches the
+server; the lot was already gone.
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 

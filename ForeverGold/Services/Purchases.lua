@@ -31,7 +31,7 @@ Purchases.READY_TRIES = 15 -- seconds of waiting for the AH throttle before givi
 function Purchases.New(deps)
   return setmetatable({
     purchase = deps.purchase, client = deps.client, scanner = deps.scanner, scheduler = deps.scheduler,
-    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, isReady = deps.isReady, current = nil,
+    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, isReady = deps.isReady, stale = deps.stale, current = nil,
   }, { __index = Purchases })
 end
 
@@ -110,6 +110,11 @@ function Purchases:Begin(opportunity, cap)
   if not self.purchase:Supports(opportunity.commodity == true and "commodity" or "auction") then
     return nil, "unsupported"
   end
+  -- In game (2026-11-07 18:59) the same gone lot was tried three times in
+  -- 20 s: an offer already found gone waits for the next scan.
+  local itemID = opportunity.itemID or Schema.ItemIDOf(opportunity.itemKey)
+  local stale = self.stale and self.stale()
+  if stale and itemID and stale[itemID] then return nil, "gone_seen" end
   local plan, reason = Purchases.Plan(opportunity, self.client:Money(), cap)
   if not plan then return nil, reason end
   self.current = { plan = plan, state = "planned", generation = self.scheduler:Invalidate() }
