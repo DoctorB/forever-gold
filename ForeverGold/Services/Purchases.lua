@@ -177,6 +177,15 @@ function Purchases:Send(current)
   -- Variant items: build the server's key directly (bonus ID + offset).
   local _, _, bonus = Schema.VariantFromLink(plan.link)
   current.suffix = ns.Compat.AuctionHouse.SuffixForBonus(bonus)
+  -- On live the built key of a random-variant item never got an answer (3
+  -- of 3, 2026-11-07/08: 30 s lost each time) while the browse by name
+  -- answered at once with the server's keys: variants start with the browse.
+  if current.suffix and plan.name then
+    set(self, "locating")
+    if self.trace then self.trace("purchase_no_answer", { itemID = plan.itemID, next = "browse", variant = true }) end
+    self:BrowseFallback(current)
+    return true
+  end
   return self:Locate(current, nil)
 end
 

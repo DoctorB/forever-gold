@@ -118,6 +118,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Buying an item with a random variant ("of the Bear"...): the add-on looks
+  it up by name right away instead of waiting 30 seconds for a search the
+  server never answers.
+- "To do" screen: "Reading the AH prices... 40%" instead of "Waiting for
+  the server... 13 s / 300 s"; a recipe the trainer does not teach says it
+  comes from a recipe item or a higher trainer.
 - "To do" screen: the Advanced button no longer covers the gold line or the
   last tab (in the advanced view the "To do" tab leads back); gains of the
   recipes to learn are no longer cut.

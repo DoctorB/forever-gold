@@ -30,7 +30,12 @@ end
 function Home.Freshness(app)
   local Main = ns.UI.Main
   if Main.progress or (app.scanner and app.scanner:IsActive()) then
-    return Main.ProgressText(Main.progress) or (L("PHASE_waiting") .. "...")
+    -- Not "Waiting for the server... 13 s / 300 s": the timeout is an internal limit.
+    local progress = Main.progress
+    if progress and progress.total and progress.total > 0 then
+      return string.format(L("HOME_READING_PCT"), math.floor((progress.done or 0) * 100 / progress.total))
+    end
+    return L("HOME_READING")
   end
   local scan = Main.LastScan(app)
   local parts = {}
@@ -153,7 +158,11 @@ function Home.Model(app)
       how = string.format(L("HOME_LEARN_TRAINER"), row.profession or "?", requires.skill,
         requires.cost and requires.cost > 0 and fmt(requires.cost) or "-")
     else
-      how = string.format(L("HOME_LEARN_UNKNOWN"), row.profession or "?")
+      -- A trainer already read for this profession does not teach it: a
+      -- recipe item or a higher trainer does.
+      local trainer = app.store.db.trainer and app.store.db.trainer.skills
+      local known = trainer and row.profession and trainer[row.profession] and next(trainer[row.profession]) ~= nil
+      how = string.format(L(known and "HOME_LEARN_ELSEWHERE" or "HOME_LEARN_UNKNOWN"), row.profession or "?")
     end
     model.learn[#model.learn + 1] = {
       text = string.format(L("HOME_LEARN"), row.name or "?", how), gain = row.run.profit,

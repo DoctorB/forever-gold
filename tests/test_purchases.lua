@@ -368,7 +368,10 @@ T.Case("vendor purchase accepts any variant of the item; the attempt is traced",
   local p = s.app.purchases
   p:Begin(o, 5000)
   p:Prepare()
-  -- The search result carries no bonus in its key (no link): same item, other key.
+  -- Variant: browse first; the server key carries no bonus (other key, same item).
+  s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 190 } }
+  s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  s.clock.advance(1)
   s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 91 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "located")
@@ -655,18 +658,21 @@ T.Case("buy all: offers found gone stay out of the queue", function()
   T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
 end)
 
-T.Case("variant items are searched with their item level", function()
+T.Case("variant items start with a browse by name, not with a built key", function()
+  -- On live the built key of a variant never got an answer (3 of 3).
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
     link = "|Hitem:201::::::::20:1486::1:1:12730:::::|h[Green Sword]|h" } } })
-  s.app.client.env.C_Item.GetDetailedItemLevelInfo = function(link) return link:find("12730", 1, true) and 25 or nil end
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
+  local searches = s.ah.searchCalls
   p:Prepare()
-  T.Eq(s.ah.lastSearch.itemID, 201)
-  T.Eq(s.ah.lastSearch.itemLevel, 25)
+  T.Eq(s.ah.browseCalls, 1, "browse sent at once")
+  T.Eq(s.ah.lastBrowse.searchString, "Green Sword")
+  T.Eq(s.ah.searchCalls, searches, "no built-key search")
+  T.Eq(p.current.state, "locating")
 end)
 
-T.Case("variant auction not reached by the built key: browse finds the server key", function()
+T.Case("variant auction: the browse finds the server key", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
     link = "|Hitem:201::::::::20:1486::1:1:12720:::::|h[Green Sword]|h" } } })
   local p = s.app.purchases
@@ -676,19 +682,12 @@ T.Case("variant auction not reached by the built key: browse finds the server ke
     { itemKey = { itemID = 999, itemLevel = 5, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 10 },
     { itemKey = { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 200 },
   }
-  local function results(level)
-    s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = level, itemSuffix = 0, battlePetSpeciesID = 0 })
-  end
   p:Prepare()
-  results(0) -- the built key (level 0) sees no row
-  T.Eq(p.current.state, "locating")
-  s.clock.advance(1)
   T.Eq(s.ah.browseCalls, 1, "browse by name")
-  T.Eq(s.ah.lastBrowse.searchString, "Green Sword")
   s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
   s.clock.advance(1)
   T.Eq(s.ah.lastSearch.itemLevel, 22, "searched with the server key")
-  results(22)
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "located")
   T.Eq(p.current.auction.auctionID, 501)
   local browse
@@ -765,19 +764,22 @@ T.Case("AH search test: variants and multi-unit lots probed read-only, results s
   T.Eq(lines[#lines][1], "done")
 end)
 
-T.Case("variant items are searched with the Forever key: level and bonus ID + 1580", function()
+T.Case("variant items: the lot's own variant (bonus ID + 1580) is searched first", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
     link = "|Hitem:201::::::::20:1486::1:1:12742:::::|h[Green Sword]|h" } } })
-  s.app.client.env.C_Item.GetDetailedItemLevelInfo = function() return 25 end
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 9, level = 25 } }
   p:Prepare()
-  T.Eq(s.ah.lastSearch.itemLevel, 25)
-  T.Eq(s.ah.lastSearch.itemSuffix, 14322)
+  s.ah.browse = {
+    { itemKey = { itemID = 201, itemLevel = 25, itemSuffix = 14300, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 100 },
+    { itemKey = { itemID = 201, itemLevel = 25, itemSuffix = 14322, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 200 },
+  }
+  s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  s.clock.advance(1)
+  T.Eq(s.ah.lastSearch.itemSuffix, 14322, "own variant first, though dearer")
+  s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 9, level = 25 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 25, itemSuffix = 14322, battlePetSpeciesID = 0 })
-  T.Eq(p.current.state, "located", "found at the first try, no browse")
-  T.Eq(s.ah.browseCalls, nil)
+  T.Eq(p.current.state, "located")
   T.Eq(s.ns.Compat.AuctionHouse.SuffixForBonus("12720.12800"), nil, "several bonus IDs: no guess")
 end)
 
@@ -943,8 +945,7 @@ T.Case("browse fallback: only variants at or under the lot price are searched", 
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare()
-  s.clock.advance(40) -- built key: no answer
-  T.Eq(s.ah.browseCalls, 1)
+  T.Eq(s.ah.browseCalls, 1, "variant: browse at once")
   s.ah.browse = {
     { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14308, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 500 },
     { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14320, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 1600 },
