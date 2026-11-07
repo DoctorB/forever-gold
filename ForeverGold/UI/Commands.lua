@@ -39,6 +39,8 @@ function Commands.Handle(input)
     else
       ns.UI.Feedback.StartFeeTest(app, tonumber(rest))
     end
+  elseif command == "crafting" or command == "craft" then
+    for _, line in ipairs(Commands.CraftingLines(app, tonumber(rest) or 5)) do ns.Print(line) end
   elseif command == "professions" or command == "prof" then
     -- Read-only: observes the open profession window, if any, then reports.
     app:ObserveProfession()
@@ -62,6 +64,43 @@ function Commands.Handle(input)
   else
     for _, line in ipairs({ L("HELP_1"), L("HELP_2"), L("HELP_3"), L("HELP_4"), L("HELP_5") }) do ns.Print(line) end
   end
+end
+
+-- Chat report of the crafting evaluation: the best `limit` recipes the
+-- player knows, then the best ones a trainer could teach.
+function Commands.CraftingLines(app, limit)
+  local fmt = ns.Economy.Money.Format
+  local lines = {}
+  if ns.Data.Recipes.status ~= "observed" then return { L("CRAFT_NO_RECIPES") } end
+  local results = app.opportunities.results
+  local crafting = results and not results.demo and (results.crafting or app:EvaluateCrafting())
+  if not crafting then return { L("CRAFT_NO_SCAN") } end
+  local function name(row)
+    local info = app.items:Read(row.outputItemID)
+    return (info and info.name) or row.name or ("#" .. tostring(row.recipeID))
+  end
+  local function rows(list)
+    if #list == 0 then
+      lines[#lines + 1] = L("CRAFT_NONE")
+      return
+    end
+    for index = 1, math.min(limit, #list) do
+      local row = list[index]
+      local made = row.quantity > 1 and (row.quantity .. " x ") or ""
+      lines[#lines + 1] = string.format(L("CRAFT_ROW"), row.profession or "?", made .. name(row), fmt(row.cost),
+        L("CRAFT_EXIT_" .. row.exit), fmt(row.revenue), fmt(row.profit))
+    end
+  end
+  lines[#lines + 1] = string.format(L("CRAFT_HEADER_LEARNED"), #crafting.learned, crafting.counts.evaluated,
+    crafting.counts.recipes)
+  rows(crafting.learned)
+  lines[#lines + 1] = L("CRAFT_HEADER_LEARNABLE")
+  rows(crafting.learnable)
+  local reasons = {}
+  for reason, n in pairs(crafting.excluded) do reasons[#reasons + 1] = (L("CRAFT_WHY_" .. reason)) .. " " .. n end
+  table.sort(reasons)
+  if #reasons > 0 then lines[#lines + 1] = L("CRAFT_SKIPPED") .. " " .. table.concat(reasons, ", ") end
+  return lines
 end
 
 -- Registers /fg and /forevergold (the only command globals we add).

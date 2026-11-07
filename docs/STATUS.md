@@ -100,6 +100,24 @@ view), still below 50 ms; answer delays reached 327 s, past the 300 s
 timeout (read as a late answer; the cooldown error this caused is fixed,
 API-AUDIT row 22).
 
+## Phase 4 started — professions (2026-11-07)
+
+Professions of the character: Mining, Blacksmithing, Cooking, First Aid.
+The read-only probe (API-AUDIT row 24, build 70862) showed the client
+exposes the whole recipe catalogue of each profession through the modern
+`C_TradeSkillUI` (no classic globals). Since then (not yet seen in game):
+- each profession window opened stores the compact catalogue in
+  `ForeverGoldDB.recipes[profession]` (learned and unlearned recipes);
+- after every scan, and when a window is opened, every recipe is priced:
+  reagents at AH depth, result to a merchant or the AH, best exit;
+- `/fg crafting` lists the best known recipes and the best learnable ones.
+
+Limits: reagents sold only by merchants (e.g. water, flux) have no price yet
+(the recipe is left out); AH exits have no deposit estimate (speculative);
+one craft only (no depth for many crafts); no profession skill-up planning.
+Next: check the timings `profession_observe` and `crafting` in game, then a
+Crafting tab in the window.
+
 ## Implemented
 
 - `Economy/`: Money (integer copper, `nil` never zero, safe range, costs

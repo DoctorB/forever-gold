@@ -217,12 +217,140 @@ T.Case("profession probe: a client error is recorded, not raised", function()
   local app = Fakes.App({ globals = {
     GetNumTradeSkills = function() return 1 end,
     GetTradeSkillInfo = function() error("no window") end,
-    C_TradeSkillUI = { GetAllRecipeIDs = function() error("not ready") end },
+    C_TradeSkillUI = {
+      GetBaseProfessionInfo = function() return { professionName = "Cooking", skillLevel = 5, maxSkillLevel = 75 } end,
+      GetAllRecipeIDs = function() error("not ready") end,
+    },
   } })
   local report = app:ObserveProfession()
-  T.Eq(report.name, "unknown")
+  T.Eq(report.name, "Cooking")
   T.Ok(tostring(report.modern.GetAllRecipeIDs):find("^error") ~= nil)
   T.Eq(#report.legacy.recipes, 0)
+  T.Eq(#app.store.db.recipes.Cooking.list, 0)
+end)
+
+T.Case("profession probe: nothing is saved with no window open", function()
+  -- Seen in game (build 70862): with the window closed the client answers
+  -- with an empty profession name and the previous window's recipes.
+  local app = Fakes.App({ globals = { C_TradeSkillUI = {
+    GetBaseProfessionInfo = function() return { professionName = "", skillLevel = 0, maxSkillLevel = 0 } end,
+    GetAllRecipeIDs = function() return { 1, 2, 3 } end,
+  } } })
+  local report, reason = app:ObserveProfession()
+  T.Eq(report, nil)
+  T.Eq(reason, "no_window")
+  T.Eq(app.store.db.diagnostics.professions, nil)
+  T.Eq(app.store.db.recipes, nil)
+end)
+
+T.Case("recipe compact form from the schematic seen in game", function()
+  local ns = T.LoadAddon()
+  local P = ns.Compat.Professions
+  -- Field names as recorded on build 70862 (First Aid Kit, API-AUDIT row 24).
+  local info = { recipeID = 1230117, name = "First Aid Kit", learned = true, relativeDifficulty = 3 }
+  local schematic = { recipeID = 1230117, outputItemID = 279968, quantityMin = 1, quantityMax = 1,
+    reagentSlotSchematics = {
+      { quantityRequired = 3, required = true, reagentType = 1, reagents = { { itemID = 1251 } } },
+      { quantityRequired = 1, required = true, reagentType = 1, reagents = { { itemID = 159 } } },
+      { quantityRequired = 1, required = false, reagentType = 0, reagents = { { itemID = 9999 } } },
+    } }
+  local recipe = P.Compact(info, schematic, "First Aid")
+  T.Eq(recipe.id, 1230117)
+  T.Eq(recipe.learned, true)
+  T.Eq(recipe.outputs[1].itemID, 279968)
+  T.Eq(recipe.outputs[1].quantity, 1)
+  T.Eq(#recipe.reagents, 2, "optional reagents left out")
+  T.Eq(recipe.reagents[1].itemID, 1251)
+  T.Eq(recipe.reagents[1].quantity, 3)
+  T.Eq(P.Compact(info, { outputItemID = 0, quantityMin = 1 }), nil, "no output")
+  T.Eq(P.Compact(info, { outputItemID = 5, quantityMin = 1, reagentSlotSchematics = {
+    { quantityRequired = 1, reagents = {} } } }), nil, "unreadable reagent")
+end)
+
+-- Crafting on a fake market. Prices chosen so every exit is exercised:
+--   Ore 102: commodity, 10 units at 30 each.   Bar 301: one auction at 200, merchant 10.
+--   Linen 101: not on the AH, merchant 50.     Eye 103: merchant 20.
+local CRAFT_ITEMS = {
+  [101] = { name = "Linen", sellPrice = 50 }, [102] = { name = "Ore", sellPrice = 5 },
+  [103] = { name = "Eye", sellPrice = 20 }, [301] = { name = "Bar", sellPrice = 10 },
+}
+local CRAFT_RECIPES = {
+  { id = 1, name = "Smelt Bar", learned = true, reagents = { { 102, 2 } }, output = { 301, 1 } },
+  { id = 2, name = "Weave Linen", learned = false, reagents = { { 102, 1 } }, output = { 101, 2 } },
+  { id = 3, name = "Eye Craft", learned = false, reagents = { { 102, 1 } }, output = { 103, 1 } },
+  { id = 4, name = "Rare Bar", learned = false, reagents = { { 999, 1 } }, output = { 301, 1 } },
+}
+
+local function craftingApp()
+  local trade = {
+    GetBaseProfessionInfo = function() return { professionName = "Mining", skillLevel = 23, maxSkillLevel = 75 } end,
+    GetAllRecipeIDs = function() return { 1, 2, 3, 4 } end,
+    GetRecipeInfo = function(id)
+      local r = CRAFT_RECIPES[id]
+      return { recipeID = id, name = r.name, learned = r.learned, relativeDifficulty = 0 }
+    end,
+    GetRecipeSchematic = function(id)
+      local r = CRAFT_RECIPES[id]
+      local slots = {}
+      for index, reagent in ipairs(r.reagents) do
+        slots[index] = { quantityRequired = reagent[2], required = true, reagents = { { itemID = reagent[1] } } }
+      end
+      return { recipeID = id, outputItemID = r.output[1], quantityMin = r.output[2], quantityMax = r.output[2],
+        reagentSlotSchematics = slots }
+    end,
+  }
+  local rows = { { itemID = 102, count = 10, buyout = 300 }, { itemID = 301, count = 1, buyout = 200 } }
+  local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = { C_TradeSkillUI = trade } })
+  ah.commodityItems[102] = true
+  ah.commodityItems[301] = false
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(30)
+  return app, ns, clock
+end
+
+T.Case("crafting: known recipes and learnable ones priced at real depth", function()
+  local app, ns = craftingApp()
+  T.Eq(app.opportunities.results.crafting, nil, "no recipes before a window was opened")
+  app:ObserveProfession()
+  local crafting = app.opportunities.results.crafting
+  T.Ok(crafting, "evaluated when the recipes arrive")
+  T.Eq(crafting.counts.recipes, 4)
+  -- Smelt Bar: 2 ore = 60; bar on the AH now: 200 - 5% buffer = 190, minus 5% fee (10) = 180.
+  T.Eq(#crafting.learned, 1)
+  local bar = crafting.learned[1]
+  T.Eq(bar.cost, 60)
+  T.Eq(bar.exit, "ah_now")
+  T.Eq(bar.revenue, 180)
+  T.Eq(bar.profit, 120)
+  T.Eq(bar.class, "speculative")
+  -- Weave Linen: 1 ore = 30 -> 2 linen to a merchant = 100.
+  T.Eq(#crafting.learnable, 1)
+  T.Eq(crafting.learnable[1].recipeID, 2)
+  T.Eq(crafting.learnable[1].exit, "vendor")
+  T.Eq(crafting.learnable[1].profit, 70)
+  T.Eq(crafting.learnable[1].class, "prudent")
+  T.Eq(crafting.excluded.no_profit, 1, "Eye Craft: 30 for 20")
+  T.Eq(crafting.excluded.reagent_not_on_ah, 1)
+  local lines = ns.UI.Commands.CraftingLines(app, 5)
+  local text = table.concat(lines, "\n")
+  T.Ok(text:find("Bar", 1, true) and text:find("Linen", 1, true), "both recipes reported")
+end)
+
+T.Case("crafting: recipes survive a reload and a bound result has no AH exit", function()
+  local app = craftingApp()
+  app:ObserveProfession()
+  T.Eq(#app.store.db.recipes.Mining.list, 4)
+  T.Eq(app.store.db.recipes.Mining.skill, 23)
+  local reloaded, ns2 = Fakes.App({ saved = app.store.db, items = CRAFT_ITEMS })
+  T.Eq(ns2.Data.Recipes.status, "observed")
+  T.Eq(#ns2.Data.Recipes.List(), 4)
+  local Crafting = ns2.Strategies.Crafting
+  local best = Crafting.Exits({ levels = {}, sellPrice = 10, bound = true }, 1, { feeBp = 500, bufferBp = 500 })
+  T.Eq(best.exit, "vendor")
+  T.Eq(reloaded.loaded, true)
 end)
 
 T.Case("session-only mode hands the original table back", function()

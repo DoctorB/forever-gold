@@ -63,11 +63,119 @@ function Crafting.Price(plan, market, outputPrice, feeBp, extra)
   return result
 end
 
--- Strategy entry point; ranking arrives with phase 4.
+-- Strategy entry point for the per-item pipeline: crafting spans several
+-- items, so it runs once over all recipes (Crafting.EvaluateRecipes).
 function Crafting.Evaluate(context)
   local recipes = context.recipes or ns.Data.Recipes
   if not recipes or recipes.status ~= "observed" then
     return {}, { recipes_unavailable = 1 }
   end
-  return {}, { not_implemented = 1 }
+  return {}, {}
+end
+
+local MarketValue = ns.Economy.MarketValue
+
+-- Best exit for `quantity` crafted units of one output.
+-- market: { levels, sellPrice?, estimate? }. Returns { exit, net, gross, fee }
+-- for the merchant and for the AH (history-based or, without three days of
+-- history, the lowest current listing), the better one first; nil if none.
+function Crafting.Exits(market, quantity, settings)
+  local exits = {}
+  local sellPrice = market and market.sellPrice
+  if Money.IsCopper(sellPrice) and sellPrice > 0 then
+    local gross = Money.Mul(sellPrice, quantity)
+    exits[#exits + 1] = { exit = "vendor", gross = gross, net = gross, fee = 0 }
+  end
+  -- A bound output (bind on pickup) cannot be sold on the AH.
+  if market and market.bound then
+    table.sort(exits, function(a, b) return a.net > b.net end)
+    return exits[1], exits
+  end
+  local levels = market and market.levels or {}
+  local feeBp = settings.feeBp or 500
+  local resale = market and market.estimate and MarketValue.PrudentResale({
+    estimate = market.estimate, remaining = levels, units = quantity, bufferBp = settings.bufferBp,
+  })
+  if resale and resale.sellUnits == quantity then
+    local net, fee = Costs.NetRevenue(resale.prudentGross, feeBp)
+    if net then exits[#exits + 1] = { exit = "ah", gross = resale.prudentGross, net = net, fee = fee } end
+  elseif not resale then
+    local lowest = Depth.LowestUnit(levels)
+    if lowest then
+      local unit = lowest - Money.ShareUp(lowest, settings.bufferBp or 0)
+      local gross = Money.Mul(unit, quantity)
+      local net, fee = Costs.NetRevenue(gross, feeBp)
+      if net and net > 0 then exits[#exits + 1] = { exit = "ah_now", gross = gross, net = net, fee = fee } end
+    end
+  end
+  table.sort(exits, function(a, b) return a.net > b.net end)
+  return exits[1], exits
+end
+
+-- One recipe, one craft: reagents bought on the AH at their real depth, the
+-- output sold at its best exit. market(itemID) -> { levels, sellPrice?, estimate? } or nil;
+-- cache: per-run table shared by all recipes (reagent costs by item and quantity).
+-- Returns a row, or nil, reason.
+function Crafting.EvaluateRecipe(recipe, market, settings, cache)
+  local output = recipe.outputs and recipe.outputs[1]
+  if not output or not Money.IsQuantity(output.quantity) then return nil, "output_unknown" end
+  local cost, reagents = 0, {}
+  for _, reagent in ipairs(recipe.reagents or {}) do
+    local key = reagent.itemID .. "x" .. reagent.quantity
+    local purchase = cache[key]
+    if purchase == nil then
+      local entry = market(reagent.itemID)
+      local levels = entry and entry.levels
+      purchase = levels and #levels > 0 and Depth.BuyCost(levels, reagent.quantity) or false
+      cache[key] = purchase
+    end
+    if not purchase then return nil, "reagent_not_on_ah" end
+    if not purchase.complete then return nil, "reagent_depth" end
+    cost = cost + purchase.cost
+    reagents[#reagents + 1] = { itemID = reagent.itemID, quantity = reagent.quantity, cost = purchase.cost }
+  end
+  local outputMarket = market(output.itemID)
+  local best, exits = Crafting.Exits(outputMarket, output.quantity, settings)
+  if not best then
+    return nil, (outputMarket and outputMarket.sellPrice == nil) and "output_price_pending" or "output_no_value"
+  end
+  local profit = best.net - cost
+  return {
+    strategy = "crafting", recipeID = recipe.id, name = recipe.name, profession = recipe.profession,
+    learned = recipe.learned == true, difficulty = recipe.difficulty,
+    outputItemID = output.itemID, quantity = output.quantity, quantityMax = recipe.quantityMax,
+    cost = cost, reagents = reagents, exit = best.exit, gross = best.gross, fee = best.fee, revenue = best.net,
+    profit = profit, roi = cost > 0 and profit / cost or nil, exits = exits,
+    -- The merchant price is verified in game; AH exits have no deposit
+    -- estimate yet and the "now" price has no history behind it.
+    class = best.exit == "vendor" and "prudent" or "speculative",
+  }
+end
+
+-- All recipes. Returns { learned = rows, learnable = rows, counts, excluded };
+-- rows with a positive profit only, best profit first.
+function Crafting.EvaluateRecipes(recipes, market, settings)
+  local result = { learned = {}, learnable = {}, excluded = {}, counts = { recipes = #recipes, evaluated = 0 } }
+  local cache = {}
+  for _, recipe in ipairs(recipes) do
+    local row, reason = Crafting.EvaluateRecipe(recipe, market, settings, cache)
+    if row then
+      result.counts.evaluated = result.counts.evaluated + 1
+      if row.profit > 0 then
+        local list = row.learned and result.learned or result.learnable
+        list[#list + 1] = row
+      else
+        result.excluded.no_profit = (result.excluded.no_profit or 0) + 1
+      end
+    else
+      result.excluded[reason] = (result.excluded[reason] or 0) + 1
+    end
+  end
+  local function byProfit(a, b)
+    if a.profit ~= b.profit then return a.profit > b.profit end
+    return a.recipeID < b.recipeID
+  end
+  table.sort(result.learned, byProfit)
+  table.sort(result.learnable, byProfit)
+  return result
 end

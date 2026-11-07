@@ -195,6 +195,59 @@ function Opportunities:FinishEvaluate(job)
   return results
 end
 
+-- Crafting over the given recipes with the latest AH view. Only the item
+-- keys of the recipes' reagents and outputs are touched; variants of one
+-- item are merged (their books are bought from together).
+function Opportunities:EvaluateCrafting(recipes)
+  local settings = self.store:Settings()
+  local wanted = {}
+  for _, recipe in ipairs(recipes) do
+    for _, reagent in ipairs(recipe.reagents or {}) do wanted[reagent.itemID] = true end
+    for _, output in ipairs(recipe.outputs or {}) do wanted[output.itemID] = true end
+  end
+  local keysByItem = {}
+  for itemKey in pairs(self.latest) do
+    local itemID = Schema.ItemIDOf(itemKey)
+    if itemID and wanted[itemID] and not self.stale[itemID] then
+      local keys = keysByItem[itemID] or {}
+      keysByItem[itemID] = keys
+      keys[#keys + 1] = itemKey
+    end
+  end
+  local now, cache, pending = self.clock(), {}, 0
+  local function market(itemID)
+    local entry = cache[itemID]
+    if entry then return entry end
+    entry = { levels = {} }
+    local keys = keysByItem[itemID] or {}
+    table.sort(keys)
+    for _, itemKey in ipairs(keys) do
+      local view = self.latest[itemKey]
+      local listings = view.listings
+      local commodity = view.source == "search_commodity" or (self.commodity and self.commodity(itemID))
+      if commodity == true and view.source == "replicate" then listings = Opportunities.CommodityLevels(listings) end
+      for _, listing in ipairs(listings) do entry.levels[#entry.levels + 1] = listing end
+      if not entry.estimate then
+        local estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp })
+        if estimate.status == "ok" then entry.estimate = estimate end
+      end
+    end
+    local info = self.items and self.items:Read(itemID)
+    if info then
+      entry.sellPrice, entry.bound, entry.name = info.sellPrice, info.bindType == 1, info.name
+    elseif self.items then
+      pending = pending + 1
+      self.items:Resolve(itemID, function() end)
+    end
+    cache[itemID] = entry
+    return entry
+  end
+  local result = ns.Strategies.Crafting.EvaluateRecipes(recipes, market, settings)
+  result.counts.infoPending = pending
+  result.at = now
+  return result
+end
+
 -- Runs every enabled strategy at once. Returns the results table (also kept).
 function Opportunities:Evaluate()
   local job = self:BeginEvaluate()

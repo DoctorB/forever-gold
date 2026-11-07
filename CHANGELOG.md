@@ -11,6 +11,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   IDs) and, for the first 12, product, quantity made and reagents, in
   `ForeverGoldDB.diagnostics.professions`. `/fg professions` prints a
   summary. Nothing is crafted or learned.
+- Crafting evaluation: every recipe of the player's professions (observed
+  when each profession window is opened, kept across sessions) is priced
+  with the latest scan. Reagents are bought at their real AH depth; the
+  result is sold to a merchant or on the AH (price history, or the current
+  lowest listing until three days of history exist, both before deposit),
+  whichever pays more. `/fg crafting` lists the best recipes the player
+  knows and the best ones a trainer could teach.
 
 ### Changed
 

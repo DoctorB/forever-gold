@@ -15,6 +15,7 @@ ns.Compat.Professions = Professions
 Professions.MAX_RECIPES = 12 -- recipes described in full per window
 Professions.MAX_IDS = 300 -- recipe IDs kept per window
 Professions.MAX_REAGENTS = 8
+Professions.MAX_CATALOGUE = 1000 -- recipes read per window (Blacksmithing lists 507)
 
 -- Presence only (never called unless listed in Observe below).
 Professions.MODERN = {
@@ -72,7 +73,32 @@ local function first(self, depth, ok, value)
   return Professions.Capture(self.client, value, depth, 40)
 end
 
-local function observeModern(self, report)
+-- Compact recipe from GetRecipeInfo + GetRecipeSchematic, in the shape of
+-- Data/Recipes; nil when the schematic has no output or unreadable reagents.
+-- Field names verified in game on build 70862 (2026-11-07, API-AUDIT row 24).
+function Professions.Compact(info, schematic, profession)
+  if type(info) ~= "table" or type(schematic) ~= "table" then return nil end
+  local output, low, high = schematic.outputItemID, schematic.quantityMin, schematic.quantityMax
+  if type(output) ~= "number" or output <= 0 or type(low) ~= "number" or low <= 0 then return nil end
+  local reagents = {}
+  for _, slot in ipairs(type(schematic.reagentSlotSchematics) == "table" and schematic.reagentSlotSchematics or {}) do
+    if slot.required ~= false then
+      local reagent = type(slot.reagents) == "table" and slot.reagents[1]
+      local itemID = type(reagent) == "table" and reagent.itemID
+      if type(itemID) ~= "number" or type(slot.quantityRequired) ~= "number" then return nil end
+      reagents[#reagents + 1] = { itemID = itemID, quantity = slot.quantityRequired }
+    end
+  end
+  if #reagents == 0 then return nil end
+  return {
+    id = info.recipeID or schematic.recipeID, name = info.name or schematic.name, profession = profession,
+    learned = info.learned == true, difficulty = info.relativeDifficulty,
+    outputs = { { itemID = output, quantity = low } }, quantityMax = high,
+    reagents = reagents,
+  }
+end
+
+local function observeModern(self, report, profession)
   local c = self.client
   local ids
   for _, name in ipairs({ "GetAllRecipeIDs", "GetFilteredRecipeIDs" }) do
@@ -89,23 +115,38 @@ local function observeModern(self, report)
   if not ids then return end
   report.recipeIDs = {}
   for index = 1, math.min(#ids, Professions.MAX_IDS) do report.recipeIDs[index] = ids[index] end
-  report.recipes = {}
-  for index = 1, math.min(#ids, Professions.MAX_RECIPES) do
+  -- Whole catalogue (learned or not) in compact form; the raw shape is kept
+  -- for the first recipes, learned ones first.
+  local catalogue, learned, other, unreadable = {}, {}, {}, 0
+  for index = 1, math.min(#ids, Professions.MAX_CATALOGUE) do
     local id = ids[index]
-    local entry = { id = id }
-    entry.info = first(self, 2, c:Call("C_TradeSkillUI", "GetRecipeInfo", id))
-    if c:Lookup("C_TradeSkillUI", "GetRecipeSchematic") then
-      -- schematic > reagentSlotSchematics > slot > reagents > reagent > fields
-      entry.schematic = first(self, 6, c:Call("C_TradeSkillUI", "GetRecipeSchematic", id, false))
+    local okInfo, info = c:Call("C_TradeSkillUI", "GetRecipeInfo", id)
+    local okSchematic, schematic = c:Call("C_TradeSkillUI", "GetRecipeSchematic", id, false)
+    local recipe = okInfo and okSchematic and Professions.Compact(info, schematic, profession)
+    if recipe then
+      catalogue[#catalogue + 1] = recipe
+    else
+      unreadable = unreadable + 1
     end
-    if c:Lookup("C_TradeSkillUI", "GetRecipeOutputItemData") then
-      entry.output = first(self, 2, c:Call("C_TradeSkillUI", "GetRecipeOutputItemData", id))
-    end
-    if c:Lookup("C_TradeSkillUI", "GetCraftableCount") then
-      entry.craftable = first(self, 0, c:Call("C_TradeSkillUI", "GetCraftableCount", id))
-    end
-    report.recipes[#report.recipes + 1] = entry
+    local list = (okInfo and type(info) == "table" and info.learned == true) and learned or other
+    list[#list + 1] = { id = id, info = info, schematic = schematic, okInfo = okInfo, okSchematic = okSchematic }
   end
+  report.catalogueSize, report.unreadable, report.learned = #catalogue, unreadable, #learned
+  report.recipes = {}
+  for _, list in ipairs({ learned, other }) do
+    for _, raw in ipairs(list) do
+      if #report.recipes >= Professions.MAX_RECIPES then break end
+      local entry = { id = raw.id }
+      entry.info = first(self, 2, raw.okInfo, raw.info)
+      -- schematic > reagentSlotSchematics > slot > reagents > reagent > fields
+      entry.schematic = first(self, 6, raw.okSchematic, raw.schematic)
+      if c:Lookup("C_TradeSkillUI", "GetCraftableCount") then
+        entry.craftable = first(self, 0, c:Call("C_TradeSkillUI", "GetCraftableCount", raw.id))
+      end
+      report.recipes[#report.recipes + 1] = entry
+    end
+  end
+  return catalogue
 end
 
 local function short(value)
@@ -155,26 +196,44 @@ local function observeLegacy(self, report)
   report.headers = headers
 end
 
+-- Name of the open profession window, or nil when none is open. With the
+-- window closed the client still answers, with an empty profession name
+-- (seen in game on build 70862) and the last window's recipes.
+function Professions:OpenProfession()
+  local c = self.client
+  local ok, base = c:Call("C_TradeSkillUI", "GetBaseProfessionInfo")
+  if ok and type(base) == "table" and type(base.professionName) == "string" and base.professionName ~= "" then
+    return base.professionName, base
+  end
+  local okLine, name = c:Call(nil, "GetTradeSkillLine")
+  if okLine and type(name) == "string" and name ~= "" and name ~= "UNKNOWN" then return name, nil end
+  return nil
+end
+
 -- Everything the open profession window exposes, read-only.
--- Returns { name, modern = {...}, legacy = {...}, symbols = { [name] = bool } }.
+-- Returns report, catalogue (compact recipes) or nil, "no_window".
+-- report: { name, skill, maxSkill, modern = {...}, legacy = {...}, symbols = { [name] = bool } }.
 function Professions:Observe()
   local c = self.client
-  local report = { symbols = {}, modern = {}, legacy = {} }
-  for _, name in ipairs(Professions.MODERN) do
-    report.symbols["C_TradeSkillUI." .. name] = c:Lookup("C_TradeSkillUI", name) ~= nil
+  local name, base = self:OpenProfession()
+  if not name then return nil, "no_window" end
+  local report = { name = name, symbols = {}, modern = {}, legacy = {} }
+  for _, symbol in ipairs(Professions.MODERN) do
+    report.symbols["C_TradeSkillUI." .. symbol] = c:Lookup("C_TradeSkillUI", symbol) ~= nil
   end
-  for _, name in ipairs(Professions.LEGACY) do report.symbols[name] = c:Lookup(nil, name) ~= nil end
-  if c:Lookup("C_TradeSkillUI", "GetBaseProfessionInfo") then
-    report.modern.base = first(self, 2, c:Call("C_TradeSkillUI", "GetBaseProfessionInfo"))
+  for _, symbol in ipairs(Professions.LEGACY) do report.symbols[symbol] = c:Lookup(nil, symbol) ~= nil end
+  if base then
+    report.modern.base = Professions.Capture(c, base, 2, 40)
+    report.skill, report.maxSkill = base.skillLevel, base.maxSkillLevel
   end
   if c:Lookup("C_TradeSkillUI", "GetChildProfessionInfo") then
     report.modern.child = first(self, 2, c:Call("C_TradeSkillUI", "GetChildProfessionInfo"))
   end
-  observeModern(self, report.modern)
+  local catalogue = observeModern(self, report.modern, name)
   observeLegacy(self, report.legacy)
-  local base = type(report.modern.base) == "table" and report.modern.base or {}
-  report.name = report.legacy.line and type(report.legacy.line.name) == "string" and report.legacy.line.name
-    or (type(base.professionName) == "string" and base.professionName ~= "" and base.professionName)
-    or "unknown"
-  return report
+  if report.legacy.line then
+    report.skill = report.skill or report.legacy.line.rank
+    report.maxSkill = report.maxSkill or report.legacy.line.max
+  end
+  return report, catalogue or {}
 end

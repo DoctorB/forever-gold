@@ -39,6 +39,11 @@ function App:Load(saved)
     self.bus:Publish("items.resolved", itemID)
   end)
   self.professions = ns.Compat.Professions.New(self.client)
+  ns.Data.Recipes.Load(self.store.db.recipes)
+  -- The first probe (32108fc) saved a report named "unknown" when called
+  -- with no window open; it held the previous window's recipes.
+  local professions = self.store.db.diagnostics and self.store.db.diagnostics.professions
+  if professions then professions.unknown = nil end
   self.history = ns.Data.History.New(self.store, clock)
   self.events = { registered = {}, rejected = {} }
   self.diagnostics = ns.Services.Diagnostics.New({
@@ -301,6 +306,7 @@ function App:EvaluateChunked(after, mode)
       self:SaveView()
       return finished
     end)
+    self:EvaluateCrafting()
     self:Progress("done", total, total, mode)
     if after then after(results) end
   end)
@@ -317,10 +323,34 @@ function App:ObserveProfessionSoon()
   end)
 end
 
+-- Returns the report, or nil, "no_window" when no profession window is open.
 function App:ObserveProfession()
-  local report = self.professions:Observe()
+  -- One frame: about 500 recipes for Blacksmithing; timed to check in game.
+  local report, catalogue = self:Timed("profession_observe", nil, function() return self.professions:Observe() end)
+  if not report then return nil, catalogue end
   self.diagnostics:RecordProfessions(report)
+  local db = self.store.db
+  db.recipes = db.recipes or {}
+  db.recipes[report.name] = {
+    at = self.clock(), build = self.client:BuildInfo().build, skill = report.skill, maxSkill = report.maxSkill,
+    list = catalogue,
+  }
+  ns.Data.Recipes.Load(db.recipes)
+  self:EvaluateCrafting()
   return report
+end
+
+-- Crafting over every known recipe with the latest AH view (one pass,
+-- timed: the reagent books are cached per item).
+function App:EvaluateCrafting()
+  local results = self.opportunities.results
+  if not results or results.demo or ns.Data.Recipes.status ~= "observed" then return nil end
+  local crafting = self:Timed("crafting", nil, function()
+    return self.opportunities:EvaluateCrafting(ns.Data.Recipes.List())
+  end)
+  results.crafting = crafting
+  self.bus:Publish("crafting.updated", crafting)
+  return crafting
 end
 
 -- Client events forwarded by Core/Init.
