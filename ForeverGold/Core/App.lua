@@ -306,6 +306,23 @@ function App:EvaluateChunked(after, mode)
   end)
 end
 
+-- Observes the open profession window (read-only) once its list settles:
+-- the list events come in bursts while the window fills.
+function App:ObserveProfessionSoon()
+  if self.professionPending then return end
+  self.professionPending = true
+  self.scheduler:After(1, function()
+    self.professionPending = false
+    self:ObserveProfession()
+  end)
+end
+
+function App:ObserveProfession()
+  local report = self.professions:Observe()
+  self.diagnostics:RecordProfessions(report)
+  return report
+end
+
 -- Client events forwarded by Core/Init.
 function App:OnEvent(event, ...)
   if not self.loaded then return end
@@ -321,6 +338,9 @@ function App:OnEvent(event, ...)
     self.vendorCheck:OnMerchantShow()
   elseif event == "MERCHANT_CLOSED" then
     self.vendorCheck:OnMerchantClosed()
+  elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then
+    self.diagnostics:Trace("tradeskill", { event = event })
+    if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon() end
   else
     if event == "AUCTION_HOUSE_SHOW" then self.marketKeyCache = nil end
     self.ah:OnEvent(event, ...)

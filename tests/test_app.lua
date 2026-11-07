@@ -130,6 +130,101 @@ T.Case("invalid events are not registered", function()
   T.NotOk(frame.events.REPLICATE_ITEM_LIST_UPDATE)
 end)
 
+-- Profession window fakes: shapes are invented for the test, not taken
+-- from the Forever client (that is what the in-game probe is for).
+local function legacyProfession(calls)
+  local list = {
+    { "Smelting", "header" },
+    { "Smelt Copper", "optimal", 3, link = "|Hitem:2840|h[Copper Bar]|h", made = { 1, 1 },
+      reagents = { { "Copper Ore", 1, 3, "|Hitem:2770|h[Copper Ore]|h" } } },
+    { "Smelt Bronze", "medium", 0, link = "|Hitem:2841|h[Bronze Bar]|h", made = { 2, 2 },
+      reagents = { { "Copper Bar", 1, 0 }, { "Tin Bar", 1, 0 } } },
+  }
+  local function track(name, fn)
+    return function(...)
+      calls[name] = (calls[name] or 0) + 1
+      return fn(...)
+    end
+  end
+  return {
+    GetTradeSkillLine = track("GetTradeSkillLine", function() return "Mining", 75, 150 end),
+    GetNumTradeSkills = track("GetNumTradeSkills", function() return #list end),
+    GetTradeSkillInfo = function(i) return list[i][1], list[i][2], list[i][3] end,
+    GetTradeSkillItemLink = function(i) return list[i].link end,
+    GetTradeSkillNumMade = function(i) return list[i].made[1], list[i].made[2] end,
+    GetTradeSkillNumReagents = function(i) return #list[i].reagents end,
+    GetTradeSkillReagentInfo = function(i, j)
+      local r = list[i].reagents[j]
+      return r[1], "texture", r[2], r[3]
+    end,
+    GetTradeSkillReagentItemLink = function(i, j) return list[i].reagents[j][4] end,
+  }
+end
+
+T.Case("profession probe: classic list read when the window opens, read-only", function()
+  local calls = {}
+  local app, ns, clock = Fakes.App({ globals = legacyProfession(calls) })
+  app:OnEvent("TRADE_SKILL_SHOW")
+  app:OnEvent("TRADE_SKILL_LIST_UPDATE")
+  app:OnEvent("TRADE_SKILL_LIST_UPDATE")
+  clock.advance(2)
+  T.Eq(calls.GetNumTradeSkills, 1, "one observation per burst of list events")
+  local report = app.store.db.diagnostics.professions.Mining
+  T.Ok(report, "saved under the profession name")
+  T.Eq(report.legacy.line.rank, 75)
+  T.Eq(report.legacy.count, 3)
+  T.Eq(report.legacy.headers, 1)
+  T.Eq(#report.legacy.recipes, 2)
+  local copper = report.legacy.recipes[1]
+  T.Eq(copper.name, "Smelt Copper")
+  T.Eq(copper.madeMin, 1)
+  T.Eq(copper.reagents[1].count, 1)
+  T.Eq(copper.reagents[1].have, 3)
+  T.Ok(copper.reagents[1].link:find("2770", 1, true) ~= nil)
+  T.Eq(report.symbols.GetNumTradeSkills, true)
+  T.Eq(report.symbols["C_TradeSkillUI.GetAllRecipeIDs"], false)
+  T.Eq(report.modern.recipeIDs, nil)
+  ns.UI.Commands.Handle("professions")
+  local found
+  for _, line in ipairs(ns.printed) do if line:find("Mining", 1, true) then found = line end end
+  T.Ok(found and found:find("75/150", 1, true), "summary printed")
+end)
+
+T.Case("profession probe: modern recipe IDs keep the raw field names", function()
+  local trade = {
+    GetAllRecipeIDs = function() return { 2657, 2659 } end,
+    GetRecipeInfo = function(id) return { recipeID = id, name = "Smelt " .. id, learned = true, craftable = true } end,
+    GetRecipeSchematic = function(id)
+      return { outputItemID = 2840, quantityMin = 1, quantityMax = 1,
+        reagentSlotSchematics = { { quantityRequired = 1, reagents = { { itemID = 2770 } } } },
+        callback = function() end }
+    end,
+    GetBaseProfessionInfo = function() return { professionName = "Mining", skillLevel = 75, maxSkillLevel = 150 } end,
+  }
+  local app = Fakes.App({ globals = { C_TradeSkillUI = trade } })
+  local report = app:ObserveProfession()
+  T.Eq(report.name, "Mining")
+  T.Eq(report.modern.idSource, "GetAllRecipeIDs")
+  T.Eq(#report.modern.recipeIDs, 2)
+  local schematic = report.modern.recipes[1].schematic
+  T.Eq(schematic.outputItemID, 2840)
+  T.Eq(schematic.reagentSlotSchematics[1].reagents[1].itemID, 2770)
+  T.Eq(schematic.callback, "function", "functions kept by type name only")
+  T.Eq(report.modern.recipes[2].info.name, "Smelt 2659")
+end)
+
+T.Case("profession probe: a client error is recorded, not raised", function()
+  local app = Fakes.App({ globals = {
+    GetNumTradeSkills = function() return 1 end,
+    GetTradeSkillInfo = function() error("no window") end,
+    C_TradeSkillUI = { GetAllRecipeIDs = function() error("not ready") end },
+  } })
+  local report = app:ObserveProfession()
+  T.Eq(report.name, "unknown")
+  T.Ok(tostring(report.modern.GetAllRecipeIDs):find("^error") ~= nil)
+  T.Eq(#report.legacy.recipes, 0)
+end)
+
 T.Case("session-only mode hands the original table back", function()
   local saved = { schema = 1, settings = { sessionOnly = true }, markets = {} }
   local app = Fakes.App({ saved = saved })

@@ -39,6 +39,12 @@ function Commands.Handle(input)
     else
       ns.UI.Feedback.StartFeeTest(app, tonumber(rest))
     end
+  elseif command == "professions" or command == "prof" then
+    -- Read-only: observes the open profession window, if any, then reports.
+    app:ObserveProfession()
+    local lines = ns.Services.Diagnostics.ProfessionSummary(app.store.db.diagnostics.professions, ns.L)
+    for _, line in ipairs(lines) do ns.Print(line) end
+    ns.Print(L("DIAG_SAVED"))
   elseif command == "probe" then
     ns.UI.Feedback.StartProbe(app)
   elseif command == "lang" then

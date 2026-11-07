@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ## [Unreleased]
 
+### Added
+
+- Profession probe (read-only): opening a profession window records which
+  recipe APIs the client has, the recipes it lists (classic list and recipe
+  IDs) and, for the first 12, product, quantity made and reagents, in
+  `ForeverGoldDB.diagnostics.professions`. `/fg professions` prints a
+  summary. Nothing is crafted or learned.
+
 ### Changed
 
 - "Buy all" stops after two searches or quotes in a row get no answer,

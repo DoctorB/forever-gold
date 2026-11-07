@@ -94,3 +94,16 @@ not post: you post from the native AH window.
 | 4.3 | Wait for the sale (may take hours; `/fg feetest status` shows the stage) | — | — |
 | 4.4 | Open any mailbox (no need to take the mail) | chat: "Sale invoices read … fee X%. Fee verified" | fee |
 | 4.5 | `/reload`, then send the file for the audit | fee and deposit recorded in `ForeverGoldDB.verifiedRuntime` | — |
+
+## Session 5 — profession windows (read-only)
+
+Nothing is crafted, learned or changed: the add-on only reads what each open
+window shows. Character professions: Mining (Smelting window), Blacksmithing,
+Cooking, First Aid.
+
+| # | Action | Expected result | To record |
+| --- | --- | --- | --- |
+| 5.1 | Open the Smelting window (Mining), wait 2 s, close it | nothing visible | — |
+| 5.2 | Same for Blacksmithing, Cooking and First Aid | nothing visible | — |
+| 5.3 | `/fg professions` | one chat line per profession: skill, recipes by ID and in the classic list | the four lines |
+| 5.4 | `/reload`, then send the file for the audit | `ForeverGoldDB.diagnostics.professions` holds one report per window | — |

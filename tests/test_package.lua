@@ -104,6 +104,18 @@ T.Case("spending calls live only in Compat/Purchase.lua; posting and cancelling 
   end
 end)
 
+T.Case("no crafting, learning or profession-window calls anywhere", function()
+  local names = { "CraftRecipe", "CraftEnchant", "CraftSalvage", "RecraftRecipe", "DoTradeSkill", "DoCraft",
+    "OpenTradeSkill", "CloseTradeSkill", "OpenRecipe", "SetRecipeTracked", "ConfirmProfessionRespec",
+    "AbandonSkill", "CastSpell", "SetShowLearned", "SetShowUnlearned", "SetSourceTypeFilter" }
+  for path, source in pairs(sources) do
+    local body = code(source)
+    for _, name in ipairs(names) do
+      T.NotOk(body:find("[^%w_]" .. name .. "[^%w_]"), path .. " mentions " .. name)
+    end
+  end
+end)
+
 -- Globals read by the addon: Lua base library plus client symbols. Client
 -- APIs are otherwise reached through the adapter's env table.
 local ALLOWED_GETS = {
@@ -135,7 +147,14 @@ T.Case("versions agree: TOC, runtime, changelog", function()
   local ns = T.LoadAddon()
   T.Eq(ns.VERSION, fields.Version)
   local changelog = T.ReadFile(T.ROOT .. "/CHANGELOG.md")
-  local top = changelog:match("\n## %[?([%w%.%-]+)%]?")
+  -- Keep a Changelog: an [Unreleased] section may sit above the latest version.
+  local top
+  for heading in changelog:gmatch("\n## %[?([%w%.%-]+)%]?") do
+    if heading ~= "Unreleased" then
+      top = heading
+      break
+    end
+  end
   T.Eq(top, fields.Version)
 end)
 

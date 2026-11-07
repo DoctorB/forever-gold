@@ -56,6 +56,42 @@ function Diagnostics:Timing(phase, fields)
   while #list > Diagnostics.TIMING_LIMIT do table.remove(list, 1) end
 end
 
+-- Latest observation of each profession window (Compat/Professions), kept
+-- in ForeverGoldDB.diagnostics.professions[name] for docs/API-AUDIT.md.
+Diagnostics.PROFESSION_LIMIT = 8
+
+function Diagnostics:RecordProfessions(report)
+  local diag = self.store.db.diagnostics
+  diag.professions = diag.professions or {}
+  report.at = self.clock()
+  report.build = self.client:BuildInfo().build
+  local list = diag.professions
+  if list[report.name] == nil then
+    local count = 0
+    for _ in pairs(list) do count = count + 1 end
+    if count >= Diagnostics.PROFESSION_LIMIT then return false end
+  end
+  list[report.name] = report
+  return true
+end
+
+-- One line per observed profession: recipes found by each path.
+function Diagnostics.ProfessionSummary(professions, L)
+  local lines, names = {}, {}
+  for name in pairs(professions or {}) do names[#names + 1] = name end
+  table.sort(names)
+  for _, name in ipairs(names) do
+    local report = professions[name]
+    local modern, legacy = report.modern or {}, report.legacy or {}
+    local line = legacy.line or {}
+    lines[#lines + 1] = string.format(L["PROF_LINE"], name, tostring(line.rank or "?"), tostring(line.max or "?"),
+      modern.recipeIDs and #modern.recipeIDs or 0, tostring(modern.idSource or "-"),
+      type(legacy.count) == "number" and (legacy.count - (legacy.headers or 0)) or 0)
+  end
+  if #lines == 0 then lines[1] = L["PROF_NONE"] end
+  return lines
+end
+
 function Diagnostics:Run()
   local client, capabilities = self.client, self.capabilities
   client:Detect(capabilities)
