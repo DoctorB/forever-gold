@@ -1,5 +1,5 @@
--- History, Professions and Portfolio tabs. History and Portfolio show their
--- data as tables (UI/Table.lua); the row builders are pure and tested.
+-- History, Crafting (key "professions") and Portfolio tabs, shown as tables
+-- (UI/Table.lua); the row builders are pure and tested.
 local _, ns = ...
 
 local W = ns.UI.Widgets
@@ -199,31 +199,121 @@ function History.Refresh(panel)
   panel.prices:SetRows(History.PriceRows(app), L("HIST_EMPTY_PRICES"))
 end
 
--- Professions ----------------------------------------------------------------
+-- Professions (Crafting tab) ------------------------------------------------
+-- Every recipe of the player's professions priced with the latest scan
+-- (Strategies/Crafting): the recipes the player knows, then the ones a
+-- trainer or a recipe item could teach. Read-only; nothing is crafted.
 
 local Professions = {}
 Panels.professions = Professions
 
+Professions.COLUMNS = {
+  { key = "prof", width = 0.13 }, { key = "recipe", width = 0.27 }, { key = "cost", width = 0.11, right = true },
+  { key = "exit", width = 0.14 }, { key = "revenue", width = 0.11, right = true },
+  { key = "gain", width = 0.11, right = true }, { key = "onah", width = 0.13, right = true },
+}
+Professions.KNOWN_ROWS = 6
+
+local function itemName(app, itemID, fallback)
+  local info = app.items and app.items:Read(itemID)
+  return (info and info.name) or fallback or ("#" .. tostring(itemID))
+end
+
+-- Lines above the tables: professions and skill, then what was priced.
 function Professions.Summary(app)
-  local caps = app.professions:GetCapabilities()
-  local lines = {
-    L("PROF_DISABLED"),
-    "",
-    string.format(L("PROF_API"), caps.recipeInfo and L("PRESENT") or L("ABSENT"),
-      caps.recipeSchematic and L("PRESENT") or L("ABSENT")),
-    string.format(L("PROF_DE"), ns.Data.Disenchant.status),
-    string.format(L("PROF_RECIPES"), ns.Data.Recipes.status),
-  }
+  local Recipes = ns.Data.Recipes
+  if Recipes.status ~= "observed" then return L("CRAFT_UI_NO_RECIPES") end
+  local names = {}
+  for name in pairs(Recipes.professions) do names[#names + 1] = name end
+  table.sort(names)
+  local parts = {}
+  for _, name in ipairs(names) do
+    local p = Recipes.professions[name]
+    parts[#parts + 1] = string.format("%s %s/%s", name, tostring(p.skill or "?"), tostring(p.maxSkill or "?"))
+  end
+  local lines = { table.concat(parts, "  ·  ") }
+  local results = app.opportunities.results
+  local crafting = (results and results.crafting) or app.lastCrafting
+  if not results or results.demo then
+    lines[2] = L("CRAFT_NO_SCAN")
+  elseif app.craftingRunning and not crafting then
+    lines[2] = L("CRAFT_UI_COMPUTING")
+  elseif crafting then
+    local skipped = crafting.counts.recipes - crafting.counts.evaluated
+    lines[2] = string.format(L("CRAFT_UI_PRICED"), crafting.counts.recipes, crafting.counts.evaluated,
+      crafting.excluded.reagent_not_on_ah or 0, skipped)
+  end
   return table.concat(lines, "\n")
 end
 
+-- Table rows for one list of crafting rows (pure apart from item names).
+function Professions.Rows(app, list)
+  local rows = {}
+  for _, row in ipairs(list or {}) do
+    local name = itemName(app, row.outputItemID, row.name)
+    if row.quantity > 1 then name = row.quantity .. " x " .. name end
+    local tip = { name, string.format(L("CRAFT_TIP_RECIPE"), row.name or "?", row.profession or "?"), L("CRAFT_TIP_REAGENTS") }
+    for _, reagent in ipairs(row.reagents or {}) do
+      tip[#tip + 1] = string.format("  %d x %s: %s", reagent.quantity, itemName(app, reagent.itemID), fmt(reagent.cost))
+    end
+    for _, exit in ipairs(row.exits or {}) do
+      tip[#tip + 1] = string.format(L("CRAFT_TIP_EXIT"), L("CRAFT_EXIT_" .. exit.exit), fmt(exit.net))
+    end
+    if row.listings and row.listings > 0 then
+      tip[#tip + 1] = string.format(L("CRAFT_TIP_COMPETITION"), row.listings, row.units or 0)
+    end
+    if row.exit ~= "vendor" then tip[#tip + 1] = L("CRAFT_TIP_SPECULATIVE") end
+    local gain, gainColor = signed(row.profit)
+    rows[#rows + 1] = {
+      cells = {
+        row.profession or "?", name, fmt(row.cost), L("CRAFT_EXIT_SHORT_" .. row.exit), fmt(row.revenue), gain,
+        (row.listings and row.listings > 0) and tostring(row.units) or "-",
+      },
+      colors = { [4] = row.exit == "vendor" and W.EMERALD or W.GOLD, [6] = gainColor },
+      tip = tip,
+    }
+  end
+  return rows
+end
+
+local function labelled(columns)
+  local out = {}
+  for index, column in ipairs(columns) do
+    out[index] = { key = column.key, width = column.width, right = column.right, label = L("CRAFT_COL_" .. column.key) }
+  end
+  return out
+end
+
 function Professions.Build(panel)
-  panel.text = W.ScrollText(panel, false)
-  panel.text:SetAllPoints()
+  panel.summary = W.Text(panel, "GameFontHighlightSmall")
+  panel.summary:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  panel.summary:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  local knownTitle = W.Text(panel, "GameFontNormal")
+  knownTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -34)
+  knownTitle:SetText(L("CRAFT_UI_KNOWN"))
+  panel.known = ns.UI.Table.New(panel, labelled(Professions.COLUMNS))
+  panel.known.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -52)
+  panel.known.frame:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  panel.known.frame:SetHeight(ns.UI.Table.ROW_HEIGHT * (Professions.KNOWN_ROWS + 1))
+  local learnTitle = W.Text(panel, "GameFontNormal")
+  learnTitle:SetPoint("TOPLEFT", panel.known.frame, "BOTTOMLEFT", 0, -8)
+  learnTitle:SetText(L("CRAFT_UI_LEARNABLE"))
+  panel.learnable = ns.UI.Table.New(panel, labelled(Professions.COLUMNS))
+  panel.learnable.frame:SetPoint("TOPLEFT", learnTitle, "BOTTOMLEFT", 0, -4)
+  panel.learnable.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+  if ns.app and ns.app.bus then
+    ns.app.bus:Subscribe("crafting.updated", function() ns.UI.Main.RefreshPanel("professions") end)
+  end
 end
 
 function Professions.Refresh(panel)
-  panel.text:SetText(Professions.Summary(ns.app))
+  local app = ns.app
+  panel.summary:SetText(Professions.Summary(app))
+  local results = app.opportunities.results
+  local crafting = results and not results.demo and (results.crafting or app.lastCrafting)
+  local empty = ns.Data.Recipes.status == "observed" and L("CRAFT_NONE") or L("CRAFT_UI_NO_RECIPES")
+  panel.known:SetRows(Professions.Rows(app, crafting and crafting.learned), empty)
+  panel.learnable:SetRows(Professions.Rows(app, crafting and crafting.learnable), empty)
 end
 
 -- Portfolio ------------------------------------------------------------------

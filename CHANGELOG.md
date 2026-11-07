@@ -25,6 +25,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   1-2 s: the window is read when it opens and then at most once a minute,
   and recipes are re-priced only when they changed.
 
+- Crafting tab (was "Professions"): the recipes you know that pay off and
+  the ones you could learn, with reagent cost, where to sell, what you get,
+  the gain and how many are already on the AH; hover a row for reagents and
+  exits. It refreshes by itself after each scan, when a profession window is
+  opened and when a recipe is learned (no need to reopen the window).
+- The "current lowest" AH price of a crafted item is used only with at least
+  3 listings: single overpriced weapons and armour made unlearned recipes
+  look worth 100-250 gold.
+
 ### Changed
 
 - "Buy all" stops after two searches or quotes in a row get no answer,

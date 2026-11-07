@@ -119,8 +119,16 @@ Checked in game 2026-11-07 08:49: catalogue saved for the four professions
 (learned 5/4/2/1), `profession_observe` 36 ms for Blacksmithing (507
 recipes), under 6 ms for the others; **pricing all recipes in one frame took
 360-380 ms** after a scan, so it now runs one recipe per step (bench: 16 ms
-slowest step on desktop). Next: check `crafting` timings and
-`diagnostics.crafting` in game, then a Crafting tab in the window.
+slowest step on desktop). Checked in game 2026-11-07 09:41: 688 recipes priced over 109 frames,
+longest 28 ms (Copper Rod, 2,851 listings); known recipes that pay: Copper
+Rod +50 c, Basic Campfire +21 c, Copper Bracers +10 c, Rough Sharpening
+Stone +3 c; 338 recipes unpriced because a reagent is sold only by
+merchants. Unlearned weapons and armour showed 100-250 gold gains from
+single overpriced listings: the "current lowest" price now needs 3
+listings. Crafting tab added (replaces the Professions status page);
+recipes learned in game are picked up through `NEW_RECIPE_LEARNED`.
+Next: merchant prices for reagents (observed at merchants), several crafts
+at real depth, deposit.
 
 ## Implemented
 

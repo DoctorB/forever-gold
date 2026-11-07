@@ -268,7 +268,7 @@ T.Case("recipe compact form from the schematic seen in game", function()
 end)
 
 -- Crafting on a fake market. Prices chosen so every exit is exercised:
---   Ore 102: commodity, 10 units at 30 each.   Bar 301: one auction at 200, merchant 10.
+--   Ore 102: commodity, 10 units at 30 each.   Bar 301: three auctions from 200, merchant 10.
 --   Linen 101: not on the AH, merchant 50.     Eye 103: merchant 20.
 local CRAFT_ITEMS = {
   [101] = { name = "Linen", sellPrice = 50 }, [102] = { name = "Ore", sellPrice = 5 },
@@ -299,7 +299,8 @@ local function craftingApp()
         reagentSlotSchematics = slots }
     end,
   }
-  local rows = { { itemID = 102, count = 10, buyout = 300 }, { itemID = 301, count = 1, buyout = 200 } }
+  local rows = { { itemID = 102, count = 10, buyout = 300 }, { itemID = 301, count = 1, buyout = 200 },
+    { itemID = 301, count = 1, buyout = 210 }, { itemID = 301, count = 1, buyout = 220 } }
   local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = { C_TradeSkillUI = trade } })
   ah.commodityItems[102] = true
   ah.commodityItems[301] = false
@@ -592,4 +593,64 @@ T.Case("profession window: list updates are throttled and unchanged recipes are 
   runs = 0
   for _, timing in ipairs(app.store.db.diagnostics.timings) do if timing.phase == "crafting_begin" then runs = runs + 1 end end
   T.Eq(runs, 1, "same recipes: not priced again")
+end)
+
+T.Case("crafting: the current AH price needs at least 3 listings of the result", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  local settings = { feeBp = 500, bufferBp = 500 }
+  local function lots(n)
+    local levels = {}
+    for index = 1, n do levels[index] = { quantity = 1, buyoutTotal = 1000000, divisible = false, buyable = true } end
+    return levels
+  end
+  -- One overpriced weapon: no AH exit, and no merchant price either.
+  T.Eq(Crafting.Exits({ levels = lots(1), sellPrice = 0 }, 1, settings), nil)
+  local market = function(itemID)
+    if itemID == 1 then return { levels = { { quantity = 5, unitPrice = 10, divisible = true, buyable = true } } } end
+    return { levels = lots(2), sellPrice = 0 }
+  end
+  local row, reason = Crafting.EvaluateRecipe({ id = 9, outputs = { { itemID = 2, quantity = 1 } },
+    reagents = { { itemID = 1, quantity = 1 } } }, market, settings, {})
+  T.Eq(row, nil)
+  T.Eq(reason, "thin_market")
+  local best = Crafting.Exits({ levels = lots(3), sellPrice = 0 }, 1, settings)
+  T.Eq(best.exit, "ah_now")
+end)
+
+T.Case("crafting: a recipe learned in game is priced without reopening the window", function()
+  local app, _, clock = craftingApp()
+  app:ObserveProfession()
+  clock.advance(1)
+  T.Eq(#app.opportunities.results.crafting.learnable, 1)
+  app:OnEvent("NEW_RECIPE_LEARNED", 2)
+  clock.advance(1)
+  local crafting = app.opportunities.results.crafting
+  T.Eq(#crafting.learned, 2, "Weave Linen moved to the known recipes")
+  T.Eq(#crafting.learnable, 0)
+  T.Eq(app.store.db.recipes.Mining.list[2].learned, true, "saved")
+  T.NotOk(app:OnRecipeLearned(424242), "unknown recipe: nothing to do")
+end)
+
+T.Case("crafting tab: rows, tooltip and summary", function()
+  local app, ns, clock = craftingApp()
+  local Panel = ns.UI.Panels.professions
+  T.Ok(Panel.Summary(app):find("Open each profession window", 1, true), "asks for the windows first")
+  app:ObserveProfession()
+  clock.advance(1)
+  local summary = Panel.Summary(app)
+  T.Ok(summary:find("Mining 23/75", 1, true), "skill shown")
+  T.Ok(summary:find("4 recipes, 3 priced", 1, true), summary)
+  local crafting = app.opportunities.results.crafting
+  local rows = Panel.Rows(app, crafting.learned)
+  T.Eq(#rows, 1)
+  T.Eq(rows[1].cells[2], "Bar")
+  T.Eq(rows[1].cells[4], "AH (now)")
+  T.Eq(rows[1].cells[7], "3")
+  local tip = table.concat(rows[1].tip, "\n")
+  T.Ok(tip:find("2 x Ore", 1, true), tip)
+  T.Ok(tip:find("3 listings", 1, true), tip)
+  local learnable = Panel.Rows(app, crafting.learnable)
+  T.Eq(learnable[1].cells[2], "2 x Linen")
+  T.Eq(learnable[1].cells[4], "Merchant")
 end)

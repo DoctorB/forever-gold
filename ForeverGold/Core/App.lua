@@ -356,6 +356,25 @@ function App:ObserveProfession()
   return report, changed
 end
 
+-- A recipe learned from a trainer or a recipe item: mark it in the saved
+-- catalogue and re-price, without reopening the profession window.
+-- Returns true when the recipe was in a catalogue.
+function App:OnRecipeLearned(recipeID)
+  self.diagnostics:Trace("recipe_learned", { recipeID = recipeID })
+  for _, entry in pairs(self.store.db.recipes or {}) do
+    for _, recipe in ipairs(entry.list or {}) do
+      if recipe.id == recipeID then
+        if recipe.learned then return true end
+        recipe.learned = true
+        ns.Data.Recipes.Load(self.store.db.recipes)
+        self:EvaluateCrafting()
+        return true
+      end
+    end
+  end
+  return false
+end
+
 -- Recipes and which of them are learned, as one comparable string.
 function App.CatalogueSignature(list)
   local parts = {}
@@ -435,6 +454,8 @@ function App:OnEvent(event, ...)
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then
     self.diagnostics:Trace("tradeskill", { event = event })
     if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon(event == "TRADE_SKILL_SHOW") end
+  elseif event == "NEW_RECIPE_LEARNED" then
+    self:OnRecipeLearned(...)
   else
     if event == "AUCTION_HOUSE_SHOW" then self.marketKeyCache = nil end
     self.ah:OnEvent(event, ...)

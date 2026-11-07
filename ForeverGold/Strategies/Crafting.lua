@@ -79,6 +79,25 @@ local MarketValue = ns.Economy.MarketValue
 -- market: { levels, sellPrice?, estimate? }. Returns { exit, net, gross, fee }
 -- for the merchant and for the AH (history-based or, without three days of
 -- history, the lowest current listing), the better one first; nil if none.
+-- The "current lowest" AH price is used only with at least this many
+-- listings of the result: in game (2026-11-07) single overpriced weapons and
+-- armour made unlearned recipes look worth 100-250 gold.
+Crafting.MIN_LISTINGS = 3
+
+-- Listings and units of an item on the AH, computed once per market entry.
+function Crafting.Liquidity(market)
+  if not market then return 0, 0, nil end
+  if market.book == nil then
+    local book = Depth.Book(market.levels or {})
+    local units = 0
+    for _, level in ipairs(book) do units = units + level.quantity end
+    market.book, market.units = book, units
+  end
+  local first = market.book[1]
+  local lowest = first and (first.divisible and first.unitPrice or Money.DivCeil(first.buyoutTotal, first.quantity))
+  return #market.book, market.units, lowest
+end
+
 function Crafting.Exits(market, quantity, settings)
   local exits = {}
   local sellPrice = market and market.sellPrice
@@ -100,8 +119,8 @@ function Crafting.Exits(market, quantity, settings)
     local net, fee = Costs.NetRevenue(resale.prudentGross, feeBp)
     if net then exits[#exits + 1] = { exit = "ah", gross = resale.prudentGross, net = net, fee = fee } end
   elseif not resale then
-    local lowest = Depth.LowestUnit(levels)
-    if lowest then
+    local listings, _, lowest = Crafting.Liquidity(market)
+    if lowest and listings >= Crafting.MIN_LISTINGS then
       local unit = lowest - Money.ShareUp(lowest, settings.bufferBp or 0)
       local gross = Money.Mul(unit, quantity)
       local net, fee = Costs.NetRevenue(gross, feeBp)
@@ -136,8 +155,11 @@ function Crafting.EvaluateRecipe(recipe, market, settings, cache)
   end
   local outputMarket = market(output.itemID)
   local best, exits = Crafting.Exits(outputMarket, output.quantity, settings)
+  local listings, units = Crafting.Liquidity(outputMarket)
   if not best then
-    return nil, (outputMarket and outputMarket.sellPrice == nil) and "output_price_pending" or "output_no_value"
+    if outputMarket and outputMarket.sellPrice == nil then return nil, "output_price_pending" end
+    if listings > 0 and listings < Crafting.MIN_LISTINGS then return nil, "thin_market" end
+    return nil, "output_no_value"
   end
   local profit = best.net - cost
   return {
@@ -146,6 +168,7 @@ function Crafting.EvaluateRecipe(recipe, market, settings, cache)
     outputItemID = output.itemID, quantity = output.quantity, quantityMax = recipe.quantityMax,
     cost = cost, reagents = reagents, exit = best.exit, gross = best.gross, fee = best.fee, revenue = best.net,
     profit = profit, roi = cost > 0 and profit / cost or nil, exits = exits,
+    listings = listings, units = units, -- the result already on the AH (competition)
     -- The merchant price is verified in game; AH exits have no deposit
     -- estimate yet and the "now" price has no history behind it.
     class = best.exit == "vendor" and "prudent" or "speculative",
