@@ -326,8 +326,11 @@ T.Case("crafting: known recipes and learnable ones priced at real depth", functi
   local bar = crafting.learned[1]
   T.Eq(bar.cost, 60)
   T.Eq(bar.exit, "ah_now")
-  T.Eq(bar.revenue, 180)
-  T.Eq(bar.profit, 120)
+  -- Deposit: merchant price 10 -> 3 for 8 h, raised to the 100 minimum;
+  -- half counted as lost: 180 - 50.
+  T.Eq(bar.revenue, 130)
+  T.Eq(bar.profit, 70)
+  T.Eq(bar.exits[1].deposit, 100)
   T.Eq(bar.class, "speculative")
   -- Weave Linen: 1 ore = 30 -> 2 linen to a merchant = 100.
   T.Eq(#crafting.learnable, 1)
@@ -554,7 +557,7 @@ T.Case("crafting: summary kept for the audit, a newer run cancels the older one"
   local saved = app.store.db.diagnostics.crafting
   T.Ok(saved, "summary saved")
   T.Eq(saved.totals.learned, 1)
-  T.Eq(saved.learned[1].profit, 120)
+  T.Eq(saved.learned[1].profit, 70)
   T.Eq(saved.learnable[1].recipeID, 2)
   T.Eq(saved.excluded.reagent_not_on_ah, 1)
   local crafting = 0
@@ -728,7 +731,7 @@ T.Case("crafting: a merchant reagent prices recipes and is used only when cheape
   T.Ok(rare, "Rare Bar now priced")
   T.Eq(rare.cost, 50)
   T.Eq(rare.reagents[1].merchant, true)
-  T.Eq(rare.profit, 130)
+  T.Eq(rare.profit, 80, "180 - 50 expected deposit loss - 50 flux")
   T.Eq(crafting.learned[1].cost, 60, "ore still bought on the AH at 30")
   T.Eq(crafting.learned[1].reagents[1].merchant, false)
   T.Eq(crafting.learned[1].listings, 3, "the merchant is not AH competition")
@@ -844,4 +847,55 @@ T.Case("auto-scan: never while a purchase run uses the AH or with the AH closed"
   app:OnEvent("AUCTION_HOUSE_CLOSED")
   clock.advance(7200)
   T.Eq(ah.replicateCalls, 1, "AH closed: nothing")
+end)
+
+T.Case("deposit check: quotes for items in the bags compared with the formula, read-only", function()
+  local quotes = { [2840] = { 100, 100, 120 }, [2589] = { 100, 100, 100 } }
+  local bags = { [0] = { { itemID = 2840, stackCount = 20 }, { itemID = 2589, stackCount = 5 },
+    { itemID = 6948, stackCount = 1, isBound = true } } }
+  local items = { [2840] = { name = "Copper Bar", sellPrice = 10 }, [2589] = { name = "Linen Cloth", sellPrice = 3 },
+    [6948] = { name = "Hearthstone", sellPrice = 1 } }
+  local app, ns, clock, ah = Fakes.App({ rows = replicateRows(), items = items, globals = {
+    C_Container = {
+      GetContainerNumSlots = function(bag) return bags[bag] and #bags[bag] or 0 end,
+      GetContainerItemInfo = function(bag, slot) return bags[bag] and bags[bag][slot] end,
+    },
+    ItemLocation = { CreateFromBagAndSlot = function(_, bag, slot) return { bag = bag, slot = slot } end },
+  } })
+  ah.commodityItems[2840] = true
+  ah.commodityItems[2589] = false
+  ah.api.CalculateCommodityDeposit = function(itemID, duration, quantity) return quotes[itemID][duration] end
+  ah.api.CalculateItemDeposit = function(location, duration) return quotes[bags[location.bag][location.slot].itemID][duration] end
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  clock.advance(3)
+  local memory = app.store.db.depositChecks
+  T.Eq(#memory.samples, 2, "the bound Hearthstone is skipped")
+  T.Eq(memory.items[2840], "match", "20 bars: 100 / 100 / 120 as measured in game")
+  T.Eq(memory.samples[1].quantity, 20)
+  T.Eq(memory.items[2589], "match", "one cloth: the 100 minimum for every duration")
+  local status = app.depositCheck:Status()
+  T.Eq(status.matched, 2)
+  T.NotOk(status.verified, "five matching items are needed")
+  T.Eq(ah.spendCalls, 0)
+  -- Known items are not asked again.
+  app:OnEvent("AUCTION_HOUSE_CLOSED")
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  clock.advance(3)
+  T.Eq(#memory.samples, 2)
+  local _ = ns
+end)
+
+T.Case("deposit check: a quote that differs from the formula is a mismatch", function()
+  local bags = { [0] = { { itemID = 2840, stackCount = 20 } } }
+  local app, _, clock, ah = Fakes.App({ rows = replicateRows(), items = { [2840] = { name = "Copper Bar", sellPrice = 10 } },
+    globals = { C_Container = {
+      GetContainerNumSlots = function(bag) return bags[bag] and #bags[bag] or 0 end,
+      GetContainerItemInfo = function(bag, slot) return bags[bag] and bags[bag][slot] end,
+    } } })
+  ah.commodityItems[2840] = true
+  ah.api.CalculateCommodityDeposit = function(_, duration) return ({ 100, 150, 120 })[duration] end
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  clock.advance(3)
+  T.Eq(app.store.db.depositChecks.items[2840], "mismatch")
+  T.Eq(app.depositCheck:Status().mismatched, 1)
 end)

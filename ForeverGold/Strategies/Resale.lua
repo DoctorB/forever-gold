@@ -35,10 +35,18 @@ function Resale.EvaluatePrefix(book, k, cost, units, entry, settings)
     bufferBp = settings.bufferBp,
   })
   if not prudent then return nil, reason end
-  local depositKnown = Money.IsCopper(entry.depositPerUnit)
+  -- Deposit: estimated from the merchant price (Economy/Deposit) and
+  -- deducted as an expected loss; it counts as "known" only once the formula
+  -- matched the client's own quotes (Services/DepositCheck).
+  local deposits
+  if entry.depositFor then
+    deposits = entry.depositFor(prudent.sellUnits)
+  elseif Money.IsCopper(entry.depositPerUnit) then
+    deposits = Money.Mul(entry.depositPerUnit, prudent.sellUnits)
+  end
+  local depositKnown = Money.IsCopper(deposits) and (entry.depositFor == nil or entry.depositVerified == true)
   local lostDeposits = 0
-  if depositKnown then
-    local deposits = Money.Mul(entry.depositPerUnit, prudent.sellUnits)
+  if Money.IsCopper(deposits) then
     lostDeposits = Money.ShareUp(deposits, settings.depositLossBp or Resale.DEFAULT_DEPOSIT_LOSS_BP)
   end
   local result, costReason = Costs.Evaluate({ B = cost, R = prudent.prudentGross, feeBp = settings.feeBp, L = lostDeposits, X = 0 })

@@ -120,3 +120,14 @@ Forever: this session is the test. Nothing is bought.
 | 6.1 | Settings: tick "Scan the AH by itself when the cooldown ends", open the AH window | status line: "auto-scan in N min" (or a scan starts at once if the cooldown is over) | screenshot |
 | 6.2 | Stay at the auctioneer until the countdown ends | chat: scan finished, as with the button; or status "auto-scan off: the game blocked the request" | screenshot |
 | 6.3 | Stay away for a while (optional) | further scans every cooldown until the game disconnects for inactivity | time of the disconnect |
+
+
+## Session 7 — deposit check (read-only, automatic)
+
+Needs at least 5 different sellable, unbound items in the bags (trade
+goods, cloth, food, gear). Nothing is posted.
+
+| # | Action | Expected result | To record |
+| --- | --- | --- | --- |
+| 7.1 | Open the AH and wait 3 s | nothing visible; `ForeverGoldDB.depositChecks` gets up to 8 items with the quotes for 2/8/24 h | `/reload` when asked |
+| 7.2 | Crafting tab, hover a row sold on the AH | "AH deposit about X (8 h) ... (formula checked on your items)" once 5 items matched, "(estimated)" before | screenshot |

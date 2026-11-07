@@ -282,7 +282,18 @@ function Professions.Rows(app, list)
       if (run.unsold or 0) > 0 then tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN_UNSOLD"), run.unsold) end
       if run.limit then tip[#tip + 1] = L("CRAFT_LIMIT_" .. run.limit) end
     end
-    if run.exit ~= "vendor" then tip[#tip + 1] = L("CRAFT_TIP_SPECULATIVE") end
+    if run.exit ~= "vendor" then
+      local exitRow
+      for _, exit in ipairs(row.exits or {}) do if exit.exit == run.exit then exitRow = exit end end
+      if exitRow and exitRow.deposit then
+        local verified = app.depositCheck and app.depositCheck:Status().verified
+        tip[#tip + 1] = string.format(L("CRAFT_TIP_DEPOSIT"), fmt(exitRow.deposit),
+          L(verified and "DEPOSIT_VERIFIED" or "DEPOSIT_ESTIMATED"))
+      else
+        tip[#tip + 1] = L("CRAFT_TIP_DEPOSIT_UNKNOWN")
+      end
+      tip[#tip + 1] = L("CRAFT_TIP_SPECULATIVE")
+    end
     local gain, gainColor = signed(run.profit)
     rows[#rows + 1] = {
       cells = {

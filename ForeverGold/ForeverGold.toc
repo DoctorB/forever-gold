@@ -17,6 +17,7 @@ Core\Scheduler.lua
 Economy\Money.lua
 Economy\Depth.lua
 Economy\Costs.lua
+Economy\Deposit.lua
 Economy\MarketValue.lua
 Economy\Risk.lua
 Compat\ClientAdapter.lua
@@ -49,6 +50,7 @@ Services\Batch.lua
 Services\Probe.lua
 Services\FeeTest.lua
 Services\AutoScan.lua
+Services\DepositCheck.lua
 Core\App.lua
 UI\Widgets.lua
 UI\Table.lua

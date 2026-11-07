@@ -163,7 +163,11 @@ Optional auto-scan added (D48) and verified in game 2026-11-07 12:11-12:37
 (API-AUDIT row 26): ReplicateItems works from a timer, no block; one
 silent request at +871 s then an answer at +1,171 s. The cooldown now
 waits the proven upper bound (D49).
-Next: deposit.
+AH deposit estimated from the merchant price and deducted as an expected
+loss (D50, not yet seen in game); the formula is checked automatically
+against the client's quotes for bag items at every AH visit.
+Next: check the deposit samples in game; then crafting from bag stock
+(reagents already owned) or the History price chart.
 
 ## Implemented
 

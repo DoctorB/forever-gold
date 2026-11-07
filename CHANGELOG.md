@@ -6,6 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- AH deposit: estimated from the merchant price (15% / 30% / 60% for
+  2 / 8 / 24 h, at least 1 silver per auction; one auction for a commodity,
+  one per unit otherwise) and deducted from AH sales as an expected loss
+  (half of it, refunded when the item sells). Resale and the AH exits of
+  crafting include it; the Crafting tooltip shows it.
+- Deposit check: when the AH opens, the deposit the game quotes for up to
+  8 sellable items in your bags is compared with the formula (quotes only,
+  nothing is posted). Once 5 items match and none differs, deposits count
+  as known and resale can leave the "speculative" class.
 - Optional automatic scan (Settings, off by default): with the AH window
   open, the add-on asks for the AH replica by itself as soon as the
   measured cooldown ends, e.g. while you are away. Reads only: it never

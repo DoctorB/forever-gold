@@ -64,6 +64,7 @@ function App:Load(saved)
     store = self.store, history = self.history, items = self.items, clock = clock, bus = self.bus,
     commodity = function(itemID) return self.ah:IsCommodity(itemID) end,
     merchantPrice = function(itemID) return self:MerchantPrice(itemID) end,
+    depositVerified = function() return self.depositCheck ~= nil and self.depositCheck:Status().verified end,
   })
   self.transactions = ns.Services.Transactions.New(clock)
   self.purchases = ns.Services.Purchases.New({
@@ -89,6 +90,20 @@ function App:Load(saved)
     end,
   })
   self.bus:Subscribe("scanner.state", function(state, reason) self.autoScan:OnScannerState(state, reason) end)
+  self.store.db.depositChecks = self.store.db.depositChecks or {}
+  self.depositCheck = ns.Services.DepositCheck.New({
+    client = self.client, ah = self.ah, items = self.items, scheduler = ns.Core.Scheduler.New(self.schedulerEnv),
+    clock = clock, memory = self.store.db.depositChecks, bus = self.bus,
+    trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
+  })
+  self.bus:Subscribe("deposit.checked", function(status)
+    -- The formula just became verified: re-rank with deposits now "known".
+    if status.verified and not self.depositWasVerified then
+      self.depositWasVerified = true
+      if self.opportunities.results and not self.processing then self:EvaluateChunked() end
+    end
+  end)
+  self.depositWasVerified = self.depositCheck:Status().verified
   self.probe = ns.Services.Probe.New({
     scanner = self.scanner, ah = self.ah, client = self.client, items = self.items, opportunities = self.opportunities,
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, store = self.store,
@@ -533,6 +548,7 @@ function App:OnEvent(event, ...)
     self.ah:OnEvent(event, ...)
     if event == "AUCTION_HOUSE_SHOW" then
       self.autoScan:OnShow()
+      self.depositCheck:OnShow()
     elseif event == "AUCTION_HOUSE_CLOSED" then
       self.autoScan:OnClose()
     end

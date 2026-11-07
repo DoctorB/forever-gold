@@ -161,3 +161,17 @@ T.Case("hard gates fail on unknown", function()
   T.NotOk(ok)
   T.Eq(failed[1], "variantKnown")
 end)
+
+T.Case("deposit formula: the Copper Bar measurement and the minimum", function()
+  local ns = T.LoadAddon()
+  local D = ns.Economy.Deposit
+  -- Audit rows 14-15: 20 Copper Bars (merchant price 10) quoted 100 / 100 / 120.
+  T.Eq(D.Estimate(10, 20, 1), 100)
+  T.Eq(D.Estimate(10, 20, 2), 100)
+  T.Eq(D.Estimate(10, 20, 3), 120)
+  T.Eq(D.Estimate(1000, 1, 2), 300, "30% for 8 h")
+  T.Eq(D.Estimate(nil, 1, 2), nil)
+  T.Eq(D.ForUnits(1000, 3, true), 900, "a commodity: one auction")
+  T.Eq(D.ForUnits(10, 3, false), 300, "other items: one auction each, each with the minimum")
+  T.Eq(D.ExpectedLoss(300, 5000), 150)
+end)

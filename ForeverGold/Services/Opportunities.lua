@@ -15,7 +15,7 @@ ns.Services.Opportunities = Opportunities
 function Opportunities.New(deps)
   local self = setmetatable({
     store = deps.store, history = deps.history, items = deps.items, clock = deps.clock, bus = deps.bus,
-    commodity = deps.commodity, merchantPrice = deps.merchantPrice,
+    commodity = deps.commodity, merchantPrice = deps.merchantPrice, depositVerified = deps.depositVerified,
     latest = {}, marketKey = nil, results = nil, lastNotify = 0,
     stale = {}, -- itemID -> true: a purchase attempt found the offer gone
   }, { __index = Opportunities })
@@ -159,6 +159,8 @@ function Opportunities:EvaluateStep(job, index)
   local entry = {
     listings = listings, info = info, commodity = commodity,
     estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp }),
+    depositFor = Opportunities.DepositFor(info and info.sellPrice, commodity),
+    depositVerified = self.depositVerified and self.depositVerified() or false,
   }
   local context = {
     items = { [itemKey] = entry }, settings = settings,
@@ -200,6 +202,13 @@ end
 -- keys of the recipes' reagents and outputs are touched; variants of one
 -- item are merged (their books are bought from together).
 Opportunities.MERCHANT_UNITS = 1000000 -- "unlimited" merchant supply
+
+-- Deposit for selling `units` of an item (8 h), from its merchant price, or
+-- nil when the merchant price is unknown or zero.
+function Opportunities.DepositFor(sellPrice, commodity)
+  if type(sellPrice) ~= "number" or sellPrice <= 0 then return nil end
+  return function(units) return ns.Economy.Deposit.ForUnits(sellPrice, units, commodity == true) end
+end
 
 -- Stepwise form: BeginCrafting, then ns.Strategies.Crafting.RecipeStep(job,
 -- index) for each recipe, then FinishCrafting(job).
@@ -250,6 +259,7 @@ function Opportunities:BeginCrafting(recipes)
     local info = self.items and self.items:Read(itemID)
     if info then
       entry.sellPrice, entry.bound, entry.name = info.sellPrice, info.bindType == 1, info.name
+      entry.depositFor = Opportunities.DepositFor(info.sellPrice, self.commodity and self.commodity(itemID))
     elseif self.items then
       pending = pending + 1
       self.items:Resolve(itemID, function() end)

@@ -118,6 +118,14 @@ local function withRest(exit, sold, quantity, sellPrice)
   return exit
 end
 
+-- Expected deposit loss of an AH sale (Economy/Deposit), 0 when the
+-- deposit is unknown (no merchant price): the row then says so.
+local function depositLoss(market, units, settings)
+  local deposit = market and market.depositFor and market.depositFor(units)
+  if not deposit then return 0 end
+  return ns.Economy.Deposit.ExpectedLoss(deposit, settings.depositLossBp or ns.Strategies.Resale.DEFAULT_DEPOSIT_LOSS_BP) or 0
+end
+
 function Crafting.Exits(market, quantity, settings)
   local exits = {}
   local sellPrice = market and market.sellPrice
@@ -138,9 +146,10 @@ function Crafting.Exits(market, quantity, settings)
   })
   if resale then
     local net, fee = Costs.NetRevenue(resale.prudentGross, feeBp)
-    if net then
-      exits[#exits + 1] = withRest({ exit = "ah", gross = resale.prudentGross, net = net, fee = fee },
-        resale.sellUnits, quantity, sellPrice)
+    net = net and net - depositLoss(market, resale.sellUnits, settings)
+    if net and net > 0 then
+      exits[#exits + 1] = withRest({ exit = "ah", gross = resale.prudentGross, net = net, fee = fee,
+        deposit = market.depositFor and market.depositFor(resale.sellUnits) }, resale.sellUnits, quantity, sellPrice)
     end
   else
     local listings, units, lowest = Crafting.Liquidity(market)
@@ -150,8 +159,10 @@ function Crafting.Exits(market, quantity, settings)
       local sold = math.min(quantity, cap)
       local gross = Money.Mul(unit, sold)
       local net, fee = Costs.NetRevenue(gross, feeBp)
+      net = net and net - depositLoss(market, sold, settings)
       if net and net > 0 then
-        exits[#exits + 1] = withRest({ exit = "ah_now", gross = gross, net = net, fee = fee }, sold, quantity, sellPrice)
+        exits[#exits + 1] = withRest({ exit = "ah_now", gross = gross, net = net, fee = fee,
+          deposit = market.depositFor and market.depositFor(sold) }, sold, quantity, sellPrice)
       end
     end
   end
