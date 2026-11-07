@@ -108,7 +108,8 @@ T.Case("no crafting, learning, profession-window or merchant buy/sell calls anyw
   local names = { "CraftRecipe", "CraftEnchant", "CraftSalvage", "RecraftRecipe", "DoTradeSkill", "DoCraft",
     "OpenTradeSkill", "CloseTradeSkill", "OpenRecipe", "SetRecipeTracked", "ConfirmProfessionRespec",
     "AbandonSkill", "CastSpell", "SetShowLearned", "SetShowUnlearned", "SetSourceTypeFilter",
-    "BuyMerchantItem", "BuybackItem", "RepairAllItems", "PickupMerchantItem", "SellAllJunkItems", "CloseMerchant" }
+    "BuyMerchantItem", "BuybackItem", "RepairAllItems", "PickupMerchantItem", "SellAllJunkItems", "CloseMerchant",
+    "BuyTrainerService", "CloseTrainer" }
   for path, source in pairs(sources) do
     local body = code(source)
     for _, name in ipairs(names) do

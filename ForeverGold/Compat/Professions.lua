@@ -93,6 +93,9 @@ function Professions.Compact(info, schematic, profession)
   return {
     id = info.recipeID or schematic.recipeID, name = info.name or schematic.name, profession = profession,
     learned = info.learned == true, difficulty = info.relativeDifficulty,
+    -- Skill where the recipe turns grey: an upper bound of the skill it
+    -- requires (the recipe window gives no requirement; the trainer does).
+    trivial = type(info.maxTrivialLevel) == "number" and info.maxTrivialLevel or nil,
     outputs = { { itemID = output, quantity = low } }, quantityMax = high,
     reagents = reagents,
   }

@@ -215,7 +215,7 @@ end
 
 -- Stepwise form: BeginCrafting, then ns.Strategies.Crafting.RecipeStep(job,
 -- index) for each recipe, then FinishCrafting(job).
-function Opportunities:BeginCrafting(recipes)
+function Opportunities:BeginCrafting(recipes, skills)
   local settings = self.store:Settings()
   local wanted = {}
   for _, recipe in ipairs(recipes) do
@@ -276,7 +276,7 @@ function Opportunities:BeginCrafting(recipes)
     if owned[itemID] == nil then owned[itemID] = self.ownedCount(itemID) or 0 end
     return owned[itemID]
   end
-  local job = ns.Strategies.Crafting.BeginRecipes(recipes, market, settings, ownedCount)
+  local job = ns.Strategies.Crafting.BeginRecipes(recipes, market, settings, ownedCount, skills)
   job.pending = function() return pending end
   job.at = now
   return job
@@ -290,8 +290,8 @@ function Opportunities:FinishCrafting(job)
 end
 
 -- All recipes in one go (offline and tests).
-function Opportunities:EvaluateCrafting(recipes)
-  local job = self:BeginCrafting(recipes)
+function Opportunities:EvaluateCrafting(recipes, skills)
+  local job = self:BeginCrafting(recipes, skills)
   for index = 1, #recipes do ns.Strategies.Crafting.RecipeStep(job, index) end
   return self:FinishCrafting(job)
 end

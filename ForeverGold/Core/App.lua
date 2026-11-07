@@ -41,6 +41,7 @@ function App:Load(saved)
   end)
   self.professions = ns.Compat.Professions.New(self.client)
   self.merchant = ns.Compat.Merchant.New(self.client)
+  self.trainer = ns.Compat.Trainer.New(self.client)
   -- The first probe (32108fc) saved a report named "unknown" when called
   -- with no window open; it held the previous window's recipes.
   local professions = self.store.db.diagnostics and self.store.db.diagnostics.professions
@@ -499,7 +500,49 @@ function App:MigrateRecipes(record)
 end
 
 function App:LoadRecipes()
-  return ns.Data.Recipes.Load(self.store.db.recipes, self:CharacterProfessions())
+  local trainer = self.store.db.trainer
+  return ns.Data.Recipes.Load(self.store.db.recipes, self:CharacterProfessions(), trainer and trainer.skills)
+end
+
+function App:ObserveTrainerSoon()
+  if self.trainerPending then return end
+  self.trainerPending = true
+  -- The service list may arrive just after TRAINER_SHOW (TRAINER_UPDATE).
+  self.scheduler:After(1, function()
+    self.trainerPending = false
+    self:ObserveTrainer()
+  end)
+end
+
+-- Skill and cost of each profession recipe the trainer lists, kept per
+-- account in ForeverGoldDB.trainer.skills[profession][recipe name] =
+-- { skill, cost, at }. Returns the number of new or changed entries, or
+-- nil, reason.
+function App:ObserveTrainer()
+  local report, reason = self.trainer:Read()
+  if not report then return nil, reason end
+  local db = self.store.db
+  db.trainer = db.trainer or {}
+  db.trainer.skills = db.trainer.skills or {}
+  local now, changed, recorded = self.clock(), 0, 0
+  for _, row in ipairs(report.rows) do
+    if type(row.skillName) == "string" and row.skillName ~= "" and type(row.skill) == "number" then
+      local byName = db.trainer.skills[row.skillName] or {}
+      db.trainer.skills[row.skillName] = byName
+      local known = byName[row.name]
+      recorded = recorded + 1
+      if not known or known.skill ~= row.skill or known.cost ~= row.cost then changed = changed + 1 end
+      byName[row.name] = { skill = row.skill, cost = row.cost, at = now }
+    end
+  end
+  db.diagnostics.trainer = { at = now, build = self.client:BuildInfo().build, services = report.services,
+    rows = #report.rows, recorded = recorded, changed = changed, symbols = report.symbols, samples = report.samples }
+  self.diagnostics:Trace("trainer", { services = report.services, recorded = recorded, changed = changed })
+  if changed > 0 then
+    self:LoadRecipes()
+    self:EvaluateCrafting()
+  end
+  return changed
 end
 
 -- { [recipeID] = true } for the learned recipes of a list.
@@ -638,7 +681,9 @@ function App:EvaluateCrafting()
   local work = self.craftWork
   work:Invalidate()
   local recipes = ns.Data.Recipes.List()
-  local job = self:Timed("crafting_begin", #recipes, function() return self.opportunities:BeginCrafting(recipes) end)
+  local skills = {}
+  for name, profession in pairs(ns.Data.Recipes.professions) do skills[name] = profession.skill end
+  local job = self:Timed("crafting_begin", #recipes, function() return self.opportunities:BeginCrafting(recipes, skills) end)
   local startedAt = self.clock()
   self.craftingRunning = true
   work:Chunk(1, #recipes, self.store:Settings().frameBudgetMs, function(index)
@@ -699,6 +744,8 @@ function App:OnEvent(event, ...)
     self:ObserveMerchantSoon()
   elseif event == "MERCHANT_UPDATE" then
     self:ObserveMerchantSoon()
+  elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
+    self:ObserveTrainerSoon()
   elseif event == "MERCHANT_CLOSED" then
     self.vendorCheck:OnMerchantClosed()
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then

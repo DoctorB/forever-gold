@@ -360,6 +360,9 @@ function Professions.Summary(app)
     for _ in pairs(app.store.db.merchant and app.store.db.merchant.prices or {}) do merchant = merchant + 1 end
     lines[2] = string.format(L("CRAFT_UI_PRICED"), crafting.counts.recipes, crafting.counts.evaluated,
       crafting.excluded.reagent_not_on_ah or 0, merchant)
+    if (crafting.excluded.skill or 0) > 0 then
+      lines[2] = lines[2] .. " " .. string.format(L("CRAFT_UI_SKILL_HIDDEN"), crafting.excluded.skill)
+    end
   end
   return table.concat(lines, "\n")
 end
@@ -389,6 +392,13 @@ function Professions.Rows(app, list)
       tip[#tip + 1] = string.format(L("CRAFT_TIP_COMPETITION"), row.listings, row.units or 0)
     end
     if row.alsoLearn then tip[#tip + 1] = string.format(L("CRAFT_TIP_ALSO_LEARN"), table.concat(row.alsoLearn, ", ")) end
+    local requires = row.requires
+    if requires and requires.exact then
+      tip[#tip + 1] = string.format(L("CRAFT_TIP_REQUIRES"), row.profession or "?", requires.skill)
+      if requires.cost and requires.cost > 0 then tip[#tip + 1] = string.format(L("CRAFT_TIP_LEARN_COST"), fmt(requires.cost)) end
+    elseif requires and requires.trivial then
+      tip[#tip + 1] = string.format(L("CRAFT_TIP_REQUIRES_UNKNOWN"), requires.trivial)
+    end
     local run = row.run or { crafts = 1, cost = row.cost, revenue = row.revenue, profit = row.profit, exit = row.exit }
     tip[#tip + 1] = string.format(L("CRAFT_TIP_ONE"), fmt(row.cost), fmt(row.revenue), signed(row.profit))
     if run.crafts > 1 or run.limit then

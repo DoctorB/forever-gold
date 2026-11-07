@@ -390,8 +390,31 @@ end
 -- single frame (2026-11-07, build 70862). EvaluateRecipes runs all steps.
 -- Result: { learned = rows, learnable = rows, counts, excluded }, rows with
 -- a positive profit only, best profit first.
-function Crafting.BeginRecipes(recipes, market, settings, ownedCount)
+-- A recipe still to learn and its skill requirement, for the character's
+-- skill: { skill, exact = true, cost } when a trainer gave it, else
+-- { trivial } (the grey level, an upper bound); `later` when it needs more
+-- skill than the character has. Recipes turn grey 20-75 points above the
+-- skill they require in the data seen (e.g. Smelt Copper 1 -> 70, Smelt
+-- Thorium 230 -> 250): REACH_SPAN keeps a margin before calling it later.
+Crafting.REACH_SPAN = 100
+
+function Crafting.Reach(recipe, skill)
+  if recipe.learned then return nil end
+  local known = type(skill) == "number"
+  if type(recipe.requiredSkill) == "number" then
+    return { skill = recipe.requiredSkill, exact = true, cost = recipe.learnCost,
+      later = known and skill < recipe.requiredSkill }
+  end
+  if type(recipe.trivial) == "number" then
+    return { trivial = recipe.trivial, later = known and skill + Crafting.REACH_SPAN < recipe.trivial }
+  end
+  return nil
+end
+
+-- skills: { [profession] = current skill } of the character (optional).
+function Crafting.BeginRecipes(recipes, market, settings, ownedCount, skills)
   return {
+    skills = skills or {},
     recipes = recipes, market = market, settings = settings, cache = Crafting.Context(recipes, market, ownedCount),
     result = { learned = {}, learnable = {}, excluded = {}, counts = { recipes = #recipes, evaluated = 0 } },
   }
@@ -399,8 +422,16 @@ end
 
 function Crafting.RecipeStep(job, index)
   local result = job.result
-  local row, reason = Crafting.EvaluateRecipe(job.recipes[index], job.market, job.settings, job.cache)
+  local recipe = job.recipes[index]
+  local reach = Crafting.Reach(recipe, job.skills[recipe.profession])
+  if reach and reach.later then
+    -- Needs more skill than the character has: not a choice for now.
+    result.excluded.skill = (result.excluded.skill or 0) + 1
+    return
+  end
+  local row, reason = Crafting.EvaluateRecipe(recipe, job.market, job.settings, job.cache)
   if row then
+    row.requires = reach
     result.counts.evaluated = result.counts.evaluated + 1
     if row.run.profit > 0 then
       local list = row.learned and result.learned or result.learnable
@@ -426,8 +457,8 @@ function Crafting.FinishRecipes(job)
   return result
 end
 
-function Crafting.EvaluateRecipes(recipes, market, settings, ownedCount)
-  local job = Crafting.BeginRecipes(recipes, market, settings, ownedCount)
+function Crafting.EvaluateRecipes(recipes, market, settings, ownedCount, skills)
+  local job = Crafting.BeginRecipes(recipes, market, settings, ownedCount, skills)
   for index = 1, #recipes do Crafting.RecipeStep(job, index) end
   return Crafting.FinishRecipes(job)
 end

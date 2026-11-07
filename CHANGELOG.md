@@ -6,6 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Required skill of the recipes to learn. Opening a profession trainer reads
+  the skill and cost of every recipe it lists (nothing is learned); the
+  tooltip of a recipe to learn shows "Requires Leatherworking 125" and the
+  trainer cost. Recipes that need more skill than the character has are
+  left out of "Recipes you could learn" (the summary counts them). Without
+  a trainer reading, the level where the recipe turns grey (given by the
+  recipe window) is used: a recipe grey 100 points or more above the
+  character's skill is left out.
 - Automatic scan alert: when an automatic scan finds offers that are not
   speculative, one chat line with the count and the gain, and a sound
   (with "Aggregated notifications" on).

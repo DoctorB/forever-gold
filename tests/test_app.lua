@@ -287,7 +287,7 @@ local function craftingApp(bags, extra, saved)
     GetAllRecipeIDs = function() return { 1, 2, 3, 4 } end,
     GetRecipeInfo = function(id)
       local r = CRAFT_RECIPES[id]
-      return { recipeID = id, name = r.name, learned = r.learned, relativeDifficulty = 0 }
+      return { recipeID = id, name = r.name, learned = r.learned, relativeDifficulty = 0, maxTrivialLevel = r.trivial }
     end,
     GetRecipeSchematic = function(id)
       local r = CRAFT_RECIPES[id]
@@ -1080,4 +1080,64 @@ T.Case("professions: lists saved before 1 character per record are given by skil
   T.Eq(mine.Cooking, nil, "nothing saved for Cooking")
   T.Eq(#ns.Data.Recipes.List(), 1)
   T.Eq(ns.Data.Recipes.byId[1].learned, true)
+end)
+
+T.Case("crafting: recipes far above the skill are not listed as learnable", function()
+  -- In game a Leatherworking 38 Rogue saw Thick Leather and Tanning Rack
+  -- (grey at 180 and 145) among the recipes to learn.
+  CRAFT_RECIPES[3].trivial = 300
+  local app, ns, clock = craftingApp()
+  app:ObserveProfession()
+  clock.advance(1)
+  CRAFT_RECIPES[3].trivial = nil
+  local recipe = ns.Data.Recipes.byId[3]
+  T.Eq(recipe.trivial, 300, "grey level kept from maxTrivialLevel")
+  local crafting = app.opportunities.results.crafting
+  T.Eq(crafting.excluded.skill, 1, "Eye Craft (grey at 300) needs more than Mining 23 + 100")
+  for _, row in ipairs(crafting.learnable) do T.Ok(row.recipeID ~= 3) end
+  local summary = ns.UI.Panels.professions.Summary(app)
+  T.Ok(summary:find("1 recipes need more skill", 1, true), summary)
+end)
+
+T.Case("crafting: the trainer gives the exact skill and cost of a recipe", function()
+  local services = {
+    { "Weave Linen", "", "available", "Mining", 20, 150 },
+    { "Eye Craft", "", "unavailable", "Mining", 250, 5000 },
+    { "Mining", "", "header" },
+    { "Sinister Strike", "Rank 2", "available", nil, nil, 100 },
+  }
+  local app, ns, clock = craftingApp(nil, {
+    GetNumTrainerServices = function() return #services end,
+    GetTrainerServiceInfo = function(i) local s = services[i] return s[1], s[2], s[3] end,
+    GetTrainerServiceSkillReq = function(i) local s = services[i] return s[4], s[5], true end,
+    GetTrainerServiceCost = function(i) return services[i][6] end,
+  })
+  app:ObserveProfession()
+  clock.advance(1)
+  app:OnEvent("TRAINER_SHOW")
+  clock.advance(2)
+  local skills = app.store.db.trainer.skills.Mining
+  T.Eq(skills["Weave Linen"].skill, 20)
+  T.Eq(skills["Weave Linen"].cost, 150)
+  T.Eq(skills["Eye Craft"].skill, 250)
+  T.Eq(app.store.db.trainer.skills["Sinister Strike"], nil, "class spells have no profession")
+  T.Eq(app.store.db.diagnostics.trainer.recorded, 2)
+  T.Eq(ns.Data.Recipes.byId[2].requiredSkill, 20)
+  local crafting = app.opportunities.results.crafting
+  local linen
+  for _, row in ipairs(crafting.learnable) do if row.recipeID == 2 then linen = row end end
+  T.Ok(linen, "Weave Linen: Mining 23 >= 20, learnable now")
+  T.Eq(linen.requires.exact, true)
+  T.Eq(linen.requires.cost, 150)
+  local tip = table.concat(ns.UI.Panels.professions.Rows(app, { linen })[1].tip, "\n")
+  T.Ok(tip:find("Requires Mining 20", 1, true), tip)
+  T.Eq(crafting.excluded.skill, 1, "Eye Craft: 250 > 23")
+  T.Eq(app:ObserveTrainer(), 0, "same list again: nothing changed")
+end)
+
+T.Case("trainer: a client without the trainer API reports it", function()
+  local app = Fakes.App({})
+  local changed, reason = app:ObserveTrainer()
+  T.Eq(changed, nil)
+  T.Eq(reason, "no_api")
 end)

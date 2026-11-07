@@ -31,7 +31,9 @@ end
 -- learned = { [recipeID] = true } }: only its professions are loaded, with
 -- its skill and its learned recipes. Without `owned` (character unknown)
 -- every list is loaded with the flags it was saved with.
-function Recipes.Load(saved, owned)
+-- `requirements[profession][recipe name] = { skill, cost }` (read at a
+-- trainer) adds requiredSkill and learnCost to the recipes.
+function Recipes.Load(saved, owned, requirements)
   Recipes.Clear()
   for name, entry in pairs(type(saved) == "table" and saved or {}) do
     local mine = type(owned) == "table" and owned[name] or nil
@@ -39,15 +41,18 @@ function Recipes.Load(saved, owned)
       local source = mine or entry
       Recipes.professions[name] = { at = source.at, skill = source.skill, maxSkill = source.maxSkill, count = #entry.list }
       local learned = mine and type(mine.learned) == "table" and mine.learned or {}
+      local needs = type(requirements) == "table" and type(requirements[name]) == "table" and requirements[name] or {}
       for _, recipe in ipairs(entry.list) do
+        local target = recipe
         if mine then
-          local copy = {}
-          for key, value in pairs(recipe) do copy[key] = value end
-          copy.learned = learned[recipe.id] == true
-          Recipes.Add(copy)
-        else
-          Recipes.Add(recipe)
+          target = {}
+          for key, value in pairs(recipe) do target[key] = value end
+          target.learned = learned[recipe.id] == true
         end
+        local need = recipe.name and needs[recipe.name]
+        target.requiredSkill = type(need) == "table" and need.skill or nil
+        target.learnCost = type(need) == "table" and need.cost or nil
+        Recipes.Add(target)
       end
       if not Recipes.observedAt or (source.at or 0) > Recipes.observedAt then Recipes.observedAt = source.at end
     end

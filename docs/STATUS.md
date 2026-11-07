@@ -180,6 +180,8 @@ to invest for now).
 Second look 2026-11-07 17:39-17:57 with a Rogue (API-AUDIT row 28):
 auto-scan answered, 25 deposit quotes all at the minimum; professions were
 shared by the account's characters, fixed per character (D52).
+Recipes to learn are limited to the reachable skill (D53): trainer reading
+(not seen in game yet) or the grey level from the recipe window.
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 
