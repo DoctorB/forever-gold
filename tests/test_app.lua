@@ -311,7 +311,7 @@ local function craftingApp(bags, extra, saved)
   ah.delivered = true
   app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
   clock.advance(30)
-  return app, ns, clock
+  return app, ns, clock, ah
 end
 
 T.Case("crafting: known recipes and learnable ones priced at real depth", function()
@@ -1140,4 +1140,86 @@ T.Case("trainer: a client without the trainer API reports it", function()
   local changed, reason = app:ObserveTrainer()
   T.Eq(changed, nil)
   T.Eq(reason, "no_api")
+end)
+
+local function sellingApp(slots)
+  local bags = { [0] = slots }
+  local app, ns, clock, ah = craftingApp(nil, {
+    C_Container = {
+      GetContainerNumSlots = function(bag) return bags[bag] and #bags[bag] or 0 end,
+      GetContainerItemInfo = function(bag, slot) return bags[bag] and bags[bag][slot] end,
+    },
+    ItemLocation = { CreateFromBagAndSlot = function(_, bag, slot) return { bag = bag, slot = slot } end },
+  })
+  app:ObserveProfession()
+  clock.advance(2)
+  return app, ns, clock, ah, bags
+end
+
+T.Case("sell: crafted items in the bags, priced under the lowest listing, one auction per click", function()
+  local app, ns, clock, ah, bags = sellingApp({
+    { itemID = 301, stackCount = 1 }, { itemID = 301, stackCount = 1 }, { itemID = 102, stackCount = 5 },
+  })
+  local plan = app.selling:Plan()
+  T.Eq(#plan.lots, 1, "only the Bar: Ore is not made by a known recipe")
+  local lot = plan.lots[1]
+  T.Eq(lot.itemID, 301)
+  T.Eq(lot.bags, 2)
+  T.Eq(lot.unitPrice, 199, "1 copper under the lowest listing (200)")
+  T.Eq(lot.quantity, 1, "the AH takes 1 now (3 listed, no history)")
+  T.Eq(lot.commodity, false)
+  local model = ns.UI.Panels.sell.Model(app)
+  T.Eq(model.enabled, true)
+  T.Ok(model.button:find("Bar x1", 1, true), model.button)
+  T.Eq(ah.spendCalls, 0, "nothing posted before the click")
+  clock.advance(60)
+  T.Eq(ah.calls.PostItem, nil, "no timer posts")
+
+  T.Ok(app.selling:PostNext())
+  T.Eq(ah.calls.PostItem, 1)
+  local args = ah.args.PostItem
+  T.Eq(args[1].bag, 0)
+  T.Eq(args[2], 2, "8 h")
+  T.Eq(args[3], 1)
+  T.Eq(args[5], 199, "buyout")
+  T.Eq(app.selling:Blocked(), "waiting")
+  local ok, reason = app.selling:PostNext()
+  T.NotOk(ok)
+  T.Eq(reason, "waiting", "one auction at a time")
+  app:OnEvent("AUCTION_HOUSE_AUCTION_CREATED", 77)
+  T.Eq(app.selling.last.result, "posted")
+  T.Eq(app.store.db.posts[1].unitPrice, 199)
+  T.Ok(ns.UI.Panels.sell.Model(app).status:find("on the AH", 1, true))
+end)
+
+T.Case("sell: closed AH, server refusal and no answer", function()
+  local app, ns, clock, ah, bags = sellingApp({ { itemID = 301, stackCount = 1 } })
+  app:OnEvent("AUCTION_HOUSE_CLOSED")
+  local ok, reason = app.selling:PostNext()
+  T.NotOk(ok)
+  T.Eq(reason, "ah_closed")
+  local model = ns.UI.Panels.sell.Model(app)
+  T.Eq(model.enabled, false)
+  T.Ok(model.summary:find("Open the auction house", 1, true), model.summary)
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  T.Ok(app.selling:PostNext())
+  app:OnEvent("AUCTION_HOUSE_POST_ERROR")
+  T.Eq(app.selling.last.result, "refused")
+  T.Ok(app.selling:PostNext())
+  bags[0][1] = nil -- the item left the bags but no event came
+  clock.advance(11)
+  T.Eq(app.selling.last.result, "posted_bags")
+  T.Eq(ah.calls.PostItem, 2)
+end)
+
+T.Case("sell: an item a merchant pays more for is not listed", function()
+  local app, ns = sellingApp({ { itemID = 301, stackCount = 1 } })
+  CRAFT_ITEMS[301].sellPrice = 400
+  app.items.cache = {}
+  local market = app.craftMarket(301)
+  market.sellPrice = 400
+  local plan = app.selling:Plan()
+  CRAFT_ITEMS[301].sellPrice = 10
+  T.Eq(#plan.lots, 0)
+  T.Eq(plan.skipped.merchant, 1)
 end)

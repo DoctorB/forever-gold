@@ -482,6 +482,111 @@ function Professions.Refresh(panel)
   panel.learnable:SetRows(Professions.Rows(app, crafting and crafting.learnable), empty)
 end
 
+-- Sell -----------------------------------------------------------------------
+-- Items made by the character's recipes that the AH buys for more than a
+-- merchant, with price, quantity and deposit already set: one click on the
+-- button creates the next auction (Services/Selling).
+
+local Sell = {}
+Panels.sell = Sell
+
+Sell.COLUMNS = {
+  { key = "item", width = 0.28 }, { key = "bags", width = 0.08, right = true },
+  { key = "qty", width = 0.08, right = true }, { key = "price", width = 0.13, right = true },
+  { key = "lowest", width = 0.13, right = true }, { key = "deposit", width = 0.12, right = true },
+  { key = "get", width = 0.14, right = true },
+}
+
+-- Everything the tab shows, from the selling service. Pure apart from the
+-- service's reads.
+function Sell.Model(app)
+  local selling = app.selling
+  local plan = selling.plan or selling:Plan()
+  local blocked = selling:Blocked()
+  local model = { rows = {} }
+  for _, lot in ipairs(plan.lots) do
+    local tip = { lot.name or "?", string.format(L("SELL_TIP_PRICE"), fmt(lot.unitPrice),
+      lot.lowest and fmt(lot.lowest) or L("SELL_TIP_NO_LISTING")) }
+    if lot.quantity < lot.bags then tip[#tip + 1] = string.format(L("SELL_TIP_KEEP"), lot.bags - lot.quantity) end
+    tip[#tip + 1] = string.format(L("SELL_TIP_AUCTIONS"), #lot.actions, L(lot.commodity and "SELL_TIP_COMMODITY" or "SELL_TIP_ITEM"))
+    tip[#tip + 1] = string.format(L("SELL_TIP_GET"), fmt(lot.net), fmt(lot.deposit or 0), fmt(lot.merchant))
+    model.rows[#model.rows + 1] = {
+      cells = { lot.name or "?", tostring(lot.bags), tostring(lot.quantity), fmt(lot.unitPrice),
+        lot.lowest and fmt(lot.lowest) or "-", fmt(lot.deposit or 0), fmt(lot.expected) },
+      colors = { [7] = W.EMERALD },
+      tip = tip,
+    }
+  end
+  local lot, action = selling:Next()
+  if blocked then
+    model.summary = L("SELL_BLOCKED_" .. blocked)
+    model.button, model.enabled = L("SELL_BTN_WAIT"), false
+  elseif lot then
+    model.summary = string.format(L("SELL_READY"), #plan.lots)
+    model.button = string.format(L("SELL_BTN"), lot.name or "?", action.quantity, fmt(lot.unitPrice))
+    model.enabled = true
+  else
+    model.summary = L("SELL_NOTHING")
+    model.button, model.enabled = L("SELL_BTN_NONE"), false
+  end
+  local skipped = {}
+  for _, reason in ipairs({ "merchant", "no_price", "demand" }) do
+    local count = plan.skipped[reason]
+    if count then skipped[#skipped + 1] = string.format(L("SELL_SKIPPED_" .. reason), count) end
+  end
+  if #skipped > 0 then model.summary = model.summary .. "\n" .. table.concat(skipped, "  ·  ") end
+  local last = selling.pending or selling.last
+  if last then
+    model.status = string.format(L("SELL_LAST"), last.name or "?", last.quantity, L("SELL_RESULT_" .. (last.result or "sent")))
+  else
+    model.status = ""
+  end
+  return model
+end
+
+function Sell.Click()
+  local app = ns.app
+  local ok, reason = app.selling:PostNext()
+  if not ok then ns.Print(L("SELL_FAIL_" .. tostring(reason))) end
+  ns.UI.Main.RefreshPanel("sell")
+end
+
+function Sell.Build(panel)
+  panel.summary = W.Text(panel, "GameFontHighlightSmall")
+  panel.summary:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  panel.summary:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  panel.summary:SetHeight(30)
+  if panel.summary.SetWordWrap then panel.summary:SetWordWrap(true) end
+  if panel.summary.SetJustifyV then panel.summary:SetJustifyV("TOP") end
+  local labelled = {}
+  for index, column in ipairs(Sell.COLUMNS) do
+    labelled[index] = { key = column.key, width = column.width, right = column.right, label = L("SELL_COL_" .. column.key) }
+  end
+  panel.table = ns.UI.Table.New(panel, labelled)
+  panel.table.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -34)
+  panel.table.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 30)
+  -- The click is what lets the client create the auction (one per click).
+  panel.button = W.Button(panel, L("SELL_BTN_NONE"), 340, function() Sell.Click() end)
+  panel.button:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 2)
+  panel.status = W.Text(panel, "GameFontHighlightSmall")
+  panel.status:SetPoint("LEFT", panel.button, "RIGHT", 10, 0)
+  panel.status:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  if ns.app and ns.app.bus then
+    local function refresh() ns.UI.Main.RefreshPanel("sell") end
+    ns.app.bus:Subscribe("selling.updated", refresh)
+    ns.app.bus:Subscribe("crafting.updated", refresh)
+  end
+end
+
+function Sell.Refresh(panel)
+  local model = Sell.Model(ns.app)
+  panel.summary:SetText(model.summary)
+  panel.table:SetRows(model.rows, L("SELL_EMPTY"))
+  panel.button:SetText(model.button)
+  panel.button:SetEnabled(model.enabled)
+  panel.status:SetText(model.status)
+end
+
 -- Portfolio ------------------------------------------------------------------
 
 local Portfolio = {}

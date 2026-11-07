@@ -116,7 +116,25 @@ function App:Load(saved)
     clock = clock, printer = function(kind, data) self.bus:Publish("feetest", kind, data) end,
   })
   self.ah.callbacks.onOwned = function() self.feeTest:OnOwnedAuctions() end
-  self.ah.callbacks.onAuctionCreated = function() self.feeTest:OnBagsOrMoney() end
+  self.ah.callbacks.onAuctionCreated = function()
+    self.feeTest:OnBagsOrMoney()
+    self.selling:OnEvent("AUCTION_HOUSE_AUCTION_CREATED")
+  end
+  -- Selling from the bags: one auction per click on the Sell tab.
+  self.post = ns.Compat.Post.New(self.client)
+  self.selling = ns.Services.Selling.New({
+    client = self.client, ah = self.ah, items = self.items, post = self.post, store = self.store, clock = clock,
+    scheduler = ns.Core.Scheduler.New(self.schedulerEnv), bus = self.bus,
+    trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
+    slots = function() return self.depositCheck:Slots() end,
+    market = function(itemID) return self.craftMarket and self.craftMarket(itemID) or nil end,
+    outputs = function() return App.CraftedOutputs() end,
+    scanAge = function()
+      local results = self.opportunities.results
+      if not results or results.demo or not results.at then return nil end
+      return self.clock() - results.at
+    end,
+  })
   self.vendorCheck = ns.Services.VendorCheck.New({
     client = self.client, store = self.store, clock = clock,
     printer = function(report) self.bus:Publish("vendor.check", report) end,
@@ -545,6 +563,16 @@ function App:ObserveTrainer()
   return changed
 end
 
+-- { [itemID] = recipe name } for what the character's known recipes make.
+function App.CraftedOutputs()
+  local outputs = {}
+  for _, recipe in ipairs(ns.Data.Recipes.List()) do
+    local output = recipe.learned and recipe.outputs and recipe.outputs[1]
+    if output then outputs[output.itemID] = recipe.name or true end
+  end
+  return outputs
+end
+
 -- { [recipeID] = true } for the learned recipes of a list.
 function App.LearnedSet(list)
   local set = {}
@@ -696,6 +724,8 @@ function App:EvaluateCrafting()
       return recipe and ("r:" .. tostring(recipe.id)), recipe and #(recipe.reagents or {})
     end)
     local crafting = self.opportunities:FinishCrafting(job)
+    self.craftMarket = job.market -- prices of the same scan, for the Sell tab
+    self.selling.plan = nil
     -- The results may have been replaced by a newer evaluation meanwhile.
     local current = self.opportunities.results
     if current and not current.demo then current.crafting = crafting end
@@ -746,6 +776,8 @@ function App:OnEvent(event, ...)
     self:ObserveMerchantSoon()
   elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
     self:ObserveTrainerSoon()
+  elseif event == "AUCTION_HOUSE_POST_ERROR" or event == "AUCTION_HOUSE_POST_WARNING" then
+    self.selling:OnEvent(event)
   elseif event == "MERCHANT_CLOSED" then
     self.vendorCheck:OnMerchantClosed()
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then
@@ -764,6 +796,11 @@ function App:OnEvent(event, ...)
     elseif event == "AUCTION_HOUSE_CLOSED" then
       self.autoScan:OnClose()
     end
+  end
+  -- The Sell tab depends on the bags and on the AH being open.
+  if event == "BAG_UPDATE_DELAYED" or event == "AUCTION_HOUSE_SHOW" or event == "AUCTION_HOUSE_CLOSED" then
+    self.selling.plan = nil
+    self.bus:Publish("selling.updated")
   end
 end
 

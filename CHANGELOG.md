@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Sell tab: the items your known recipes make that sell better on the AH
+  than to a merchant, from your bags, with price (1 copper under the lowest
+  listing), quantity (what the AH takes now), 8 h duration and deposit
+  already set. With the AH open, each click on "Sell ..." creates the next
+  auction (the game requires a click per auction); the server's answer is
+  shown next to the button. Items a merchant pays more for, bound items and
+  items with no AH price are left out.
 - Required skill of the recipes to learn. Opening a profession trainer reads
   the skill and cost of every recipe it lists (nothing is learned); the
   tooltip of a recipe to learn shows "Requires Leatherworking 125" and the

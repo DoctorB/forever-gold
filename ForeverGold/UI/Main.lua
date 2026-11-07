@@ -8,7 +8,7 @@ local Main = { tab = "opportunities", offset = 0, rows = {},
   filters = { vendor = true, resale = true, allocated = false, verified = false } }
 ns.UI.Main = Main
 
-Main.TABS = { "opportunities", "history", "professions", "portfolio", "settings" }
+Main.TABS = { "opportunities", "history", "professions", "sell", "portfolio", "settings" }
 Main.ROW_HEIGHT = 18
 Main.COLUMNS = {
   { key = "item", width = 0.24 }, { key = "strategy", width = 0.19 }, { key = "qty", width = 0.05, right = true },

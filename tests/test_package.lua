@@ -84,7 +84,9 @@ end)
 local PURCHASE_NAMES = { StartCommoditiesPurchase = true, ConfirmCommoditiesPurchase = true, CancelCommoditiesPurchase = true,
   PlaceBid = true }
 
-T.Case("spending calls live only in Compat/Purchase.lua; posting and cancelling nowhere", function()
+local POST_NAMES = { PostItem = true, PostCommodity = true }
+
+T.Case("spending calls live only in Compat/Purchase.lua, posting only in Compat/Post.lua, cancelling nowhere", function()
   local names = { "PlaceBid", "StartCommoditiesPurchase", "ConfirmCommoditiesPurchase", "PostItem", "PostCommodity",
     "ConfirmPostItem", "ConfirmPostCommodity", "CancelAuction", "CancelSell", "CancelCommoditiesPurchase",
     "UseContainerItem", "PickupContainerItem" }
@@ -98,7 +100,8 @@ T.Case("spending calls live only in Compat/Purchase.lua; posting and cancelling 
         local presenceRow = path == "Compat/ClientAdapter.lua"
           and line:match('^%s*{ "[%w_.]+", "C_AuctionHouse", "[%w_]+" },%s*$') ~= nil
         local purchaseAdapter = path == "Compat/Purchase.lua" and PURCHASE_NAMES[name]
-        T.Ok(presenceRow or purchaseAdapter, path .. " mentions " .. name .. " outside the allowed places")
+        local postAdapter = path == "Compat/Post.lua" and POST_NAMES[name]
+        T.Ok(presenceRow or purchaseAdapter or postAdapter, path .. " mentions " .. name .. " outside the allowed places")
       end
     end
   end
@@ -195,4 +198,21 @@ T.Case("transaction controller has no path to a client call", function()
   local body = code(sources["Services/Transactions.lua"])
   T.NotOk(body:find("client", 1, true), "no adapter access")
   T.NotOk(body:find("C_AuctionHouse", 1, true))
+end)
+
+T.Case("auctions are created only from the Sell button's click", function()
+  for path, source in pairs(sources) do
+    local body = code(source)
+    for position in body:gmatch("()PostNext%s*%(") do
+      local allowed = path == "Services/Selling.lua" or (path == "UI/Panels.lua" and body:find("function Sell.Click", 1, true))
+      T.Ok(allowed, path .. " calls PostNext")
+    end
+    for _, name in ipairs({ "post:Commodity", "post:Item" }) do
+      if body:find(name, 1, true) then T.Eq(path, "Services/Selling.lua", path .. " calls " .. name) end
+    end
+  end
+  local panels = code(sources["UI/Panels.lua"])
+  local calls = 0
+  for _ in panels:gmatch("PostNext%s*%(") do calls = calls + 1 end
+  T.Eq(calls, 1, "one call, in Sell.Click (the button's OnClick)")
 end)

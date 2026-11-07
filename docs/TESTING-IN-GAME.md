@@ -27,6 +27,7 @@ Copper Bars for Copper Rod).
 | R7 | Crafting | Buy or loot a reagent, wait 10 s | the Crafting tab updates "To spend" by itself | bag refresh |
 | R8 | Opportunities (optional) | "Buy all" with a small limit, at a quiet hour | each search/quote answered or the run stops after two silences with "the server stopped answering" | Buy all (open since 2026-11-06) |
 | R10 | Trainer of a profession you have | Open the trainer window, then `/fg` → Crafting | hovering a recipe to learn shows "Requires <profession> N (read at the trainer)" and the cost; the summary says how many recipes need more skill | trainer requirements (D53) |
+| R11 | AH open, crafted items in the bags | `/fg` → Sell, check the row (price under the lowest, quantity, deposit), click "Sell ..." once | the auction appears in the AH Auctions tab; next to the button "on the AH" (or the server's refusal) | assisted selling (D54) |
 | R9 | anywhere | `/reload` | — (saves deposit checks, auto-scan and Buy all traces) | evidence |
 
 ## Installing the alpha
