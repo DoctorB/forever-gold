@@ -10,7 +10,7 @@ L.PRESENT, L.ABSENT = "presente", "assente"
 L.VERIFIED, L.NOT_VERIFIED, L.SCENARIO = "verificata", "non ancora verificata", "scenario"
 L.SESSION_ONLY = "solo sessione (nulla viene salvato)"
 L.NOT_LOADED = "non ancora caricato."
-L.FOOTER = "Forever Gold non compra mai da solo: ogni acquisto richiede il tuo clic. Non mette all'asta e non cancella aste."
+L.FOOTER = "Forever Gold non compra e non vende mai da solo: un clic, un acquisto o un'asta. Non cancella mai aste."
 L.DEMO_BANNER = "DATI DEMO - oggetti fittizi"
 
 L.TAB_opportunities, L.TAB_history, L.TAB_professions = "Opportunità", "Storico", "Crafting"

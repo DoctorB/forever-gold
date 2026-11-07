@@ -12,7 +12,7 @@ L.PRESENT, L.ABSENT = "present", "absent"
 L.VERIFIED, L.NOT_VERIFIED, L.SCENARIO = "verified", "not yet verified", "scenario"
 L.SESSION_ONLY = "session only (nothing saved)"
 L.NOT_LOADED = "not loaded yet."
-L.FOOTER = "Forever Gold never buys on its own: every purchase needs your click. It never posts or cancels auctions."
+L.FOOTER = "Forever Gold never buys or sells on its own: one click, one purchase or one auction. It never cancels auctions."
 L.DEMO_BANNER = "DEMO DATA - fictional items"
 
 L.TAB_opportunities, L.TAB_history, L.TAB_professions = "Opportunities", "History", "Crafting"

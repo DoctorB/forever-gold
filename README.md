@@ -8,8 +8,8 @@ Auction House **analysis** add-on for **World of Warcraft: Forever**. It finds
 money-making opportunities and explains why they may pay off: effective
 price, quantity you can buy, capital, costs, prudent profit, data freshness,
 reliability and constraints. **It never buys on its own**: the optional
-assisted purchase needs your click for every single purchase. It never
-posts or cancels auctions.
+assisted purchase needs your click for every single purchase, and the Sell
+tab creates one auction per click. It never cancels auctions.
 
 > Status: `0.1.0-alpha.3`, alpha partly tested in game on the beta build 1.60.1.70450,
 > first scan checks on the live client 1.60.1.70790 in progress
