@@ -445,3 +445,41 @@ T.Case("an empty list after a scan says the scan found nothing", function()
     T.Eq(Main.EmptyReason(app, { counts = { itemKeys = 0 }, excluded = {}, list = {} }), ns.L.EMPTY_NO_DEALS_SCAN)
   end)
 end)
+
+T.Case("history: price chart of one item, one bar per scan, from a click", function()
+  withClient(function(ns, _, clock, ah, eventFrame)
+    local app = ns.app
+    local market = app.store:Market(app:MarketKey(), true)
+    -- Two days of buckets: three scans, then two.
+    market.items["i:2840:0"] = { lastSeen = clock.now(), recent = {}, days = {
+      [20763] = { p = { 50, 55, 60 }, min = 47, price = 55 },
+      [20764] = { p = { 45, 70 }, min = 40, price = 45 },
+    } }
+    local History = ns.UI.Panels.history
+    local data = History.ChartData(app, "i:2840:0")
+    T.Eq(#data.points, 5)
+    T.Eq(data.low, 45)
+    T.Eq(data.high, 70)
+    T.Eq(data.firstDay, 20763)
+    T.Eq(data.lastDay, 20764)
+    local heights = History.BarHeights(data)
+    T.Eq(heights[4], History.MIN_BAR, "the lowest price gets the shortest bar")
+    T.Eq(heights[5], 1, "the highest the tallest")
+    T.Eq(History.ChartData(app, "i:9999:0"), nil)
+    ns.UI.Commands.Handle("")
+    ns.UI.Main.SelectTab("history")
+    local panel = ns.UI.Main.frame.panels.history
+    local row
+    for _, r in ipairs(panel.prices.rows) do if r.itemKey == "i:2840:0" then row = r end end
+    T.Ok(row and row.onClick, "price rows can be clicked")
+    row.onClick()
+    T.Ok(panel.chart:IsShown())
+    T.NotOk(panel.scans.frame:IsShown())
+    T.Eq(#panel.chart.bars, 5)
+    T.Ok(panel.chart.title:GetText():find("5 scans", 1, true), panel.chart.title:GetText())
+    panel.chart.scripts.OnMouseUp(panel.chart)
+    T.NotOk(panel.chart:IsShown(), "a click goes back to the scans")
+    T.Ok(panel.scans.frame:IsShown())
+    local _ = ah and eventFrame
+  end)
+end)

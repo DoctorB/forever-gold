@@ -1,7 +1,7 @@
 -- Table: header plus rows of aligned cells, mouse-wheel scrolling, rows
 -- created lazily to fit the height. Used by the History and Portfolio tabs.
 --   columns = { { key, label, width (fraction), right? } }
---   rows    = { { cells = { text, ... }, colors = { [column] = rgb }, tip = { lines }? } }
+--   rows    = { { cells = { text, ... }, colors = { [column] = rgb }, tip = { lines }?, onClick = fn? } }
 local _, ns = ...
 
 local W = ns.UI.Widgets
@@ -71,6 +71,9 @@ function Table:Layout()
         GameTooltip:Show()
       end)
       line:SetScript("OnLeave", function() if type(GameTooltip) == "table" then GameTooltip:Hide() end end)
+      line:SetScript("OnMouseUp", function()
+        if line.row and line.row.onClick then line.row.onClick() end
+      end)
       self.lines[index] = line
     end
     if line then

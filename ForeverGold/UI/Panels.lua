@@ -100,10 +100,53 @@ function History.PriceRows(app, limit)
       },
       colors = { [3] = ready and W.EMERALD or W.MUTED },
       tip = { info and info.name or itemKey, itemKey, ready and string.format(L("PRICE_TIP_REF"), estimate.window)
-        or L("PRICE_TIP_WAIT") },
+        or L("PRICE_TIP_WAIT"), L("PRICE_TIP_CHART") },
+      itemKey = itemKey, name = info and info.name or itemKey,
     }
   end
   return rows
+end
+
+-- Price chart of one item key: one point per scan (the daily buckets keep
+-- each scan's price), oldest first, at most CHART_POINTS. Pure.
+-- Returns { points = { { day, price } }, low, high, firstDay, lastDay, minByDay } or nil.
+History.CHART_POINTS = 48
+History.DAY = 86400
+
+function History.ChartData(app, itemKey)
+  local market = app.store:Market(app:MarketKey(), false)
+  local item = market and market.items[itemKey]
+  if not item then return nil end
+  local days = {}
+  for day in pairs(item.days or {}) do days[#days + 1] = day end
+  table.sort(days)
+  local points, minByDay = {}, {}
+  for _, day in ipairs(days) do
+    local bucket = item.days[day]
+    minByDay[day] = bucket.min
+    for _, price in ipairs(bucket.p or {}) do points[#points + 1] = { day = day, price = price } end
+  end
+  while #points > History.CHART_POINTS do table.remove(points, 1) end
+  if #points == 0 then return nil end
+  local low, high = points[1].price, points[1].price
+  for _, point in ipairs(points) do
+    if point.price < low then low = point.price end
+    if point.price > high then high = point.price end
+  end
+  return { points = points, low = low, high = high, firstDay = points[1].day, lastDay = points[#points].day,
+    minByDay = minByDay }
+end
+
+-- Bar heights in [MIN_BAR, 1] for the chart, from the data's low to high.
+History.MIN_BAR = 0.08
+
+function History.BarHeights(data)
+  local heights = {}
+  local span = data.high - data.low
+  for index, point in ipairs(data.points) do
+    heights[index] = span > 0 and (History.MIN_BAR + (1 - History.MIN_BAR) * (point.price - data.low) / span) or 0.5
+  end
+  return heights
 end
 
 local function columnsWithLabels(columns, prefix)
@@ -125,6 +168,22 @@ function History.Build(panel)
   panel.scans.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -38)
   panel.scans.frame:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
   panel.scans.frame:SetHeight(18 * 6)
+  -- Price chart, shown over the scans table when a price row is clicked;
+  -- a click on the chart goes back to the scans.
+  local chart = CreateFrame("Frame", nil, panel)
+  chart:SetPoint("TOPLEFT", panel.scans.frame, "TOPLEFT", 0, 0)
+  chart:SetPoint("BOTTOMRIGHT", panel.scans.frame, "BOTTOMRIGHT", 0, 0)
+  local background = chart:CreateTexture(nil, "BACKGROUND")
+  background:SetAllPoints()
+  background:SetColorTexture(0, 0, 0, 0.35)
+  chart.title = W.Text(chart, "GameFontHighlightSmall")
+  chart.title:SetPoint("TOPLEFT", chart, "TOPLEFT", 4, -2)
+  chart.title:SetPoint("RIGHT", chart, "RIGHT", -4, 0)
+  chart.bars = {}
+  chart:EnableMouse(true)
+  chart:SetScript("OnMouseUp", function() History.ShowChart(panel, nil) end)
+  chart:Hide()
+  panel.chart = chart
   local pricesTitle = W.Text(panel, "GameFontNormal")
   pricesTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -152)
   pricesTitle:SetText(L("HIST_PRICES"))
@@ -192,11 +251,62 @@ function History.Build(panel)
   panel.message:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
 end
 
+-- Shows the chart of one item key over the scans table, or the scans
+-- again when itemKey is nil or has no data.
+function History.ShowChart(panel, itemKey, name)
+  local chart = panel.chart
+  local data = itemKey and History.ChartData(ns.app, itemKey)
+  panel.chartKey = data and itemKey or nil
+  if not data then
+    chart:Hide()
+    panel.scans.frame:Show()
+    return nil
+  end
+  panel.scans.frame:Hide()
+  chart:Show()
+  local fmtDay = function(day) return ns.app.client:FormatTime(day * History.DAY):match("^(%S+)") or "" end
+  chart.title:SetText(string.format(L("CHART_TITLE"), name or itemKey, #data.points, fmtDay(data.firstDay),
+    fmtDay(data.lastDay), fmt(data.low), fmt(data.high)))
+  local heights = History.BarHeights(data)
+  local width = chart:GetWidth() or 600
+  local height = (chart:GetHeight() or 108) - 18
+  local step = width / History.CHART_POINTS
+  for index = 1, math.max(#chart.bars, #heights) do
+    local bar = chart.bars[index]
+    if not bar and heights[index] then
+      bar = chart:CreateTexture(nil, "ARTWORK")
+      chart.bars[index] = bar
+    end
+    if bar then
+      if heights[index] then
+        local point = data.points[index]
+        local previous = data.points[index - 1]
+        -- A new day starts with a lighter bar.
+        local newDay = not previous or previous.day ~= point.day
+        bar:ClearAllPoints()
+        bar:SetPoint("BOTTOMLEFT", chart, "BOTTOMLEFT", (index - 1) * step + 1, 2)
+        bar:SetSize(math.max(1, step - 2), math.max(1, height * heights[index]))
+        if newDay then bar:SetColorTexture(0.95, 0.80, 0.35, 0.95) else bar:SetColorTexture(0.85, 0.65, 0.20, 0.85) end
+        bar:Show()
+      else
+        bar:Hide()
+      end
+    end
+  end
+  return data
+end
+
 function History.Refresh(panel)
   local app = ns.app
   panel.summary:SetText(History.SummaryLine(app))
   panel.scans:SetRows(History.ScanRows(app), L("HIST_EMPTY_SCANS"))
-  panel.prices:SetRows(History.PriceRows(app), L("HIST_EMPTY_PRICES"))
+  local rows = History.PriceRows(app)
+  for _, row in ipairs(rows) do
+    local key, name = row.itemKey, row.name
+    row.onClick = function() History.ShowChart(panel, key, name) end
+  end
+  panel.prices:SetRows(rows, L("HIST_EMPTY_PRICES"))
+  if panel.chartKey then History.ShowChart(panel, panel.chartKey) end
 end
 
 -- Professions (Crafting tab) ------------------------------------------------

@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- History: click an item in the prices table to see its price chart (one
+  bar per scan, a lighter bar where a day starts, lowest and highest price
+  and the dates covered); click the chart to go back to the scans.
 - Item tooltips: besides the reference price, the crafting gain when one of
   your recipes (or one you could learn) makes the item, and the merchant
   price when a merchant you visited sells it. The Crafting tab is re-priced
