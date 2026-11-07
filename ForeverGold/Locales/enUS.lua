@@ -156,6 +156,9 @@ L.PORT_ALLOCATED = "%d opportunities fit the budget, capital %s"
 L.PORT_LEDGER = "Ledger entries: %d (transaction ledger arrives with assisted actions)."
 
 L.TIP_REFERENCE = "ref. %s (%d-day window, %d days)"
+L.TIP_CRAFT_KNOWN = "craft: +%s for %d (your recipe %s)"
+L.TIP_CRAFT_LEARN = "craft: +%s for %d if you learn %s"
+L.TIP_MERCHANT = "sold by a merchant for %s"
 L.TIP_INSUFFICIENT = "history insufficient (%d days)"
 L.NOTIFY_FOUND = "%d non-speculative opportunities across %d item keys."
 

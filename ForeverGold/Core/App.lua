@@ -456,6 +456,26 @@ function App:OnRecipeLearned(recipeID)
   return false
 end
 
+-- The bags changed (reagents bought, crafted or looted): re-price crafting
+-- once they have been quiet for BAG_QUIET seconds.
+App.BAG_QUIET = 10
+
+function App:CraftingAfterBags()
+  if not self.opportunities.results or ns.Data.Recipes.status ~= "observed" then return end
+  self.bagsChangedAt = self.clock()
+  if self.bagsPending then return end
+  self.bagsPending = true
+  local function check()
+    if self.clock() - self.bagsChangedAt < App.BAG_QUIET then
+      self.scheduler:After(App.BAG_QUIET, check)
+      return
+    end
+    self.bagsPending = false
+    if not self.processing then self:EvaluateCrafting() end
+  end
+  self.scheduler:After(App.BAG_QUIET, check)
+end
+
 -- Recipes and which of them are learned, as one comparable string.
 function App.CatalogueSignature(list)
   local parts = {}
@@ -528,6 +548,7 @@ function App:OnEvent(event, ...)
     self.history:Prune(self.clock(), nil)
   elseif event == "PLAYER_MONEY" or event == "BAG_UPDATE_DELAYED" then
     self.feeTest:OnBagsOrMoney()
+    if event == "BAG_UPDATE_DELAYED" then self:CraftingAfterBags() end
   elseif event == "MAIL_INBOX_UPDATE" then
     self.feeTest:OnInbox()
   elseif event == "MERCHANT_SHOW" then

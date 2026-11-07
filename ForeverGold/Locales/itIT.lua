@@ -154,6 +154,9 @@ L.PORT_ALLOCATED = "%d opportunità rientrano nel budget, capitale %s"
 L.PORT_LEDGER = "Voci di registro: %d (il registro transazioni arriva con le azioni assistite)."
 
 L.TIP_REFERENCE = "rif. %s (finestra %d giorni, %d giorni)"
+L.TIP_CRAFT_KNOWN = "craft: +%s per %d (tua ricetta %s)"
+L.TIP_CRAFT_LEARN = "craft: +%s per %d se impari %s"
+L.TIP_MERCHANT = "venduto da un mercante a %s"
 L.TIP_INSUFFICIENT = "storico insufficiente (%d giorni)"
 L.NOTIFY_FOUND = "%d opportunità non speculative su %d chiavi oggetto."
 

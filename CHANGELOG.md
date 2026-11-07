@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Item tooltips: besides the reference price, the crafting gain when one of
+  your recipes (or one you could learn) makes the item, and the merchant
+  price when a merchant you visited sells it. The Crafting tab is re-priced
+  10 s after the bags stop changing (reagents bought, crafted or looted).
 - Crafting with reagents already in your bags: the "To spend" column shows
   only the gold for what is missing; the tooltip says how many units of each
   reagent you have and what they are worth. The gain still counts them at

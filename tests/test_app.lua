@@ -922,3 +922,37 @@ T.Case("crafting: reagents in the bags lower the gold to spend, not the gain", f
   T.Ok(tip:find("(4 in your bags)", 1, true), tip)
   T.Ok(tip:find("gold to spend now 1s 80c", 1, true), tip)
 end)
+
+T.Case("tooltips: crafting gain for an item you can make, merchant price when known", function()
+  local app, ns, clock = craftingApp()
+  app:ObserveProfession()
+  clock.advance(1)
+  app.store.db.merchant = { prices = { [999] = { unit = 50, at = clock.now() } } }
+  local Tips = ns.UI.Tooltips
+  local bar = table.concat(Tips.Lines(app, "|cffffffff|Hitem:301::::::::|h[Bar]|h|r"), "\n")
+  T.Ok(bar:find("craft: +70c for 1 (your recipe Smelt Bar)", 1, true), bar)
+  local linen = table.concat(Tips.Lines(app, "|cffffffff|Hitem:101::::::::|h[Linen]|h|r"), "\n")
+  T.Ok(linen:find("if you learn Weave Linen", 1, true), linen)
+  local flux = table.concat(Tips.Lines(app, "|cffffffff|Hitem:999::::::::|h[Flux]|h|r"), "\n")
+  T.Ok(flux:find("sold by a merchant for 50c", 1, true), flux)
+  T.Eq(#Tips.Lines(app, "|cffffffff|Hitem:555::::::::|h[Nothing]|h|r"), 0)
+end)
+
+T.Case("crafting is re-priced once the bags are quiet", function()
+  local app, _, clock = craftingApp()
+  app:ObserveProfession()
+  clock.advance(1)
+  local function runs()
+    local n = 0
+    for _, timing in ipairs(app.store.db.diagnostics.timings) do if timing.phase == "crafting_begin" then n = n + 1 end end
+    return n
+  end
+  local before = runs()
+  for _ = 1, 5 do
+    app:OnEvent("BAG_UPDATE_DELAYED")
+    clock.advance(3)
+  end
+  T.Eq(runs(), before, "still changing: not yet")
+  clock.advance(30)
+  T.Eq(runs(), before + 1, "one re-pricing after the bags settled")
+end)
