@@ -108,3 +108,15 @@ once per window and kept; after that the tab needs no command.
 | 5.3 | Hover a row | reagents with their cost, exits, listings already on the AH | — |
 | 5.4 | Open a few merchant windows (trade goods, general goods, cooking and blacksmithing suppliers), then the Crafting tab | "Merchant prices known: N items" grows; recipes with thread, flux or spices appear, hovering shows "(merchant)" on those reagents | screenshot |
 | 5.5 | Learn a recipe from a trainer (optional) | the recipe moves to "recipes you know" by itself | — |
+
+
+## Session 6 — automatic scan (read-only)
+
+Whether the game accepts the AH request without a click is not known on
+Forever: this session is the test. Nothing is bought.
+
+| # | Action | Expected result | To record |
+| --- | --- | --- | --- |
+| 6.1 | Settings: tick "Scan the AH by itself when the cooldown ends", open the AH window | status line: "auto-scan in N min" (or a scan starts at once if the cooldown is over) | screenshot |
+| 6.2 | Stay at the auctioneer until the countdown ends | chat: scan finished, as with the button; or status "auto-scan off: the game blocked the request" | screenshot |
+| 6.3 | Stay away for a while (optional) | further scans every cooldown until the game disconnects for inactivity | time of the disconnect |

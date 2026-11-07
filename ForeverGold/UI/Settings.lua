@@ -93,6 +93,9 @@ function Settings.Build(panel)
     ns.Print(L("LANG_SET"))
   end)
   panel.italian:SetPoint("TOPLEFT", panel, "TOPLEFT", 380, y)
+  y = y - 26
+  panel.autoScan = W.Check(panel, L("SET_AUTOSCAN"), function(value) ns.app.autoScan:SetEnabled(value) end)
+  panel.autoScan:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y)
   y = y - 30
   local save = W.Button(panel, L("BTN_SAVE"), 110, function()
     local values = {}
@@ -137,5 +140,6 @@ function Settings.Refresh(panel)
   panel.notify:SetChecked(settings.notify and true or false)
   panel.session:SetChecked(settings.sessionOnly and true or false)
   panel.assisted:SetChecked(settings.assistedBuy and true or false)
+  panel.autoScan:SetChecked(ns.app.autoScan:Enabled())
   panel.italian:SetChecked(ns.L == ns.Locales.itIT)
 end

@@ -155,6 +155,12 @@ recipe, best total kept with the reason it stops; bench 0.59 s for 700
 recipes (was 0.20), slowest step unchanged (16 ms). On the real catalogue
 (approximate offline simulation) Copper Rod reaches the 20-craft limit at
 about +8s 85c; weapons and armour stay at one craft (AH demand).
+Checked in game 2026-11-07 12:06 (screenshot): several crafts work; known
+recipes Copper Rod 20x +10s 5c, Basic Campfire Kit 20x +4s 56c, Copper
+Bracers 20x +2s 5c; learnable led by Truesilver Rod 1x +8g 60s and Jade
+Serpentblade 1x +2g 35s; worst crafting frame 32 ms.
+Optional auto-scan added (D48, not yet seen in game): whether the game
+accepts ReplicateItems without a click is the open question (session 6).
 Next: deposit.
 
 ## Implemented

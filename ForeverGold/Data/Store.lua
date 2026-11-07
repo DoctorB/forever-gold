@@ -25,6 +25,7 @@ Store.DEFAULT_SETTINGS = {
   notifyCooldown = 300,
   sessionOnly = false,
   assistedBuy = false, -- experimental: buy from the details window, one click per purchase
+  autoScan = false, -- read-only AH scan when the cooldown ends, AH window open (Services/AutoScan)
   maxPurchase = 5000, -- spending cap per assisted purchase (50 silver)
   locale = "auto", -- "auto" (client language), "itIT" or "enUS"
 }

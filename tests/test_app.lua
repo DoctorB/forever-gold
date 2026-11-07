@@ -755,3 +755,93 @@ T.Case("status line describes the last full scan, not the restored or searched v
   local after = ns2.UI.Main.StatusLine(reloaded, reloaded.opportunities.results)
   T.Ok(after:find("Last scan 0 min ago · 3 auctions read · 2 items", 1, true), after)
 end)
+
+-- Auto-scan (Services/AutoScan). The fake client accepts the call without
+-- a click; whether Forever does is what the first real use will show.
+local function autoApp()
+  local app, ns, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
+  return app, ns, clock, ah
+end
+
+local function answer(app, ah, clock)
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(30)
+end
+
+T.Case("auto-scan: off by default, nothing requested", function()
+  local app, _, clock, ah = autoApp()
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  clock.advance(60)
+  T.Eq(ah.replicateCalls, 0)
+  T.Eq(app.autoScan:Status(), "off")
+end)
+
+T.Case("auto-scan: requests when the AH opens, then again when the cooldown ends", function()
+  local app, ns, clock, ah = autoApp()
+  app.autoScan:SetEnabled(true)
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  T.Eq(ah.replicateCalls, 1, "no cooldown known yet: at once")
+  answer(app, ah, clock)
+  T.Eq(app.store.db.autoScan.answered, 1)
+  local kind, seconds = app.autoScan:Status()
+  T.Eq(kind, "waiting")
+  T.Ok(seconds > 800, "the measured cooldown is respected: " .. tostring(seconds))
+  T.Ok(ns.UI.Main.StatusLine(app, app.opportunities.results):find("auto-scan in", 1, true), "shown in the status line")
+  clock.advance(seconds - 10)
+  T.Eq(ah.replicateCalls, 1, "not before the cooldown ends")
+  clock.advance(20)
+  T.Eq(ah.replicateCalls, 2, "requested by itself")
+  T.Eq(ah.spendCalls, 0)
+end)
+
+T.Case("auto-scan: three silent requests in a row pause it until the AH reopens", function()
+  local app, _, clock, ah = autoApp()
+  app.autoScan:SetEnabled(true)
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  for _ = 1, 3 do clock.advance(app.scanner.opts.timeout + app.scanner.opts.silentPause + 10) end
+  T.Eq(ah.replicateCalls, 3)
+  T.Eq(app.autoScan:Status(), "silent")
+  clock.advance(3600)
+  T.Eq(ah.replicateCalls, 3, "no fourth request")
+  app:OnEvent("AUCTION_HOUSE_CLOSED")
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  T.Eq(ah.replicateCalls, 4, "reopening the AH tries again")
+end)
+
+T.Case("auto-scan: a blocked call switches it off and is remembered", function()
+  local app, ns, clock, ah = autoApp()
+  app.autoScan:SetEnabled(true)
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app:OnEvent("ADDON_ACTION_BLOCKED", "ForeverGold", "C_AuctionHouse.ReplicateItems()")
+  T.Eq(app.autoScan:Status(), "blocked")
+  T.Eq(app.store:Settings().autoScan, false)
+  T.Eq(app.store.db.autoScan.blocked.event, "ADDON_ACTION_BLOCKED")
+  T.Ok(ns.UI.Main.StatusLine(app, app.opportunities.results):find("blocked", 1, true))
+  clock.advance(3600)
+  T.Eq(ah.replicateCalls, 1)
+  -- Another add-on's block, or a late one, is not ours.
+  local app2, _, clock2 = autoApp()
+  app2.autoScan:SetEnabled(true)
+  app2:OnEvent("AUCTION_HOUSE_SHOW")
+  T.NotOk(app2.autoScan:OnBlocked("ADDON_ACTION_BLOCKED", "OtherAddon", "x"))
+  clock2.advance(10)
+  T.NotOk(app2.autoScan:OnBlocked("ADDON_ACTION_FORBIDDEN", "ForeverGold", "x"), "too late to be this request")
+  T.Eq(app2.autoScan:Status(), "scanning")
+end)
+
+T.Case("auto-scan: never while a purchase run uses the AH or with the AH closed", function()
+  local app, _, clock, ah = autoApp()
+  app.store:Settings().autoScan = true
+  app.batch.active = true
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  clock.advance(30)
+  T.Eq(ah.replicateCalls, 0, "batch running")
+  app.batch.active = false
+  clock.advance(6)
+  T.Eq(ah.replicateCalls, 1, "once the batch is over")
+  answer(app, ah, clock)
+  app:OnEvent("AUCTION_HOUSE_CLOSED")
+  clock.advance(7200)
+  T.Eq(ah.replicateCalls, 1, "AH closed: nothing")
+end)

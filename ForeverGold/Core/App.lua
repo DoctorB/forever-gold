@@ -75,6 +75,20 @@ function App:Load(saved)
   self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
     stale = function() return self.opportunities.stale end })
   self.bus:Subscribe("purchase.state", function(current) self.batch:OnPurchase(current) end)
+  self.store.db.autoScan = self.store.db.autoScan or {}
+  self.autoScan = ns.Services.AutoScan.New({
+    scanner = self.scanner, ah = self.ah, scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock,
+    settings = function() return self.store:Settings() end, memory = self.store.db.autoScan, bus = self.bus,
+    trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
+    -- Never while a scan is processed or a purchase uses the AH.
+    busy = function()
+      local current = self.purchases.current
+      local using = current and (current.state == "waiting" or current.state == "quoting"
+        or current.state == "locating" or current.state == "confirming")
+      return self.processing == true or self.batch.active == true or using == true
+    end,
+  })
+  self.bus:Subscribe("scanner.state", function(state, reason) self.autoScan:OnScannerState(state, reason) end)
   self.probe = ns.Services.Probe.New({
     scanner = self.scanner, ah = self.ah, client = self.client, items = self.items, opportunities = self.opportunities,
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, store = self.store,
@@ -510,11 +524,18 @@ function App:OnEvent(event, ...)
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then
     self.diagnostics:Trace("tradeskill", { event = event })
     if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon(event == "TRADE_SKILL_SHOW") end
+  elseif event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
+    self.autoScan:OnBlocked(event, ...)
   elseif event == "NEW_RECIPE_LEARNED" then
     self:OnRecipeLearned(...)
   else
     if event == "AUCTION_HOUSE_SHOW" then self.marketKeyCache = nil end
     self.ah:OnEvent(event, ...)
+    if event == "AUCTION_HOUSE_SHOW" then
+      self.autoScan:OnShow()
+    elseif event == "AUCTION_HOUSE_CLOSED" then
+      self.autoScan:OnClose()
+    end
   end
 end
 

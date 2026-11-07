@@ -112,6 +112,15 @@ function Main.StatusLine(app, results)
   else
     parts[#parts + 1] = L("STATUS_NEVER")
   end
+  local auto = app and app.autoScan
+  if auto then
+    local kind, seconds = auto:Status()
+    if kind == "waiting" then
+      parts[#parts + 1] = string.format(L("AUTO_waiting"), Main.Wait(seconds))
+    elseif kind ~= "off" and kind ~= "closed" then
+      parts[#parts + 1] = L("AUTO_" .. kind)
+    end
+  end
   if scanner and (scanner.state == "FAILED" or scanner.state == "CANCELLED") and scanner.reason then
     parts[#parts + 1] = L("STATE_" .. scanner.state) .. ": " .. (ns.L["REASON_" .. scanner.reason] or scanner.reason)
   end

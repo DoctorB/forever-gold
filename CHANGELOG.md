@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Optional automatic scan (Settings, off by default): with the AH window
+  open, the add-on asks for the AH replica by itself as soon as the
+  measured cooldown ends, e.g. while you are away. Reads only: it never
+  buys, posts or cancels. It waits while a scan is processed or a purchase
+  uses the AH, pauses after 3 unanswered requests in a row (reopen the AH
+  to retry), and switches itself off if the game blocks the request
+  without a click. The status line shows the next automatic scan.
 - Profession probe (read-only): opening a profession window records which
   recipe APIs the client has, the recipes it lists (classic list and recipe
   IDs) and, for the first 12, product, quantity made and reagents, in
