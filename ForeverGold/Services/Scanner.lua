@@ -27,6 +27,7 @@ Scanner.ACTIVE = { REQUESTED = true, RECEIVING = true, NORMALIZING = true, THROT
 -- build 70450, six requests). Silent requests do not restart it. Used only
 -- as the starting measurement; every attempt keeps refining it.
 Scanner.MEASURED = { lowerBound = 867, upperBound = 938, source = "2026-10-20 build 70450" }
+Scanner.PAST_LOWER = 30 -- seconds past a proven silence before asking again (no upper bound yet)
 Scanner.DEFAULTS = {
   -- Seconds without any replicate event before giving up. Live build 70790
   -- (2026-11-06): a request at 18:12:01 was answered at 18:14:29, 148 s
@@ -247,10 +248,14 @@ function Scanner:Cooldown(now)
   local memory = self.memory
   local info = { lastSuccess = memory.lastSuccess, lowerBound = memory.lowerBound, upperBound = memory.upperBound, remaining = 0 }
   now = now or self.clock()
-  if memory.lastSuccess and memory.lowerBound then
-    -- An answer at +upperBound proves the cooldown is never longer.
-    local bound = memory.lowerBound
-    if memory.upperBound and memory.upperBound < bound then bound = memory.upperBound end
+  if memory.lastSuccess and (memory.lowerBound or memory.upperBound) then
+    -- An answer at +upperBound proves the cooldown is never longer, while a
+    -- silence at +lowerBound proves it is longer: asking at the lower bound
+    -- is always wasted. In game (2026-11-07, build 70862) a request at
+    -- +871 s stayed silent for the 300 s timeout and the retry was answered
+    -- at once; the proven upper bound was 929 s. So wait the upper bound,
+    -- or just past the lower bound when no answer has measured one yet.
+    local bound = memory.upperBound or (memory.lowerBound + Scanner.PAST_LOWER)
     local left = memory.lastSuccess + bound - now
     if left > 0 then info.remaining, info.kind = left, "measured" end
   end

@@ -73,6 +73,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- The scan cooldown waits the time proven to be enough (a past answer)
+  instead of the time proven to be too short (a past silence): in game the
+  first automatic request went out at +871 s, stayed unanswered for 5
+  minutes, and the retry was answered at once.
+- Opportunities: after /reload an empty list said "No data yet: open the
+  Auction House and press Scan" even right after a scan; it now says the
+  last scan found nothing worth buying.
 - Crafting tab: the summary shows its second line (recipes priced, merchant
   prices known); it was cut off after the professions.
 - The banner no longer announces a gain as available when you cannot pay

@@ -55,6 +55,10 @@ end
 -- Why the table is empty: no data, insufficient data, unsupported, or no deals.
 function Main.EmptyReason(app, results)
   if app and app.ah and not app.ah:GetCapabilities().replicate then return L("EMPTY_UNSUPPORTED") end
+  -- After /reload only the auctions behind opportunities are restored: an
+  -- empty list then means the last scan found none, not "no data" (seen in
+  -- game 2026-11-07, six minutes after a 132,942-row scan).
+  if (not results or results.counts.itemKeys == 0) and Main.LastScan(app) then return L("EMPTY_NO_DEALS_SCAN") end
   if not results or results.counts.itemKeys == 0 then return L("EMPTY_NO_DATA") end
   if (results.excluded.insufficient_history or 0) > 0 and #results.list == 0 then return L("EMPTY_INSUFFICIENT") end
   return L("EMPTY_NO_DEALS")

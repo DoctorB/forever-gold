@@ -451,8 +451,9 @@ T.Case("a late answer withdraws the silence it was first recorded as", function(
   for _, entry in ipairs(memory.observations) do if entry.t == requested then twins = twins + 1 end end
   T.Eq(twins, 1, "one observation per request")
   T.Eq(#s.snapshots, 2)
-  -- Next scan: waits the 867 s lower bound from the late-answered request.
-  T.Eq(s.scanner:Cooldown().remaining, requested + 867 - s.clock.now())
+  -- Next scan: waits the proven 938 s upper bound from the late-answered request
+  -- (asking at the 867 s lower bound is proven to be too early).
+  T.Eq(s.scanner:Cooldown().remaining, requested + 938 - s.clock.now())
 end)
 
 T.Case("saved memory with a silent twin of a late answer is repaired on load", function()
@@ -490,4 +491,16 @@ T.Case("a late answer with the AH closed is left for the next scan", function()
   T.Eq(#s.snapshots, 0)
   s.event("AUCTION_HOUSE_SHOW")
   T.Eq(s.scanner:ClientReplica(), 4)
+end)
+
+T.Case("cooldown: wait the proven upper bound, never just the proven silence", function()
+  -- Live 2026-11-07: silent at +871 s, answered at +929 s earlier.
+  local s = setup(rows(1))
+  local memory = s.scanner.memory
+  memory.lastSuccess, memory.lowerBound, memory.upperBound = 1000, 871, 929
+  T.Eq(s.scanner:Cooldown(1000).remaining, 929)
+  T.Eq(s.scanner:Cooldown(1000 + 871).remaining, 58, "at +871 the server is known to stay silent")
+  -- No answer has measured an upper bound yet: just past the silence.
+  memory.upperBound = nil
+  T.Eq(s.scanner:Cooldown(1000).remaining, 871 + Scanner.PAST_LOWER)
 end)

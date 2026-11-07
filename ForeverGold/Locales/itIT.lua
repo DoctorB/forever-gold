@@ -89,6 +89,7 @@ L.EMPTY_NO_DATA = "Nessun dato: apri la casa d'aste e premi Scansiona, oppure pr
 L.EMPTY_INSUFFICIENT = "Storico insufficiente: i prezzi restano scenari finché non ci sono abbastanza giorni indipendenti."
 L.EMPTY_UNSUPPORTED = "Questo client non espone l'API di replica dell'AH."
 L.EMPTY_NO_DEALS = "Nessuna opportunità supera i filtri in questo momento."
+L.EMPTY_NO_DEALS_SCAN = "L'ultima scansione non ha trovato niente da comprare. La prossima potrebbe: vedi la riga di stato in alto."
 
 L.DETAIL_TITLE = "Dettaglio opportunità"
 L.DETAIL_CONFIDENCE = "Punteggio euristico %s (%s), non una probabilità. Penalità: %s"

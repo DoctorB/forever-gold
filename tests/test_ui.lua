@@ -211,10 +211,14 @@ T.Case("with the measured cooldown a scan too early is refused before sending", 
     clock.advance(600) -- 10 min after the answered request
     ns.UI.Commands.Handle("scan")
     local last = ns.printed[#ns.printed]
-    T.Ok(last:find("still cooling down: next scan possible in 4 min 27 s", 1, true) ~= nil, last)
+    -- The proven upper bound (15 min 38 s), not the proven silence (14 min 27 s).
+    T.Ok(last:find("still cooling down: next scan possible in 5 min 38 s", 1, true) ~= nil, last)
     T.Ok(last:find("between 14 min 27 s and 15 min 38 s", 1, true) ~= nil, last)
     T.Eq(ah.replicateCalls, 1)
     clock.advance(270)
+    ns.UI.Commands.Handle("scan")
+    T.Eq(ah.replicateCalls, 1, "past the silence bound: still refused")
+    clock.advance(70)
     ns.UI.Commands.Handle("scan")
     T.Eq(ah.replicateCalls, 2, "allowed once the proven bound has passed")
   end)
@@ -353,9 +357,9 @@ T.Case("cooldown countdown on the scan button and in the hint", function()
     clock.advance(60)
     local frame = ns.UI.Main.frame
     frame.scripts.OnUpdate(frame, 1)
-    T.Eq(frame.scanButton:GetText(), "Scan (in 14 min)")
+    T.Eq(frame.scanButton:GetText(), "Scan (in 15 min)")
     T.NotOk(frame.scanButton.enabled)
-    T.Eq(ns.UI.Main.Hint(ns.app, nil, {}), "Next scan possible in 14 min. Meanwhile, items you search in the AH window are evaluated.")
+    T.Eq(ns.UI.Main.Hint(ns.app, nil, {}), "Next scan possible in 15 min. Meanwhile, items you search in the AH window are evaluated.")
     clock.advance(900)
     frame.scripts.OnUpdate(frame, 1)
     T.Eq(frame.scanButton:GetText(), ns.L.BTN_SCAN)
@@ -428,5 +432,16 @@ T.Case("buy all button: start, one click per purchase, summary in chat", functio
     T.Ok(found, "summary printed")
     T.Eq(button:GetText(), "Buy all (max 50s 0c)")
     _G.GetMoney = nil
+  end)
+end)
+
+T.Case("an empty list after a scan says the scan found nothing", function()
+  withClient(function(ns)
+    local Main = ns.UI.Main
+    local app = ns.app
+    T.Eq(Main.EmptyReason(app, nil), ns.L.EMPTY_NO_DATA)
+    local market = app.store:Market(app:MarketKey(), true)
+    market.snapshots[#market.snapshots + 1] = { mode = "replicate", t = app.clock(), items = 6724, counts = { valid = 132942 } }
+    T.Eq(Main.EmptyReason(app, { counts = { itemKeys = 0 }, excluded = {}, list = {} }), ns.L.EMPTY_NO_DEALS_SCAN)
   end)
 end)

@@ -91,6 +91,7 @@ L.EMPTY_NO_DATA = "No data yet: open the Auction House and press Scan, or try De
 L.EMPTY_INSUFFICIENT = "History insufficient: prices are shown as scenarios until enough independent days exist."
 L.EMPTY_UNSUPPORTED = "This client does not expose the AH replication API."
 L.EMPTY_NO_DEALS = "No opportunity passes the filters right now."
+L.EMPTY_NO_DEALS_SCAN = "The last scan found nothing worth buying. The next scan may: see the status line above."
 
 L.DETAIL_TITLE = "Opportunity details"
 L.DETAIL_CONFIDENCE = "Heuristic score %s (%s), not a probability. Penalties: %s"
