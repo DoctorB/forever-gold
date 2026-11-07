@@ -55,8 +55,11 @@ $bootstrap = [System.IO.File]::ReadAllText((Join-Path $addonDir "Bootstrap.lua")
 if ($bootstrap -notmatch 'ns\.VERSION = "([^"]+)"') { Fail "ns.VERSION not found" }
 if ($Matches[1] -ne $version) { Fail "Bootstrap version $($Matches[1]) differs from TOC $version" }
 $changelog = [System.IO.File]::ReadAllText((Join-Path $root "CHANGELOG.md"))
-if ($changelog -notmatch '(?m)^## \[?([\w\.\-]+)\]?') { Fail "CHANGELOG has no version heading" }
-if ($Matches[1] -ne $version) { Fail "CHANGELOG top entry $($Matches[1]) differs from TOC $version" }
+# Keep a Changelog: an [Unreleased] section may sit above the latest version.
+$released = [regex]::Matches($changelog, '(?m)^## \[?([\w\.\-]+)\]?') |
+  ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne 'Unreleased' } | Select-Object -First 1
+if (-not $released) { Fail "CHANGELOG has no version heading" }
+if ($released -ne $version) { Fail "CHANGELOG top entry $released differs from TOC $version" }
 
 # --- Tests ------------------------------------------------------------------
 if (-not $SkipTests) {
