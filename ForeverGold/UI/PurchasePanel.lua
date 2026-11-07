@@ -19,9 +19,12 @@ local function reasonText(reason)
 end
 
 -- Pure view model: text and button states for the current situation.
--- view: { enabled, demo, ahOpen, current, beginError, money, cap, quoteLeft }
+-- view: { enabled, demo, ahOpen, current, beginError, beginNeed, money, cap, quoteLeft }
+-- The second button always reads "2. Buy" (with the amount once known): in
+-- game (2026-11-07) both buttons read "1. Get quote" when no purchase could
+-- be planned.
 function PurchasePanel.Model(view)
-  local model = { quote = false, buy = false, cancel = false, quoteLabel = L("PB_QUOTE") }
+  local model = { quote = false, buy = false, cancel = false, quoteLabel = L("PB_QUOTE"), buyLabel = L("PB_BUY_IDLE") }
   if not view.enabled then
     model.text = L("PB_DISABLED")
     model.quote, model.quoteLabel, model.enable = true, L("PB_ENABLE"), true
@@ -37,7 +40,16 @@ function PurchasePanel.Model(view)
   end
   local current = view.current
   if not current then
-    model.text = L("PB_CANNOT") .. " " .. reasonText(view.beginError)
+    local need = view.beginNeed
+    if view.beginError == "unaffordable" and Money.IsCopper(need) then
+      if Money.IsCopper(view.money) and view.money < need then
+        model.text = string.format(L("PB_CANNOT_GOLD"), fmt(need), fmt(view.money))
+      else
+        model.text = string.format(L("PB_CANNOT_CAP"), fmt(need), fmt(view.cap))
+      end
+    else
+      model.text = L("PB_CANNOT") .. " " .. reasonText(view.beginError)
+    end
     return model
   end
   local plan = current.plan
@@ -82,7 +94,7 @@ function PurchasePanel.Model(view)
     lines[#lines + 1] = W.Color(L("PB_STOPPED") .. " " .. reasonText(current.reason), W.WARN)
   end
   model.text = table.concat(lines, "\n")
-  model.buyLabel = model.buyLabel or string.format(L("PB_BUY"), fmt(plan.expectedTotal))
+  if not model.buy then model.buyLabel = string.format(L("PB_BUY"), fmt(plan.expectedTotal)) end
   return model
 end
 
@@ -103,7 +115,7 @@ function PurchasePanel.Build(frame)
   section.text = text
   section.quote = W.Button(section, L("PB_QUOTE"), 130, function() PurchasePanel.Primary() end)
   section.quote:SetPoint("BOTTOMLEFT", section, "BOTTOMLEFT", 0, 0)
-  section.buy = W.Button(section, L("PB_QUOTE"), 170, function() ns.app.purchases:Confirm() end)
+  section.buy = W.Button(section, L("PB_BUY_IDLE"), 170, function() ns.app.purchases:Confirm() end)
   section.buy:SetPoint("LEFT", section.quote, "RIGHT", 6, 0)
   section.cancel = W.Button(section, L("BTN_CANCEL"), 80, function() ns.app.purchases:Cancel("user") end)
   section.cancel:SetPoint("LEFT", section.buy, "RIGHT", 6, 0)
@@ -119,7 +131,8 @@ local function view()
   if current and current.ledgerIndex then paid = app.store.db.ledger[current.ledgerIndex].cost end
   return {
     enabled = settings.assistedBuy == true, demo = ns.UI.Main.demoResults ~= nil, ahOpen = app.ah:IsOpen(),
-    current = current, beginError = PurchasePanel.beginError, money = app.client:Money(), cap = settings.maxPurchase,
+    current = current, beginError = PurchasePanel.beginError, beginNeed = PurchasePanel.beginNeed,
+    money = app.client:Money(), cap = settings.maxPurchase,
     quoteLeft = current and current.state == "quoted" and app.purchases.purchase:QuoteRemaining() or nil, paid = paid,
   }
 end
@@ -132,7 +145,7 @@ function PurchasePanel.Update()
   section.text:SetText(model.text)
   section.quote:SetText(model.quoteLabel)
   section.quote:SetEnabled(model.quote)
-  section.buy:SetText(model.buyLabel or L("PB_QUOTE"))
+  section.buy:SetText(model.buyLabel)
   section.buy:SetEnabled(model.buy)
   section.cancel:SetEnabled(model.cancel)
 end
@@ -206,11 +219,23 @@ function PurchasePanel.BatchStart()
   PurchasePanel.UpdateBatchButton()
 end
 
+-- Smallest amount a purchase of this opportunity can spend: one unit of a
+-- commodity, or the cheapest whole auction. Pure.
+function PurchasePanel.CheapestSpend(opportunity)
+  local cheapest
+  for _, lot in ipairs(opportunity.lots or {}) do
+    local listing = lot.listing or {}
+    local spend = (opportunity.commodity == true and Money.IsCopper(listing.unitPrice)) and listing.unitPrice or lot.cost
+    if Money.IsCopper(spend) and (not cheapest or spend < cheapest) then cheapest = spend end
+  end
+  return cheapest
+end
+
 -- A new opportunity in the details window: plan it (spends nothing).
 function PurchasePanel.Show(opportunity)
   local app = ns.app
   local settings = app.store:Settings()
-  PurchasePanel.beginError = nil
+  PurchasePanel.beginError, PurchasePanel.beginNeed = nil, nil
   if app.batch.active then
     -- The batch owns the purchase in progress: only show it.
     PurchasePanel.Update()
@@ -221,7 +246,10 @@ function PurchasePanel.Show(opportunity)
   local busy = current and (current.state == "confirming" or current.state == "done" or current.state == "uncertain")
   if settings.assistedBuy and app.ah:IsOpen() and not ns.UI.Main.demoResults and not (sameItem and busy) then
     local started, reason = app.purchases:Begin(opportunity, settings.maxPurchase)
-    if not started then PurchasePanel.beginError = reason end
+    if not started then
+      PurchasePanel.beginError = reason
+      PurchasePanel.beginNeed = PurchasePanel.CheapestSpend(opportunity)
+    end
   end
   PurchasePanel.Update()
 end

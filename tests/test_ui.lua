@@ -242,6 +242,19 @@ T.Case("purchase panel explains why it cannot buy", function()
     local m = Model({ enabled = true, ahOpen = true, beginError = "unaffordable" })
     T.Ok(m.text:find(ns.L.PR_unaffordable, 1, true) ~= nil)
     T.NotOk(m.buy)
+    -- Seen in game 2026-11-07: 15s catfish, 1s 74c in the bags; both buttons read "1. Get quote".
+    m = Model({ enabled = true, ahOpen = true, beginError = "unaffordable", beginNeed = 1500, money = 174, cap = 5000 })
+    T.Eq(m.text, "Not enough gold: the cheapest lot costs 15s 0c, you have 1s 74c.")
+    T.Eq(m.quoteLabel, "1. Get quote")
+    T.Eq(m.buyLabel, "2. Buy", "second button never reads Get quote")
+    m = Model({ enabled = true, ahOpen = true, beginError = "unaffordable", beginNeed = 1500, money = 9000, cap = 1000 })
+    T.Eq(m.text, "Above your limit per purchase: the cheapest lot costs 15s 0c, the limit is 10s 0c (Settings).")
+    for _, v in ipairs({ { enabled = false }, { enabled = true, demo = true }, { enabled = true, ahOpen = false } }) do
+      T.Eq(Model(v).buyLabel, "2. Buy")
+    end
+    local P = ns.UI.PurchasePanel
+    T.Eq(P.CheapestSpend({ commodity = true, lots = { { cost = 700, listing = { unitPrice = 35 } }, { cost = 400, listing = { unitPrice = 40 } } } }), 35)
+    T.Eq(P.CheapestSpend({ lots = { { cost = 1500 }, { cost = 900 } } }), 900)
   end)
 end)
 

@@ -59,6 +59,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Opportunity details: the second button read "1. Get quote" too when no
+  purchase could be planned; it now always reads "2. Buy". When the gold is
+  not enough, the panel says how much the cheapest lot costs and how much
+  gold you have (or that the lot is above your limit per purchase).
 - An offer whose search got no answer is no longer hidden as "gone": no
   answer says nothing about the offer.
 
