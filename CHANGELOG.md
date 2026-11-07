@@ -59,6 +59,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Crafting tab: the summary shows its second line (recipes priced, merchant
+  prices known); it was cut off after the professions.
 - The banner no longer announces a gain as available when you cannot pay
   for any of its offers ("but none you can pay for with your gold"), and
   says how many are within your gold when only some are.

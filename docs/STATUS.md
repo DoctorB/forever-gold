@@ -141,6 +141,15 @@ materials not on the AH yet (Thorium Bar 114 recipes, Arcanite Bar 82,
 Solid Grinding Stone 52). Reagents the player can make are now costed by
 their recipe (up to three levels; on the real catalogue: 338 -> 317
 blocked).
+Checked in game 2026-11-07 11:22-11:25 (screenshots): opportunity details
+show "2. Buy" and "Not enough gold: the cheapest lot costs 15s 0c, you have
+1s 74c"; the banner says no offer can be paid for; the status line reads
+"119799 auctions read · 6511 items" after /reload; the Crafting tab lists
+Copper Rod +44c and Basic Campfire Kit +23c (known) and ten learnable
+recipes (Green Iron Helm +89s 89c ... Plain Ol' Paletusk +9s 31c). Its
+summary was cut to one line (fixed). 357 of 688 recipes priced, 82 merchant
+prices; after a scan the pipeline ran three times as item data arrived
+(worst frame 43 ms).
 Next: several crafts at real depth, deposit.
 
 ## Implemented

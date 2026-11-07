@@ -294,9 +294,15 @@ local function labelled(columns)
 end
 
 function Professions.Build(panel)
+  -- Two lines (professions, then what was priced): in game a single-line
+  -- string cut the second line off after "Mining 23/75...".
   panel.summary = W.Text(panel, "GameFontHighlightSmall")
   panel.summary:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
   panel.summary:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+  panel.summary:SetHeight(30)
+  if panel.summary.SetWordWrap then panel.summary:SetWordWrap(true) end
+  if panel.summary.SetJustifyV then panel.summary:SetJustifyV("TOP") end
+  if panel.summary.SetMaxLines then panel.summary:SetMaxLines(2) end
   local knownTitle = W.Text(panel, "GameFontNormal")
   knownTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -34)
   knownTitle:SetText(L("CRAFT_UI_KNOWN"))
