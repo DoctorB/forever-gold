@@ -226,6 +226,10 @@ function Purchases:Locate(current, key)
   current.step = (current.step or 0) + 1
   local step = current.step
   local suffix = current.suffix or Schema.SuffixOf(plan.itemKey)
+  if self.trace then
+    self.trace("purchase_search", { itemID = plan.itemID, level = current.itemLevel, suffix = suffix,
+      key = key and keyText(key) or "built" })
+  end
   local ok, reason = self.scanner:Search(plan.itemID, suffix, function(_, listings)
     if not alive(self, current, { locating = true }) then return end
     local best, matched, cheapest = matchLots(plan, listings)
@@ -255,8 +259,18 @@ function Purchases:Locate(current, key)
   if current.state ~= "locating" then set(self, "locating") end
   -- A step may get no answer (or another search may replace it): stop
   -- waiting instead of leaving the panel on "waiting for the server".
+  -- In game (2026-11-07 18:26, Lesser Magic Wand) the search with the key
+  -- built by the add-on got no answer at all, while searches from the AH
+  -- window (server keys) were answered: a built key that gets no answer
+  -- goes on with a browse by name, as the AH window does.
   self.scheduler:After(self:SearchTimeout() + 2, function()
-    if alive(self, current, { locating = true }) and current.step == step then set(self, "rejected", "no_answer") end
+    if not (alive(self, current, { locating = true }) and current.step == step) then return end
+    if key == nil and not current.browsed and plan.name then
+      if self.trace then self.trace("purchase_no_answer", { itemID = plan.itemID, next = "browse" }) end
+      self:WhenReady(current, function() self:BrowseFallback(current) end)
+    else
+      set(self, "rejected", "no_answer")
+    end
   end)
   return true
 end

@@ -104,6 +104,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- "Buy all" on an item that is not a commodity: when the search with the
+  key built by the add-on gets no answer, it now browses by name like the
+  AH window and searches again with the server's own keys, instead of
+  giving up. In game a Lesser Magic Wand search got no answer in 30 s while
+  searches from the AH window were answered.
 - Professions per character: skill and known recipes are kept for each
   character (`characters["Name-Realm"]`), the recipe lists stay shared by
   the account. In game a Rogue saw the Warrior's Blacksmithing recipes as

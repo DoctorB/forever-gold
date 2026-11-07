@@ -277,9 +277,39 @@ T.Case("individual auction: no answer to the search stops waiting", function()
   s.clock.advance(25)
   T.Eq(p.current.state, "locating", "still waiting past the old 10 s timeout")
   s.clock.advance(10)
-  T.Eq(p.current.state, "rejected")
+  T.Eq(p.current.state, "locating", "no answer to the built key: browse by name next")
+  s.clock.advance(5)
+  T.Eq(s.ah.browseCalls, 1, "browse sent")
+  s.clock.advance(40)
+  T.Eq(p.current.state, "rejected", "the browse got no answer either")
   T.Eq(p.current.reason, "no_answer")
   T.Eq(s.ah.spendCalls, 0)
+end)
+
+T.Case("no answer to the built key: the browse finds the server key and the lot", function()
+  -- In game 2026-11-07 18:26: Lesser Magic Wand, built key unanswered.
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.clock.advance(40)
+  T.Eq(s.ah.browseCalls, 1)
+  s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 601, level = 13 } }
+  s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 13, itemSuffix = 0, battlePetSpeciesID = 0 },
+    totalQuantity = 1, minPrice = 200 } }
+  s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  s.clock.advance(1)
+  T.Eq(s.ah.lastSearch.itemLevel, 13, "searched with the server key")
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 13, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "located")
+  T.Eq(p.current.auction.auctionID, 601)
+  local sent, noAnswer = 0, nil
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "purchase_search" then sent = sent + 1 end
+    if e.k == "purchase_no_answer" then noAnswer = e end
+  end
+  T.Eq(sent, 2, "built key, then server key")
+  T.Eq(noAnswer.next, "browse")
 end)
 
 T.Case("search requests and their answers are traced with the delay", function()
@@ -287,7 +317,7 @@ T.Case("search requests and their answers are traced with the delay", function()
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare()
-  s.clock.advance(40) -- given up on
+  s.clock.advance(31) -- given up on (the browse fallback starts at 32 s)
   s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 93 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   local request, answer
@@ -299,7 +329,7 @@ T.Case("search requests and their answers are traced with the delay", function()
   T.Eq(request.itemID, 201)
   T.Ok(request.ready ~= nil, "throttle state at sending")
   T.Ok(answer, "late answer traced")
-  T.Eq(answer.after, 40)
+  T.Eq(answer.after, 31)
   T.Eq(answer.forItem, 201)
   T.Eq(answer.late, true)
 end)
