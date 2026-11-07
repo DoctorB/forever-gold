@@ -870,7 +870,7 @@ T.Case("deposit check: quotes for items in the bags compared with the formula, r
   clock.advance(3)
   local memory = app.store.db.depositChecks
   T.Eq(#memory.samples, 2, "the bound Hearthstone is skipped")
-  T.Eq(memory.items[2840], "match", "20 bars: 100 / 100 / 120 as measured in game")
+  T.Eq(memory.items[2840], "match_rate", "20 bars: 100 / 100 / 120 as measured in game (120 tests the 24 h rate)")
   T.Eq(memory.samples[1].quantity, 20)
   T.Eq(memory.items[2589], "match", "one cloth: the 100 minimum for every duration")
   local status = app.depositCheck:Status()
@@ -993,4 +993,34 @@ T.Case("item data arriving in bursts starts one evaluation after a quiet moment"
   T.Eq(passes(), before, "still arriving")
   clock.advance(10)
   T.Eq(passes(), before + 1, "one pass for the whole burst")
+end)
+
+T.Case("deposit check: eight matches at the minimum do not verify the rates", function()
+  -- Seen in game 2026-11-07 13:43: eight cheap items, all quoted 100.
+  local bags, items = { [0] = {} }, {}
+  for index = 1, 8 do
+    bags[0][index] = { itemID = 3000 + index, stackCount = 1 }
+    items[3000 + index] = { name = "Cheap " .. index, sellPrice = 5 }
+  end
+  local app, _, clock, ah = Fakes.App({ rows = replicateRows(), items = items, globals = { C_Container = {
+    GetContainerNumSlots = function(bag) return bags[bag] and #bags[bag] or 0 end,
+    GetContainerItemInfo = function(bag, slot) return bags[bag] and bags[bag][slot] end,
+  }, ItemLocation = { CreateFromBagAndSlot = function(_, bag, slot) return { bag = bag, slot = slot } end } } })
+  ah.api.CalculateItemDeposit = function() return 100 end
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  clock.advance(3)
+  local status = app.depositCheck:Status()
+  T.Eq(status.matched, 8)
+  T.Eq(status.aboveMinimum, 0)
+  T.NotOk(status.verified, "the minimum is proven, the rates are not")
+end)
+
+T.Case("deposit: one auction per stack for items that are not commodities", function()
+  local ns = T.LoadAddon()
+  local D = ns.Economy.Deposit
+  -- 20 Copper Rods (stacks of 20, merchant price 2): one auction, one minimum.
+  T.Eq(D.ForUnits(2, 20, false, nil, 20), 100)
+  T.Eq(D.ForUnits(2, 25, false, nil, 20), 200, "a full stack and a partial one")
+  T.Eq(D.ForUnits(1000, 3, false, nil, 1), 900, "gear: one auction each")
+  T.Eq(D.ForUnits(2, 20, false), 2000, "unknown stack size: one per unit (the old behaviour)")
 end)

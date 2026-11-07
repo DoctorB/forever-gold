@@ -111,6 +111,7 @@ end
 -- each scan's price), oldest first, at most CHART_POINTS. Pure.
 -- Returns { points = { { day, price } }, low, high, firstDay, lastDay, minByDay } or nil.
 History.CHART_POINTS = 48
+History.CHART_MIN_SLOTS = 12
 History.DAY = 86400
 
 function History.ChartData(app, itemKey)
@@ -270,7 +271,9 @@ function History.ShowChart(panel, itemKey, name)
   local heights = History.BarHeights(data)
   local width = chart:GetWidth() or 600
   local height = (chart:GetHeight() or 108) - 18
-  local step = width / History.CHART_POINTS
+  -- Bars share the width (at least CHART_MIN_SLOTS slots, so a few points
+  -- stay narrow bars): in game 8 points filled a sixth of the chart.
+  local step = width / math.max(#heights, History.CHART_MIN_SLOTS)
   for index = 1, math.max(#chart.bars, #heights) do
     local bar = chart.bars[index]
     if not bar and heights[index] then

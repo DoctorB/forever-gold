@@ -7,7 +7,9 @@
 -- client gives for an item in the bags is compared with this formula
 -- (Services/DepositCheck); until enough of them match it stays "estimated".
 -- A commodity is posted as one auction (one minimum); other items as one
--- auction per unit (one minimum each).
+-- auction per stack (stackSize units, one minimum each): in game counting
+-- one auction per unit charged 20 Copper Rods (stacks of 20) twenty
+-- minimums and removed every Blacksmithing recipe from the list.
 local _, ns = ...
 
 local Money = ns.Economy.Money
@@ -30,13 +32,24 @@ function Deposit.Estimate(sellPrice, quantity, duration)
 end
 
 -- Deposit for selling `units` units: one auction for a commodity, one per
--- unit otherwise. Returns copper or nil, reason.
-function Deposit.ForUnits(sellPrice, units, commodity, duration)
+-- full or partial stack otherwise. Returns copper or nil, reason.
+function Deposit.ForUnits(sellPrice, units, commodity, duration, stackSize)
   if not Money.IsQuantity(units) then return nil, "quantity" end
   if commodity == true then return Deposit.Estimate(sellPrice, units, duration) end
-  local one, reason = Deposit.Estimate(sellPrice, 1, duration)
-  if not one then return nil, reason end
-  return one * units
+  local stack = (type(stackSize) == "number" and stackSize >= 1) and math.floor(stackSize) or 1
+  local full, rest = math.floor(units / stack), units % stack
+  local total = 0
+  if full > 0 then
+    local one, reason = Deposit.Estimate(sellPrice, stack, duration)
+    if not one then return nil, reason end
+    total = total + one * full
+  end
+  if rest > 0 then
+    local last, reason = Deposit.Estimate(sellPrice, rest, duration)
+    if not last then return nil, reason end
+    total = total + last
+  end
+  return total
 end
 
 -- Expected loss: the deposit comes back on a sale and is kept by the AH

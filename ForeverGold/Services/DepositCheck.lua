@@ -15,6 +15,10 @@ DepositCheck.DELAY = 2 -- seconds after the AH opens
 DepositCheck.MAX_ITEMS = 8 -- new items checked per visit
 DepositCheck.KEEP = 60 -- samples kept
 DepositCheck.VERIFY_ITEMS = 5 -- matching items needed, with no mismatch
+-- ... of which this many with a quote above the minimum: in game all eight
+-- first items were cheap and quoted the 100 minimum for every duration,
+-- which proves the minimum but not the 15/30/60% rates.
+DepositCheck.VERIFY_ABOVE_MINIMUM = 2
 DepositCheck.BAGS = { 0, 1, 2, 3, 4 }
 
 -- deps: { client, ah, items, scheduler, clock, memory (persisted), trace?, bus? }
@@ -98,7 +102,10 @@ function DepositCheck:Run()
         end
         if quoted > 0 then
           sample.match = match
-          memory.items[itemID] = match and "match" or "mismatch"
+          for duration = 1, #Deposit.RATES_BP do
+            if sample.quotes[duration] and sample.quotes[duration] > Deposit.MINIMUM then sample.aboveMinimum = true end
+          end
+          memory.items[itemID] = match and (sample.aboveMinimum and "match_rate" or "match") or "mismatch"
           memory.samples[#memory.samples + 1] = sample
           added[#added + 1] = sample
         end
@@ -115,12 +122,17 @@ function DepositCheck:Run()
   return added
 end
 
--- { matched, mismatched, verified }.
+-- { matched, aboveMinimum, mismatched, verified }.
 function DepositCheck:Status()
-  local matched, mismatched = 0, 0
+  local matched, above, mismatched = 0, 0, 0
   for _, result in pairs(self.memory.items) do
-    if result == "match" then matched = matched + 1 else mismatched = mismatched + 1 end
+    if result == "match" or result == "match_rate" then
+      matched = matched + 1
+      if result == "match_rate" then above = above + 1 end
+    else
+      mismatched = mismatched + 1
+    end
   end
-  return { matched = matched, mismatched = mismatched,
-    verified = matched >= DepositCheck.VERIFY_ITEMS and mismatched == 0 }
+  return { matched = matched, aboveMinimum = above, mismatched = mismatched,
+    verified = matched >= DepositCheck.VERIFY_ITEMS and above >= DepositCheck.VERIFY_ABOVE_MINIMUM and mismatched == 0 }
 end

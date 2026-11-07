@@ -172,6 +172,11 @@ tooltips, crafting re-priced when the bags settle, price chart in History,
 alert after a fruitful automatic scan, one re-evaluation per burst of item
 data. All of it, with the deposit check and "Buy all", is in the single test
 round at the top of docs/TESTING-IN-GAME.md.
+Single round done 2026-11-07 13:42-13:45 (API-AUDIT row 27): auto-scan,
+deposit quotes (8/8 at the minimum), Crafting tab, owned reagents, price
+chart seen working; per-unit deposit of stackable items fixed (D51); bag
+tooltips, bag refresh and "Buy all" not checked ("Buy all" waits: no gold
+to invest for now).
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 

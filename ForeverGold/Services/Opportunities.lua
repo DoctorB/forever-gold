@@ -160,7 +160,7 @@ function Opportunities:EvaluateStep(job, index)
   local entry = {
     listings = listings, info = info, commodity = commodity,
     estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp }),
-    depositFor = Opportunities.DepositFor(info and info.sellPrice, commodity),
+    depositFor = Opportunities.DepositFor(info and info.sellPrice, commodity, info and info.stackCount),
     depositVerified = self.depositVerified and self.depositVerified() or false,
   }
   local context = {
@@ -206,9 +206,11 @@ Opportunities.MERCHANT_UNITS = 1000000 -- "unlimited" merchant supply
 
 -- Deposit for selling `units` of an item (8 h), from its merchant price, or
 -- nil when the merchant price is unknown or zero.
-function Opportunities.DepositFor(sellPrice, commodity)
+function Opportunities.DepositFor(sellPrice, commodity, stackSize)
   if type(sellPrice) ~= "number" or sellPrice <= 0 then return nil end
-  return function(units) return ns.Economy.Deposit.ForUnits(sellPrice, units, commodity == true) end
+  return function(units)
+    return ns.Economy.Deposit.ForUnits(sellPrice, units, commodity == true, nil, stackSize)
+  end
 end
 
 -- Stepwise form: BeginCrafting, then ns.Strategies.Crafting.RecipeStep(job,
@@ -260,7 +262,7 @@ function Opportunities:BeginCrafting(recipes)
     local info = self.items and self.items:Read(itemID)
     if info then
       entry.sellPrice, entry.bound, entry.name = info.sellPrice, info.bindType == 1, info.name
-      entry.depositFor = Opportunities.DepositFor(info.sellPrice, self.commodity and self.commodity(itemID))
+      entry.depositFor = Opportunities.DepositFor(info.sellPrice, self.commodity and self.commodity(itemID), info.stackCount)
     elseif self.items then
       pending = pending + 1
       self.items:Resolve(itemID, function() end)

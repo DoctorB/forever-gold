@@ -96,6 +96,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Deposit of stackable items that are not commodities: one auction per
+  stack, not per unit. In game 20 Copper Rods were charged twenty minimum
+  deposits and every Blacksmithing recipe left the Crafting tab.
+- Deposit check: matches at the 1-silver minimum no longer verify the
+  formula on their own; two items quoted above the minimum are also needed
+  (in game all eight first items were quoted the minimum).
+- History chart: bars share the chart width instead of a fixed 48 slots.
 - After a scan, item data arriving in bursts started a full evaluation each
   time (three passes of about 1.4 s CPU in game) and data arriving during a
   pass was not re-evaluated: one pass now starts after 3 s without new data.
