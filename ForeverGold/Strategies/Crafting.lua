@@ -152,25 +152,36 @@ function Crafting.EvaluateRecipe(recipe, market, settings, cache)
   }
 end
 
--- All recipes. Returns { learned = rows, learnable = rows, counts, excluded };
--- rows with a positive profit only, best profit first.
-function Crafting.EvaluateRecipes(recipes, market, settings)
-  local result = { learned = {}, learnable = {}, excluded = {}, counts = { recipes = #recipes, evaluated = 0 } }
-  local cache = {}
-  for _, recipe in ipairs(recipes) do
-    local row, reason = Crafting.EvaluateRecipe(recipe, market, settings, cache)
-    if row then
-      result.counts.evaluated = result.counts.evaluated + 1
-      if row.profit > 0 then
-        local list = row.learned and result.learned or result.learnable
-        list[#list + 1] = row
-      else
-        result.excluded.no_profit = (result.excluded.no_profit or 0) + 1
-      end
+-- All recipes, in steps (one recipe each) so the client can spread them
+-- over frames: in game one pass over ~690 recipes took 360-380 ms in a
+-- single frame (2026-11-07, build 70862). EvaluateRecipes runs all steps.
+-- Result: { learned = rows, learnable = rows, counts, excluded }, rows with
+-- a positive profit only, best profit first.
+function Crafting.BeginRecipes(recipes, market, settings)
+  return {
+    recipes = recipes, market = market, settings = settings, cache = {},
+    result = { learned = {}, learnable = {}, excluded = {}, counts = { recipes = #recipes, evaluated = 0 } },
+  }
+end
+
+function Crafting.RecipeStep(job, index)
+  local result = job.result
+  local row, reason = Crafting.EvaluateRecipe(job.recipes[index], job.market, job.settings, job.cache)
+  if row then
+    result.counts.evaluated = result.counts.evaluated + 1
+    if row.profit > 0 then
+      local list = row.learned and result.learned or result.learnable
+      list[#list + 1] = row
     else
-      result.excluded[reason] = (result.excluded[reason] or 0) + 1
+      result.excluded.no_profit = (result.excluded.no_profit or 0) + 1
     end
+  else
+    result.excluded[reason] = (result.excluded[reason] or 0) + 1
   end
+end
+
+function Crafting.FinishRecipes(job)
+  local result = job.result
   local function byProfit(a, b)
     if a.profit ~= b.profit then return a.profit > b.profit end
     return a.recipeID < b.recipeID
@@ -178,4 +189,10 @@ function Crafting.EvaluateRecipes(recipes, market, settings)
   table.sort(result.learned, byProfit)
   table.sort(result.learnable, byProfit)
   return result
+end
+
+function Crafting.EvaluateRecipes(recipes, market, settings)
+  local job = Crafting.BeginRecipes(recipes, market, settings)
+  for index = 1, #recipes do Crafting.RecipeStep(job, index) end
+  return Crafting.FinishRecipes(job)
 end

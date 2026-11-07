@@ -34,6 +34,7 @@ function App:Load(saved)
   self.client:Detect(self.capabilities)
   self.scheduler = ns.Core.Scheduler.New(self.schedulerEnv)
   self.work = ns.Core.Scheduler.New(self.schedulerEnv) -- history and evaluation steps
+  self.craftWork = ns.Core.Scheduler.New(self.schedulerEnv) -- crafting steps
   self.ah = ns.Compat.AuctionHouse.New(self.client)
   self.items = ns.Compat.Items.New(self.client, ns.Core.Scheduler.New(self.schedulerEnv), function(itemID)
     self.bus:Publish("items.resolved", itemID)
@@ -340,17 +341,57 @@ function App:ObserveProfession()
   return report
 end
 
--- Crafting over every known recipe with the latest AH view (one pass,
--- timed: the reagent books are cached per item).
+-- Crafting over every known recipe with the latest AH view, spread over
+-- frames (one recipe per step). A newer run cancels the one in progress.
+-- Returns true when a run started. Bus: "crafting.updated"(crafting).
+App.CRAFTING_KEEP = 10 -- rows per list kept in diagnostics
+
 function App:EvaluateCrafting()
   local results = self.opportunities.results
-  if not results or results.demo or ns.Data.Recipes.status ~= "observed" then return nil end
-  local crafting = self:Timed("crafting", nil, function()
-    return self.opportunities:EvaluateCrafting(ns.Data.Recipes.List())
+  if not results or results.demo or ns.Data.Recipes.status ~= "observed" then return false end
+  local work = self.craftWork
+  work:Invalidate()
+  local recipes = ns.Data.Recipes.List()
+  local job = self:Timed("crafting_begin", #recipes, function() return self.opportunities:BeginCrafting(recipes) end)
+  local startedAt = self.clock()
+  self.craftingRunning = true
+  work:Chunk(1, #recipes, self.store:Settings().frameBudgetMs, function(index)
+    ns.Strategies.Crafting.RecipeStep(job, index)
+  end, function(done, handle)
+    if not done then return end
+    self.craftingRunning = false
+    self:ChunkTiming("crafting", handle, startedAt, function(index)
+      local recipe = recipes[index]
+      return recipe and ("r:" .. tostring(recipe.id)), recipe and #(recipe.reagents or {})
+    end)
+    local crafting = self.opportunities:FinishCrafting(job)
+    -- The results may have been replaced by a newer evaluation meanwhile.
+    local current = self.opportunities.results
+    if current and not current.demo then current.crafting = crafting end
+    self.lastCrafting = crafting
+    self:RecordCrafting(crafting)
+    self.bus:Publish("crafting.updated", crafting)
   end)
-  results.crafting = crafting
-  self.bus:Publish("crafting.updated", crafting)
-  return crafting
+  return true
+end
+
+-- Compact copy of the best rows in ForeverGoldDB.diagnostics.crafting, to
+-- check the evaluation against the game.
+function App:RecordCrafting(crafting)
+  local function rows(list)
+    local out = {}
+    for index = 1, math.min(#list, App.CRAFTING_KEEP) do
+      local row = list[index]
+      out[index] = { recipeID = row.recipeID, name = row.name, profession = row.profession, quantity = row.quantity,
+        cost = row.cost, exit = row.exit, revenue = row.revenue, profit = row.profit, outputItemID = row.outputItemID }
+    end
+    return out
+  end
+  self.store.db.diagnostics.crafting = {
+    at = crafting.at, counts = crafting.counts, excluded = crafting.excluded,
+    learned = rows(crafting.learned), learnable = rows(crafting.learnable),
+    totals = { learned = #crafting.learned, learnable = #crafting.learnable },
+  }
 end
 
 -- Client events forwarded by Core/Init.

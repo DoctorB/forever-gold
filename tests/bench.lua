@@ -74,3 +74,25 @@ print(string.format("estimated history size after 10 days: %d KB (budget %d KB)"
   Store.RETENTION.budgetBytes / 1024))
 print(string.format("Lua heap: %d KB (+%d KB during evaluation)", collectgarbage("count"),
   collectgarbage("count") - memoryBefore))
+
+-- Crafting: 700 recipes over the same AH (2-4 reagents each), stepwise as
+-- in the client; the slowest single step is what one frame can cost.
+local Crafting = ns.Strategies.Crafting
+local recipes = {}
+for id = 1, 700 do
+  local reagents = {}
+  for slot = 1, 2 + id % 3 do reagents[slot] = { itemID = 1 + (id * 7 + slot * 13) % KEYS, quantity = 1 + slot } end
+  recipes[id] = { id = id, name = "Recipe " .. id, learned = id % 50 == 0, reagents = reagents,
+    outputs = { { itemID = 1 + (id * 11) % KEYS, quantity = 1 } } }
+end
+started = os.clock()
+local job = opportunities:BeginCrafting(recipes)
+local slowest = 0
+for index = 1, #recipes do
+  local stepStarted = os.clock()
+  Crafting.RecipeStep(job, index)
+  slowest = math.max(slowest, os.clock() - stepStarted)
+end
+local crafting = opportunities:FinishCrafting(job)
+print(string.format("crafting: %.3f s for %d recipes, slowest step %.1f ms -> %d known / %d learnable with gain",
+  os.clock() - started, #recipes, slowest * 1000, #crafting.learned, #crafting.learnable))

@@ -198,7 +198,9 @@ end
 -- Crafting over the given recipes with the latest AH view. Only the item
 -- keys of the recipes' reagents and outputs are touched; variants of one
 -- item are merged (their books are bought from together).
-function Opportunities:EvaluateCrafting(recipes)
+-- Stepwise form: BeginCrafting, then ns.Strategies.Crafting.RecipeStep(job,
+-- index) for each recipe, then FinishCrafting(job).
+function Opportunities:BeginCrafting(recipes)
   local settings = self.store:Settings()
   local wanted = {}
   for _, recipe in ipairs(recipes) do
@@ -242,10 +244,24 @@ function Opportunities:EvaluateCrafting(recipes)
     cache[itemID] = entry
     return entry
   end
-  local result = ns.Strategies.Crafting.EvaluateRecipes(recipes, market, settings)
-  result.counts.infoPending = pending
-  result.at = now
+  local job = ns.Strategies.Crafting.BeginRecipes(recipes, market, settings)
+  job.pending = function() return pending end
+  job.at = now
+  return job
+end
+
+function Opportunities:FinishCrafting(job)
+  local result = ns.Strategies.Crafting.FinishRecipes(job)
+  result.counts.infoPending = job.pending()
+  result.at = job.at
   return result
+end
+
+-- All recipes in one go (offline and tests).
+function Opportunities:EvaluateCrafting(recipes)
+  local job = self:BeginCrafting(recipes)
+  for index = 1, #recipes do ns.Strategies.Crafting.RecipeStep(job, index) end
+  return self:FinishCrafting(job)
 end
 
 -- Runs every enabled strategy at once. Returns the results table (also kept).

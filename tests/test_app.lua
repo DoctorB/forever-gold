@@ -312,9 +312,11 @@ local function craftingApp()
 end
 
 T.Case("crafting: known recipes and learnable ones priced at real depth", function()
-  local app, ns = craftingApp()
+  local app, ns, clock = craftingApp()
   T.Eq(app.opportunities.results.crafting, nil, "no recipes before a window was opened")
   app:ObserveProfession()
+  T.Eq(app.opportunities.results.crafting, nil, "spread over frames, not computed at once")
+  clock.advance(1)
   local crafting = app.opportunities.results.crafting
   T.Ok(crafting, "evaluated when the recipes arrive")
   T.Eq(crafting.counts.recipes, 4)
@@ -541,4 +543,22 @@ T.Case("a scan records how long each pipeline phase took", function()
   T.Ok(seen.history.slowestKey ~= nil and seen.history.slowestRows >= 1, "slowest history step named")
   T.Ok(seen.evaluate.slowestKey ~= nil, "slowest evaluate step named")
   T.Ok(app.store.db.markets[app:MarketKey()].snapshots[1].buyoutVotes ~= nil, "buyout evidence still recorded")
+end)
+
+T.Case("crafting: summary kept for the audit, a newer run cancels the older one", function()
+  local app, _, clock = craftingApp()
+  app:ObserveProfession()
+  T.Ok(app:EvaluateCrafting(), "restart while the first run is pending")
+  clock.advance(1)
+  local saved = app.store.db.diagnostics.crafting
+  T.Ok(saved, "summary saved")
+  T.Eq(saved.totals.learned, 1)
+  T.Eq(saved.learned[1].profit, 120)
+  T.Eq(saved.learnable[1].recipeID, 2)
+  T.Eq(saved.excluded.reagent_not_on_ah, 1)
+  local crafting = 0
+  for _, timing in ipairs(app.store.db.diagnostics.timings) do
+    if timing.phase == "crafting" then crafting = crafting + 1 end
+  end
+  T.Eq(crafting, 1, "the cancelled run finished nothing")
 end)

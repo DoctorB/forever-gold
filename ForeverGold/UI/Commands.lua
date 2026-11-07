@@ -73,8 +73,12 @@ function Commands.CraftingLines(app, limit)
   local lines = {}
   if ns.Data.Recipes.status ~= "observed" then return { L("CRAFT_NO_RECIPES") } end
   local results = app.opportunities.results
-  local crafting = results and not results.demo and (results.crafting or app:EvaluateCrafting())
-  if not crafting then return { L("CRAFT_NO_SCAN") } end
+  if not results or results.demo then return { L("CRAFT_NO_SCAN") } end
+  local crafting = results.crafting or app.lastCrafting
+  if not crafting then
+    if not app.craftingRunning then app:EvaluateCrafting() end
+    return { L("CRAFT_PENDING") }
+  end
   local function name(row)
     local info = app.items:Read(row.outputItemID)
     return (info and info.name) or row.name or ("#" .. tostring(row.recipeID))

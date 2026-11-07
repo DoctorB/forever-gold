@@ -115,8 +115,12 @@ exposes the whole recipe catalogue of each profession through the modern
 Limits: reagents sold only by merchants (e.g. water, flux) have no price yet
 (the recipe is left out); AH exits have no deposit estimate (speculative);
 one craft only (no depth for many crafts); no profession skill-up planning.
-Next: check the timings `profession_observe` and `crafting` in game, then a
-Crafting tab in the window.
+Checked in game 2026-11-07 08:49: catalogue saved for the four professions
+(learned 5/4/2/1), `profession_observe` 36 ms for Blacksmithing (507
+recipes), under 6 ms for the others; **pricing all recipes in one frame took
+360-380 ms** after a scan, so it now runs one recipe per step (bench: 16 ms
+slowest step on desktop). Next: check `crafting` timings and
+`diagnostics.crafting` in game, then a Crafting tab in the window.
 
 ## Implemented
 

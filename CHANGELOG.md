@@ -18,6 +18,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   lowest listing until three days of history exist, both before deposit),
   whichever pays more. `/fg crafting` lists the best recipes the player
   knows and the best ones a trainer could teach.
+  The pricing is spread over frames (one recipe per step): run in one go it
+  froze the game for 360-380 ms after each scan. The best rows are kept in
+  `ForeverGoldDB.diagnostics.crafting`.
 
 ### Changed
 
