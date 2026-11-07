@@ -240,8 +240,10 @@ function Professions.Summary(app)
     lines[2] = L("CRAFT_UI_COMPUTING")
   elseif crafting then
     local skipped = crafting.counts.recipes - crafting.counts.evaluated
+    local merchant = 0
+    for _ in pairs(app.store.db.merchant and app.store.db.merchant.prices or {}) do merchant = merchant + 1 end
     lines[2] = string.format(L("CRAFT_UI_PRICED"), crafting.counts.recipes, crafting.counts.evaluated,
-      crafting.excluded.reagent_not_on_ah or 0, skipped)
+      crafting.excluded.reagent_not_on_ah or 0, merchant)
   end
   return table.concat(lines, "\n")
 end
@@ -254,7 +256,8 @@ function Professions.Rows(app, list)
     if row.quantity > 1 then name = row.quantity .. " x " .. name end
     local tip = { name, string.format(L("CRAFT_TIP_RECIPE"), row.name or "?", row.profession or "?"), L("CRAFT_TIP_REAGENTS") }
     for _, reagent in ipairs(row.reagents or {}) do
-      tip[#tip + 1] = string.format("  %d x %s: %s", reagent.quantity, itemName(app, reagent.itemID), fmt(reagent.cost))
+      tip[#tip + 1] = string.format("  %d x %s: %s%s", reagent.quantity, itemName(app, reagent.itemID), fmt(reagent.cost),
+        reagent.merchant and L("CRAFT_TIP_MERCHANT") or "")
     end
     for _, exit in ipairs(row.exits or {}) do
       tip[#tip + 1] = string.format(L("CRAFT_TIP_EXIT"), L("CRAFT_EXIT_" .. exit.exit), fmt(exit.net))

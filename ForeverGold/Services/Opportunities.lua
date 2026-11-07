@@ -15,7 +15,8 @@ ns.Services.Opportunities = Opportunities
 function Opportunities.New(deps)
   local self = setmetatable({
     store = deps.store, history = deps.history, items = deps.items, clock = deps.clock, bus = deps.bus,
-    commodity = deps.commodity, latest = {}, marketKey = nil, results = nil, lastNotify = 0,
+    commodity = deps.commodity, merchantPrice = deps.merchantPrice,
+    latest = {}, marketKey = nil, results = nil, lastNotify = 0,
     stale = {}, -- itemID -> true: a purchase attempt found the offer gone
   }, { __index = Opportunities })
   return self
@@ -198,6 +199,8 @@ end
 -- Crafting over the given recipes with the latest AH view. Only the item
 -- keys of the recipes' reagents and outputs are touched; variants of one
 -- item are merged (their books are bought from together).
+Opportunities.MERCHANT_UNITS = 1000000 -- "unlimited" merchant supply
+
 -- Stepwise form: BeginCrafting, then ns.Strategies.Crafting.RecipeStep(job,
 -- index) for each recipe, then FinishCrafting(job).
 function Opportunities:BeginCrafting(recipes)
@@ -233,6 +236,16 @@ function Opportunities:BeginCrafting(recipes)
         local estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp })
         if estimate.status == "ok" then entry.estimate = estimate end
       end
+    end
+    -- A merchant sells any quantity at its price: one more divisible
+    -- level, bought from only when it is the cheapest. Not part of the
+    -- AH competition (entry.book counts AH listings only).
+    local merchantUnit = self.merchantPrice and self.merchantPrice(itemID)
+    if merchantUnit then
+      entry.merchantUnit = merchantUnit
+      entry.reagentLevels = { { quantity = Opportunities.MERCHANT_UNITS, unitPrice = merchantUnit, divisible = true,
+        buyable = true, merchant = true, id = "merchant:" .. itemID } }
+      for _, level in ipairs(entry.levels) do entry.reagentLevels[#entry.reagentLevels + 1] = level end
     end
     local info = self.items and self.items:Read(itemID)
     if info then

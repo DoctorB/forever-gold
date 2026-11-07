@@ -23,6 +23,7 @@ Compat\ClientAdapter.lua
 Compat\AuctionHouse.lua
 Compat\Items.lua
 Compat\Professions.lua
+Compat\Merchant.lua
 Compat\Purchase.lua
 Data\Schema.lua
 Data\Migrations.lua

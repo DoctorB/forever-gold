@@ -127,8 +127,12 @@ merchants. Unlearned weapons and armour showed 100-250 gold gains from
 single overpriced listings: the "current lowest" price now needs 3
 listings. Crafting tab added (replaces the Professions status page);
 recipes learned in game are picked up through `NEW_RECIPE_LEARNED`.
-Next: merchant prices for reagents (observed at merchants), several crafts
-at real depth, deposit.
+Merchant prices for reagents added (not yet seen in game): read from any
+open merchant window, lowest unlimited gold price per unit, used by
+crafting when cheaper than the AH. The merchant API shape on Forever is
+not verified: both `C_MerchantFrame.GetItemInfo` and `GetMerchantItemInfo`
+are tried and the first rows are kept in `diagnostics.merchant`.
+Next: several crafts at real depth, deposit.
 
 ## Implemented
 

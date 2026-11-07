@@ -144,14 +144,17 @@ function Crafting.EvaluateRecipe(recipe, market, settings, cache)
     local purchase = cache[key]
     if purchase == nil then
       local entry = market(reagent.itemID)
-      local levels = entry and entry.levels
+      local levels = entry and (entry.reagentLevels or entry.levels)
       purchase = levels and #levels > 0 and Depth.BuyCost(levels, reagent.quantity) or false
       cache[key] = purchase
     end
     if not purchase then return nil, "reagent_not_on_ah" end
     if not purchase.complete then return nil, "reagent_depth" end
     cost = cost + purchase.cost
-    reagents[#reagents + 1] = { itemID = reagent.itemID, quantity = reagent.quantity, cost = purchase.cost }
+    local merchant = false
+    for _, use in ipairs(purchase.used) do if use.level and use.level.merchant then merchant = true end end
+    reagents[#reagents + 1] = { itemID = reagent.itemID, quantity = reagent.quantity, cost = purchase.cost,
+      merchant = merchant }
   end
   local outputMarket = market(output.itemID)
   local best, exits = Crafting.Exits(outputMarket, output.quantity, settings)

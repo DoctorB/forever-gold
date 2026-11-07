@@ -30,6 +30,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   the gain and how many are already on the AH; hover a row for reagents and
   exits. It refreshes by itself after each scan, when a profession window is
   opened and when a recipe is learned (no need to reopen the window).
+- Merchant prices for reagents: opening any merchant window records the
+  gold price per unit of what it sells (unlimited offers paid in gold), kept
+  across sessions. Crafting buys each reagent from the cheapest source, AH
+  or merchant; the row tooltip marks merchant reagents. Recipes whose
+  reagents only merchants sell (thread, flux, spices, water...) are priced
+  once that merchant has been visited. Nothing is bought or sold.
 - The "current lowest" AH price of a crafted item is used only with at least
   3 listings: single overpriced weapons and armour made unlearned recipes
   look worth 100-250 gold.

@@ -654,3 +654,82 @@ T.Case("crafting tab: rows, tooltip and summary", function()
   T.Eq(learnable[1].cells[2], "2 x Linen")
   T.Eq(learnable[1].cells[4], "Merchant")
 end)
+
+-- Merchant fakes: classic positional API, as the shapes are not verified yet.
+local function classicMerchant(items)
+  return {
+    GetMerchantNumItems = function() return #items end,
+    GetMerchantItemInfo = function(i)
+      local m = items[i]
+      return m.name, "texture", m.price, m.stack or 1, m.available or -1, true, true, m.extended or false
+    end,
+    GetMerchantItemID = function(i) return items[i].itemID end,
+  }
+end
+
+T.Case("merchant: unlimited gold offers priced per unit, read-only", function()
+  local ns = T.LoadAddon()
+  local client = ns.Compat.ClientAdapter.New(classicMerchant({
+    { itemID = 2320, name = "Coarse Thread", price = 10 },
+    { itemID = 2880, name = "Weak Flux", price = 95, stack = 5 },
+    { itemID = 3371, name = "Empty Vial", price = 4, available = 3 },
+    { itemID = 9999, name = "Token item", price = 0, extended = true },
+  }))
+  local report = ns.Compat.Merchant.New(client):Read()
+  T.Eq(report.rows, 4)
+  T.Eq(report.prices[2320], 10)
+  T.Eq(report.prices[2880], 19, "95 for 5 -> 19 each")
+  T.Eq(report.prices[3371], nil, "limited supply left out")
+  T.Eq(report.skipped.limited, 1)
+  T.Eq(report.skipped.extended_cost, 1)
+  T.Eq(report.symbols.GetMerchantItemInfo, true)
+  T.Eq(#report.samples, 3)
+  T.Eq(ns.Compat.Merchant.New(ns.Compat.ClientAdapter.New({})):Read(), nil, "no merchant window")
+end)
+
+T.Case("merchant: modern C_MerchantFrame table read first", function()
+  local ns = T.LoadAddon()
+  local client = ns.Compat.ClientAdapter.New({
+    GetMerchantNumItems = function() return 1 end,
+    GetMerchantItemLink = function() return "|cffffffff|Hitem:2678::::::::8:1491:::::|h[Mild Spices]|h|r" end,
+    C_MerchantFrame = { GetItemInfo = function()
+      return { name = "Mild Spices", price = 10, stackCount = 1, numAvailable = -1, isPurchasable = true, hasExtendedCost = false }
+    end },
+  })
+  local report = ns.Compat.Merchant.New(client):Read()
+  T.Eq(report.prices[2678], 10, "item ID from the link")
+  T.Eq(report.samples[1].raw.stackCount, 1, "raw shape kept")
+end)
+
+T.Case("crafting: a merchant reagent prices recipes and is used only when cheaper", function()
+  local app, ns, clock = craftingApp()
+  -- Recipe 4 needs item 999, sold only by merchants.
+  app:ObserveProfession()
+  clock.advance(1)
+  T.Eq(app.opportunities.results.crafting.excluded.reagent_not_on_ah, 1)
+  local merchant = classicMerchant({
+    { itemID = 999, name = "Flux", price = 50 },
+    { itemID = 102, name = "Ore", price = 100 }, -- dearer than the AH (30)
+  })
+  for key, value in pairs(merchant) do app.client.env[key] = value end
+  app:OnEvent("MERCHANT_SHOW")
+  clock.advance(2)
+  T.Eq(app:MerchantPrice(999), 50)
+  T.Eq(app.store.db.diagnostics.merchant.priced, 2)
+  local crafting = app.opportunities.results.crafting
+  T.Eq(crafting.excluded.reagent_not_on_ah, nil, "re-priced after the merchant visit")
+  -- Rare Bar: flux 50 from the merchant -> bar on the AH 180 net: +130.
+  local rare
+  for _, row in ipairs(crafting.learnable) do if row.recipeID == 4 then rare = row end end
+  T.Ok(rare, "Rare Bar now priced")
+  T.Eq(rare.cost, 50)
+  T.Eq(rare.reagents[1].merchant, true)
+  T.Eq(rare.profit, 130)
+  T.Eq(crafting.learned[1].cost, 60, "ore still bought on the AH at 30")
+  T.Eq(crafting.learned[1].reagents[1].merchant, false)
+  T.Eq(crafting.learned[1].listings, 3, "the merchant is not AH competition")
+  local tip = table.concat(ns.UI.Panels.professions.Rows(app, { rare })[1].tip, "\n")
+  T.Ok(tip:find("(merchant)", 1, true), tip)
+  -- Same visit again: nothing new, no re-pricing.
+  T.Eq(app:ObserveMerchant(), 0)
+end)

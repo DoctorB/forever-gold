@@ -40,6 +40,7 @@ function App:Load(saved)
     self.bus:Publish("items.resolved", itemID)
   end)
   self.professions = ns.Compat.Professions.New(self.client)
+  self.merchant = ns.Compat.Merchant.New(self.client)
   ns.Data.Recipes.Load(self.store.db.recipes)
   -- The first probe (32108fc) saved a report named "unknown" when called
   -- with no window open; it held the previous window's recipes.
@@ -62,6 +63,7 @@ function App:Load(saved)
   self.opportunities = ns.Services.Opportunities.New({
     store = self.store, history = self.history, items = self.items, clock = clock, bus = self.bus,
     commodity = function(itemID) return self.ah:IsCommodity(itemID) end,
+    merchantPrice = function(itemID) return self:MerchantPrice(itemID) end,
   })
   self.transactions = ns.Services.Transactions.New(clock)
   self.purchases = ns.Services.Purchases.New({
@@ -356,6 +358,55 @@ function App:ObserveProfession()
   return report, changed
 end
 
+-- Merchant prices (Compat/Merchant), kept in ForeverGoldDB.merchant.prices
+-- [itemID] = { unit, at }: the lowest gold price per unit seen for an
+-- unlimited offer. A price older than MERCHANT_MAX_AGE is replaced by the
+-- next one seen even if higher (prices may change with reputation).
+App.MERCHANT_MAX_AGE = 14 * 86400
+
+function App:MerchantPrice(itemID)
+  local merchant = self.store.db.merchant
+  local entry = merchant and merchant.prices and merchant.prices[itemID]
+  return entry and entry.unit or nil
+end
+
+function App:ObserveMerchantSoon()
+  if self.merchantPending then return end
+  self.merchantPending = true
+  -- The item list may arrive just after MERCHANT_SHOW (MERCHANT_UPDATE).
+  self.scheduler:After(1, function()
+    self.merchantPending = false
+    self:ObserveMerchant()
+  end)
+end
+
+-- Returns the number of new or lower prices, or nil, reason.
+function App:ObserveMerchant()
+  local report, reason = self.merchant:Read()
+  if not report then return nil, reason end
+  local db = self.store.db
+  db.merchant = db.merchant or {}
+  db.merchant.prices = db.merchant.prices or {}
+  local prices, now, changed, total = db.merchant.prices, self.clock(), 0, 0
+  for itemID, unit in pairs(report.prices) do
+    total = total + 1
+    local known = prices[itemID]
+    if not known or unit < known.unit or (unit ~= known.unit and now - (known.at or 0) > App.MERCHANT_MAX_AGE) then
+      prices[itemID] = { unit = unit, at = now }
+      changed = changed + 1
+    elseif unit == known.unit then
+      known.at = now
+    end
+  end
+  db.diagnostics.merchant = {
+    at = now, build = self.client:BuildInfo().build, rows = report.rows, priced = total, changed = changed,
+    skipped = report.skipped, symbols = report.symbols, samples = report.samples,
+  }
+  self.diagnostics:Trace("merchant", { rows = report.rows, priced = total, changed = changed })
+  if changed > 0 then self:EvaluateCrafting() end
+  return changed
+end
+
 -- A recipe learned from a trainer or a recipe item: mark it in the saved
 -- catalogue and re-price, without reopening the profession window.
 -- Returns true when the recipe was in a catalogue.
@@ -449,6 +500,9 @@ function App:OnEvent(event, ...)
     self.feeTest:OnInbox()
   elseif event == "MERCHANT_SHOW" then
     self.vendorCheck:OnMerchantShow()
+    self:ObserveMerchantSoon()
+  elseif event == "MERCHANT_UPDATE" then
+    self:ObserveMerchantSoon()
   elseif event == "MERCHANT_CLOSED" then
     self.vendorCheck:OnMerchantClosed()
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then

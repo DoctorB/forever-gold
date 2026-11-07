@@ -106,4 +106,5 @@ once per window and kept; after that the tab needs no command.
 | 5.1 | First time only: open each profession window once | nothing visible | — |
 | 5.2 | Scan the AH, then open `/fg` → **Crafting** | professions with skill; "N recipes, M priced"; two tables: recipes you know, recipes you could learn | screenshot |
 | 5.3 | Hover a row | reagents with their cost, exits, listings already on the AH | — |
-| 5.4 | Learn a recipe from a trainer (optional) | the recipe moves to "recipes you know" by itself | — |
+| 5.4 | Open a few merchant windows (trade goods, general goods, cooking and blacksmithing suppliers), then the Crafting tab | "Merchant prices known: N items" grows; recipes with thread, flux or spices appear, hovering shows "(merchant)" on those reagents | screenshot |
+| 5.5 | Learn a recipe from a trainer (optional) | the recipe moves to "recipes you know" by itself | — |

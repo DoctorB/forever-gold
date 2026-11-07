@@ -104,10 +104,11 @@ T.Case("spending calls live only in Compat/Purchase.lua; posting and cancelling 
   end
 end)
 
-T.Case("no crafting, learning or profession-window calls anywhere", function()
+T.Case("no crafting, learning, profession-window or merchant buy/sell calls anywhere", function()
   local names = { "CraftRecipe", "CraftEnchant", "CraftSalvage", "RecraftRecipe", "DoTradeSkill", "DoCraft",
     "OpenTradeSkill", "CloseTradeSkill", "OpenRecipe", "SetRecipeTracked", "ConfirmProfessionRespec",
-    "AbandonSkill", "CastSpell", "SetShowLearned", "SetShowUnlearned", "SetSourceTypeFilter" }
+    "AbandonSkill", "CastSpell", "SetShowLearned", "SetShowUnlearned", "SetSourceTypeFilter",
+    "BuyMerchantItem", "BuybackItem", "RepairAllItems", "PickupMerchantItem", "SellAllJunkItems", "CloseMerchant" }
   for path, source in pairs(sources) do
     local body = code(source)
     for _, name in ipairs(names) do
