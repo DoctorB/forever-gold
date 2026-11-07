@@ -265,8 +265,8 @@ acquire = function(itemID, quantity, ctx, depth, visiting)
 end
 
 -- Context shared by all recipes of one run (caches and producers).
-function Crafting.Context(recipes, market)
-  return { buys = {}, reasons = {}, market = market, producers = Crafting.Producers(recipes) }
+function Crafting.Context(recipes, market, ownedCount)
+  return { buys = {}, reasons = {}, market = market, producers = Crafting.Producers(recipes), ownedCount = ownedCount }
 end
 
 -- Several crafts: the reagents are bought deeper into the AH book (dearer
@@ -308,6 +308,34 @@ function Crafting.BestRun(recipe, output, outputMarket, settings, ctx, first)
   return best
 end
 
+-- Reagents already in the bags (spec 9.4): they are not free, so the gain
+-- stays computed at market prices, but the money to spend now only covers
+-- what is missing. Fills run.spend (gold to spend), run.ownedValue (market
+-- value of the reagents used from the bags) and run.owned[itemID] = units.
+function Crafting.Spend(recipe, output, run, ctx)
+  run.spend, run.ownedValue, run.owned = run.cost, 0, nil
+  if not ctx.ownedCount then return run end
+  local spend = 0
+  for _, reagent in ipairs(recipe.reagents or {}) do
+    local need = reagent.quantity * run.crafts
+    local have = math.min(ctx.ownedCount(reagent.itemID) or 0, need)
+    local full = acquire(reagent.itemID, need, ctx, 0, { [output.itemID] = true })
+    if not full then return run end
+    if have > 0 then
+      run.owned = run.owned or {}
+      run.owned[reagent.itemID] = have
+      local rest = need - have
+      local part = rest > 0 and acquire(reagent.itemID, rest, ctx, 0, { [output.itemID] = true }) or { cost = 0 }
+      if not part then return run end
+      spend = spend + part.cost
+    else
+      spend = spend + full.cost
+    end
+  end
+  run.spend, run.ownedValue = spend, run.cost - spend
+  return run
+end
+
 function Crafting.EvaluateRecipe(recipe, market, settings, ctx)
   local output = recipe.outputs and recipe.outputs[1]
   if not output or not Money.IsQuantity(output.quantity) then return nil, "output_unknown" end
@@ -340,6 +368,7 @@ function Crafting.EvaluateRecipe(recipe, market, settings, ctx)
   local run = Crafting.BestRun(recipe, output, outputMarket, settings, ctx,
     { crafts = 1, cost = cost, revenue = best.net, profit = profit, exit = best.exit, sold = best.sold,
       vendorUnits = best.vendorUnits, unsold = best.unsold })
+  Crafting.Spend(recipe, output, run, ctx)
   return {
     run = run,
     strategy = "crafting", recipeID = recipe.id, name = recipe.name, profession = recipe.profession,
@@ -361,9 +390,9 @@ end
 -- single frame (2026-11-07, build 70862). EvaluateRecipes runs all steps.
 -- Result: { learned = rows, learnable = rows, counts, excluded }, rows with
 -- a positive profit only, best profit first.
-function Crafting.BeginRecipes(recipes, market, settings)
+function Crafting.BeginRecipes(recipes, market, settings, ownedCount)
   return {
-    recipes = recipes, market = market, settings = settings, cache = Crafting.Context(recipes, market),
+    recipes = recipes, market = market, settings = settings, cache = Crafting.Context(recipes, market, ownedCount),
     result = { learned = {}, learnable = {}, excluded = {}, counts = { recipes = #recipes, evaluated = 0 } },
   }
 end
@@ -397,8 +426,8 @@ function Crafting.FinishRecipes(job)
   return result
 end
 
-function Crafting.EvaluateRecipes(recipes, market, settings)
-  local job = Crafting.BeginRecipes(recipes, market, settings)
+function Crafting.EvaluateRecipes(recipes, market, settings, ownedCount)
+  local job = Crafting.BeginRecipes(recipes, market, settings, ownedCount)
   for index = 1, #recipes do Crafting.RecipeStep(job, index) end
   return Crafting.FinishRecipes(job)
 end

@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Crafting with reagents already in your bags: the "To spend" column shows
+  only the gold for what is missing; the tooltip says how many units of each
+  reagent you have and what they are worth. The gain still counts them at
+  their price (they are not free: you could sell them instead).
 - AH deposit: estimated from the merchant price (15% / 30% / 60% for
   2 / 8 / 24 h, at least 1 silver per auction; one auction for a commodity,
   one per unit otherwise) and deducted from AH sales as an expected loss

@@ -65,6 +65,7 @@ function App:Load(saved)
     commodity = function(itemID) return self.ah:IsCommodity(itemID) end,
     merchantPrice = function(itemID) return self:MerchantPrice(itemID) end,
     depositVerified = function() return self.depositCheck ~= nil and self.depositCheck:Status().verified end,
+    ownedCount = function(itemID) return self.client:ItemCount(itemID) end,
   })
   self.transactions = ns.Services.Transactions.New(clock)
   self.purchases = ns.Services.Purchases.New({

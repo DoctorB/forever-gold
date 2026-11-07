@@ -281,7 +281,7 @@ local CRAFT_RECIPES = {
   { id = 4, name = "Rare Bar", learned = false, reagents = { { 999, 1 } }, output = { 301, 1 } },
 }
 
-local function craftingApp()
+local function craftingApp(bags)
   local trade = {
     GetBaseProfessionInfo = function() return { professionName = "Mining", skillLevel = 23, maxSkillLevel = 75 } end,
     GetAllRecipeIDs = function() return { 1, 2, 3, 4 } end,
@@ -301,7 +301,7 @@ local function craftingApp()
   }
   local rows = { { itemID = 102, count = 10, buyout = 300 }, { itemID = 301, count = 1, buyout = 200 },
     { itemID = 301, count = 1, buyout = 210 }, { itemID = 301, count = 1, buyout = 220 } }
-  local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = { C_TradeSkillUI = trade } })
+  local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = { C_TradeSkillUI = trade }, bags = bags })
   ah.commodityItems[102] = true
   ah.commodityItems[301] = false
   app:OnEvent("AUCTION_HOUSE_SHOW")
@@ -898,4 +898,27 @@ T.Case("deposit check: a quote that differs from the formula is a mismatch", fun
   clock.advance(3)
   T.Eq(app.store.db.depositChecks.items[2840], "mismatch")
   T.Eq(app.depositCheck:Status().mismatched, 1)
+end)
+
+T.Case("crafting: reagents in the bags lower the gold to spend, not the gain", function()
+  local app, ns, clock = craftingApp({ [102] = 4 }) -- four ore in the bags
+  app:ObserveProfession()
+  clock.advance(1)
+  local crafting = app.opportunities.results.crafting
+  local bar = crafting.learned[1].run -- Smelt Bar: 2 ore (60), one craft
+  T.Eq(bar.crafts, 1)
+  T.Eq(bar.spend, 0, "both ore come from the bags")
+  T.Eq(bar.ownedValue, 60)
+  T.Eq(bar.owned[102], 2)
+  T.Eq(bar.profit, 70, "the gain still counts the ore at its price")
+  local linen = crafting.learnable[1].run -- Weave Linen: 1 ore each, ten crafts
+  T.Eq(linen.crafts, 10)
+  T.Eq(linen.cost, 300)
+  T.Eq(linen.spend, 180, "six ore to buy")
+  T.Eq(linen.ownedValue, 120)
+  local rows = ns.UI.Panels.professions.Rows(app, crafting.learnable)
+  T.Eq(rows[1].cells[4], "1s 80c", "To spend")
+  local tip = table.concat(rows[1].tip, "\n")
+  T.Ok(tip:find("(4 in your bags)", 1, true), tip)
+  T.Ok(tip:find("gold to spend now 1s 80c", 1, true), tip)
 end)

@@ -16,6 +16,7 @@ function Opportunities.New(deps)
   local self = setmetatable({
     store = deps.store, history = deps.history, items = deps.items, clock = deps.clock, bus = deps.bus,
     commodity = deps.commodity, merchantPrice = deps.merchantPrice, depositVerified = deps.depositVerified,
+    ownedCount = deps.ownedCount,
     latest = {}, marketKey = nil, results = nil, lastNotify = 0,
     stale = {}, -- itemID -> true: a purchase attempt found the offer gone
   }, { __index = Opportunities })
@@ -267,7 +268,13 @@ function Opportunities:BeginCrafting(recipes)
     cache[itemID] = entry
     return entry
   end
-  local job = ns.Strategies.Crafting.BeginRecipes(recipes, market, settings)
+  -- Bag counts read once per run (they do not change while pricing).
+  local owned = {}
+  local ownedCount = self.ownedCount and function(itemID)
+    if owned[itemID] == nil then owned[itemID] = self.ownedCount(itemID) or 0 end
+    return owned[itemID]
+  end
+  local job = ns.Strategies.Crafting.BeginRecipes(recipes, market, settings, ownedCount)
   job.pending = function() return pending end
   job.at = now
   return job

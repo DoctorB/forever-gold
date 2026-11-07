@@ -264,6 +264,8 @@ function Professions.Rows(app, list)
         source = string.format(L(reagent.crafted.learned and "CRAFT_TIP_CRAFTED" or "CRAFT_TIP_CRAFTED_UNLEARNED"),
           reagent.crafted.name or "?")
       end
+      local have = row.run and row.run.owned and row.run.owned[reagent.itemID]
+      if have then source = source .. string.format(L("CRAFT_TIP_HAVE"), have) end
       tip[#tip + 1] = string.format("  %d x %s: %s%s", reagent.quantity, itemName(app, reagent.itemID), fmt(reagent.cost),
         source)
     end
@@ -278,6 +280,9 @@ function Professions.Rows(app, list)
     tip[#tip + 1] = string.format(L("CRAFT_TIP_ONE"), fmt(row.cost), fmt(row.revenue), signed(row.profit))
     if run.crafts > 1 or run.limit then
       tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN"), run.crafts, fmt(run.cost), fmt(run.revenue), signed(run.profit))
+      if (run.ownedValue or 0) > 0 then
+        tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN_OWNED"), fmt(run.spend), fmt(run.ownedValue))
+      end
       if (run.vendorUnits or 0) > 0 then tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN_VENDOR"), run.vendorUnits) end
       if (run.unsold or 0) > 0 then tip[#tip + 1] = string.format(L("CRAFT_TIP_RUN_UNSOLD"), run.unsold) end
       if run.limit then tip[#tip + 1] = L("CRAFT_LIMIT_" .. run.limit) end
@@ -297,10 +302,11 @@ function Professions.Rows(app, list)
     local gain, gainColor = signed(run.profit)
     rows[#rows + 1] = {
       cells = {
-        row.profession or "?", name, run.crafts .. "x", fmt(run.cost), L("CRAFT_EXIT_SHORT_" .. run.exit),
+        row.profession or "?", name, run.crafts .. "x", fmt(run.spend or run.cost), L("CRAFT_EXIT_SHORT_" .. run.exit),
         fmt(run.revenue), gain, (row.listings and row.listings > 0) and tostring(row.units) or "-",
       },
-      colors = { [5] = run.exit == "vendor" and W.EMERALD or W.GOLD, [7] = gainColor },
+      colors = { [4] = (run.ownedValue or 0) > 0 and W.EMERALD or nil, [5] = run.exit == "vendor" and W.EMERALD or W.GOLD,
+        [7] = gainColor },
       tip = tip,
     }
   end
