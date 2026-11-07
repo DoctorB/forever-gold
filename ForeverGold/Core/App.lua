@@ -315,8 +315,17 @@ end
 
 -- Observes the open profession window (read-only) once its list settles:
 -- the list events come in bursts while the window fills.
-function App:ObserveProfessionSoon()
+-- While a profession window stays open the client fires
+-- TRADE_SKILL_LIST_UPDATE every 1-2 s (seen in game, build 70862): opening
+-- a window always observes it, list updates at most every
+-- PROFESSION_REFRESH seconds.
+App.PROFESSION_REFRESH = 60
+
+function App:ObserveProfessionSoon(opened)
   if self.professionPending then return end
+  if not opened and self.professionObservedAt and self.clock() - self.professionObservedAt < App.PROFESSION_REFRESH then
+    return
+  end
   self.professionPending = true
   self.scheduler:After(1, function()
     self.professionPending = false
@@ -329,16 +338,30 @@ function App:ObserveProfession()
   -- One frame: about 500 recipes for Blacksmithing; timed to check in game.
   local report, catalogue = self:Timed("profession_observe", nil, function() return self.professions:Observe() end)
   if not report then return nil, catalogue end
+  self.professionObservedAt = self.clock()
   self.diagnostics:RecordProfessions(report)
   local db = self.store.db
   db.recipes = db.recipes or {}
+  local previous = db.recipes[report.name]
+  local changed = not previous or App.CatalogueSignature(previous.list) ~= App.CatalogueSignature(catalogue)
   db.recipes[report.name] = {
     at = self.clock(), build = self.client:BuildInfo().build, skill = report.skill, maxSkill = report.maxSkill,
     list = catalogue,
   }
-  ns.Data.Recipes.Load(db.recipes)
-  self:EvaluateCrafting()
-  return report
+  -- Prices only change with a scan: re-price only when the recipes did.
+  if changed then
+    ns.Data.Recipes.Load(db.recipes)
+    self:EvaluateCrafting()
+  end
+  return report, changed
+end
+
+-- Recipes and which of them are learned, as one comparable string.
+function App.CatalogueSignature(list)
+  local parts = {}
+  for _, recipe in ipairs(list or {}) do parts[#parts + 1] = tostring(recipe.id) .. (recipe.learned and "+" or "-") end
+  table.sort(parts)
+  return table.concat(parts, ",")
 end
 
 -- Crafting over every known recipe with the latest AH view, spread over
@@ -411,7 +434,7 @@ function App:OnEvent(event, ...)
     self.vendorCheck:OnMerchantClosed()
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then
     self.diagnostics:Trace("tradeskill", { event = event })
-    if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon() end
+    if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon(event == "TRADE_SKILL_SHOW") end
   else
     if event == "AUCTION_HOUSE_SHOW" then self.marketKeyCache = nil end
     self.ah:OnEvent(event, ...)

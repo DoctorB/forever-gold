@@ -562,3 +562,34 @@ T.Case("crafting: summary kept for the audit, a newer run cancels the older one"
   end
   T.Eq(crafting, 1, "the cancelled run finished nothing")
 end)
+
+T.Case("profession window: list updates are throttled and unchanged recipes are not re-priced", function()
+  local app, _, clock = craftingApp()
+  local observed = 0
+  local observe = app.professions.Observe
+  app.professions.Observe = function(...)
+    observed = observed + 1
+    return observe(...)
+  end
+  app:OnEvent("TRADE_SKILL_SHOW")
+  clock.advance(2)
+  T.Eq(observed, 1)
+  local runs = 0
+  for _, timing in ipairs(app.store.db.diagnostics.timings) do if timing.phase == "crafting_begin" then runs = runs + 1 end end
+  T.Eq(runs, 1, "priced once when the recipes arrive")
+  for _ = 1, 10 do
+    app:OnEvent("TRADE_SKILL_LIST_UPDATE")
+    clock.advance(2)
+  end
+  T.Eq(observed, 1, "list updates within a minute are ignored")
+  clock.advance(60)
+  app:OnEvent("TRADE_SKILL_LIST_UPDATE")
+  clock.advance(2)
+  T.Eq(observed, 2, "observed again after a minute")
+  app:OnEvent("TRADE_SKILL_SHOW")
+  clock.advance(2)
+  T.Eq(observed, 3, "opening a window always observes")
+  runs = 0
+  for _, timing in ipairs(app.store.db.diagnostics.timings) do if timing.phase == "crafting_begin" then runs = runs + 1 end end
+  T.Eq(runs, 1, "same recipes: not priced again")
+end)

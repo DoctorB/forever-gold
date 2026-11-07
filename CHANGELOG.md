@@ -21,6 +21,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   The pricing is spread over frames (one recipe per step): run in one go it
   froze the game for 360-380 ms after each scan. The best rows are kept in
   `ForeverGoldDB.diagnostics.crafting`.
+  While a profession window stays open the client sends a list update every
+  1-2 s: the window is read when it opens and then at most once a minute,
+  and recipes are re-priced only when they changed.
 
 ### Changed
 
