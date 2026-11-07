@@ -5,6 +5,29 @@ This checklist turns the entries in `docs/API-AUDIT.md` into evidence. No
 test needs real purchases except session 3, which spends a small amount of
 gold and only on your clicks.
 
+## One round for everything not yet seen in game (2026-11-07)
+
+Everything since the last check at 12:44 (commits `0168fd3` to `3fd76eb`)
+in one visit to the auction house, about 20 minutes. Only step R8 spends
+gold, and only on your clicks; skip it if you prefer. One screenshot per
+step is enough; `/reload` once at the end so the evidence is saved.
+
+Before: have in the bags at least 5 different sellable, unbound items
+(cloth, bars, food, gear) and a few reagents of a known recipe (e.g.
+Copper Bars for Copper Rod).
+
+| # | Where | Action | Expected | Feature |
+| --- | --- | --- | --- | --- |
+| R1 | AH | Open the AH (auto-scan on) | within ~15 min an automatic scan; if it finds offers: chat "automatic scan: N offers ..." and a sound | auto-scan, alert |
+| R2 | AH | Wait 3 s after opening | nothing visible (deposit quotes are read for items in the bags) | deposit check |
+| R3 | `/fg` → Crafting | Look at the known recipes | "To spend" column; in green when reagents come from your bags | owned reagents |
+| R4 | Crafting | Hover Copper Rod | reagents with "(N in your bags)", "gold to spend now ...", "AH deposit about ... (8 h)", estimated or "formula checked on your items" | owned reagents, deposit |
+| R5 | Bags | Hover a Copper Rod, a Copper Bar, a Weak Flux | "craft: +X for N (your recipe ...)" on the rod, "sold by a merchant for 1s 0c" on the flux | tooltips |
+| R6 | `/fg` → History | Click an item in the prices table, then click the chart | bars per scan with dates and low/high; the click goes back to the scans | price chart |
+| R7 | Crafting | Buy or loot a reagent, wait 10 s | the Crafting tab updates "To spend" by itself | bag refresh |
+| R8 | Opportunities (optional) | "Buy all" with a small limit, at a quiet hour | each search/quote answered or the run stops after two silences with "the server stopped answering" | Buy all (open since 2026-11-06) |
+| R9 | anywhere | `/reload` | — (saves deposit checks, auto-scan and Buy all traces) | evidence |
+
 ## Installing the alpha
 
 1. Close the game or stay at the character screen.

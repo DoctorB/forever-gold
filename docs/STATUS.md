@@ -166,8 +166,14 @@ waits the proven upper bound (D49).
 AH deposit estimated from the merchant price and deducted as an expected
 loss (D50, not yet seen in game); the formula is checked automatically
 against the client's quotes for bag items at every AH visit.
-Next: check the deposit samples in game; then crafting from bag stock
-(reagents already owned) or the History price chart.
+Added after that, not yet seen in game: reagents already in the bags
+(money to spend vs value used), crafting gain and merchant price in item
+tooltips, crafting re-priced when the bags settle, price chart in History,
+alert after a fruitful automatic scan, one re-evaluation per burst of item
+data. All of it, with the deposit check and "Buy all", is in the single test
+round at the top of docs/TESTING-IN-GAME.md.
+Not started on purpose: buying reagents from the Crafting tab (it would
+reuse the purchase path that is still unanswered on live, see "Buy all").
 
 ## Implemented
 
