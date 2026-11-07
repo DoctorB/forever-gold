@@ -185,11 +185,22 @@ T.Case("the spending step is reached only from a button click", function()
     end
     for line in (body .. "\n"):gmatch("([^\n]*)\n") do
       if line:find("purchases:Confirm(", 1, true) then
-        T.Eq(path, "UI/PurchasePanel.lua", "Confirm called outside the purchase panel")
-        T.Ok(line:find("W.Button(", 1, true), "Confirm only inside a button OnClick: " .. line)
+        if path == "UI/Home.lua" then
+          -- Inside an action's run, which only the row button calls (below).
+          T.Ok(line:match("^%s*app%.purchases:Confirm%(%)%s*$"), "Home: " .. line)
+        else
+          T.Eq(path, "UI/PurchasePanel.lua", "Confirm called outside the purchase panel")
+          T.Ok(line:find("W.Button(", 1, true), "Confirm only inside a button OnClick: " .. line)
+        end
       end
     end
   end
+  -- "To do" screen: an action's run is called only by its row button.
+  local home = code(sources["UI/Home.lua"])
+  local runs = 0
+  for _ in home:gmatch("%.run%(") do runs = runs + 1 end
+  T.Eq(runs, 1, "one call of run")
+  T.Ok(home:find('W.Button(row, "", 130, function() if row.action then row.action.run()', 1, true), "run only from the row button")
   local scanner = code(sources["Services/Scanner.lua"])
   T.NotOk(scanner:find("purchase", 1, true), "scanner never touches purchases")
 end)
@@ -205,6 +216,7 @@ T.Case("auctions are created only from the Sell button's click", function()
     local body = code(source)
     for position in body:gmatch("()PostNext%s*%(") do
       local allowed = path == "Services/Selling.lua" or (path == "UI/Panels.lua" and body:find("function Sell.Click", 1, true))
+        or path == "UI/Home.lua"
       T.Ok(allowed, path .. " calls PostNext")
     end
     for _, name in ipairs({ "post:Commodity", "post:Item" }) do
@@ -215,4 +227,10 @@ T.Case("auctions are created only from the Sell button's click", function()
   local calls = 0
   for _ in panels:gmatch("PostNext%s*%(") do calls = calls + 1 end
   T.Eq(calls, 1, "one call, in Sell.Click (the button's OnClick)")
+  -- "To do" screen: one call, inside the run of a sell action (a row button's OnClick).
+  local home = code(sources["UI/Home.lua"])
+  calls = 0
+  for _ in home:gmatch("PostNext%s*%(") do calls = calls + 1 end
+  T.Eq(calls, 1)
+  T.Ok(home:find("run = function%(%)%s*local ok, reason = selling:PostNext"), "only inside an action's run (button click)")
 end)

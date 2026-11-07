@@ -1,14 +1,15 @@
--- Main window: tabs Opportunities, History, Professions, Portfolio,
--- Settings. Analysis only: no button here spends, posts or cancels.
+-- Main window. Simple view (default): the "To do" screen only (UI/Home.lua).
+-- Advanced view: every tab (To do, Opportunities, History, Crafting, Sell,
+-- Portfolio, Settings). Spending and posting buttons act only on a click.
 local _, ns = ...
 
 local W = ns.UI.Widgets
 local Money = ns.Economy.Money
-local Main = { tab = "opportunities", offset = 0, rows = {},
+local Main = { tab = "home", offset = 0, rows = {},
   filters = { vendor = true, resale = true, allocated = false, verified = false } }
 ns.UI.Main = Main
 
-Main.TABS = { "opportunities", "history", "professions", "sell", "portfolio", "settings" }
+Main.TABS = { "home", "opportunities", "history", "professions", "sell", "portfolio", "settings" }
 Main.ROW_HEIGHT = 18
 Main.COLUMNS = {
   { key = "item", width = 0.24 }, { key = "strategy", width = 0.19 }, { key = "qty", width = 0.05, right = true },
@@ -234,6 +235,37 @@ function Main.UpdateProgress()
   end
   frame.status:SetText(Main.StatusLine(app, Main.Results()))
   ns.UI.PurchasePanel.UpdateBatchButton()
+  if Main.tab == "home" then Main.RefreshPanel("home") end
+end
+
+function Main.Advanced()
+  local app = ns.app
+  return app and app.store and app.store:Settings().advancedView == true or false
+end
+
+-- Simple view: no tab bar, no technical status line, the "To do" screen
+-- right under the title. Advanced view: the tabs, "To do" first.
+function Main.ApplyView()
+  local frame = Main.frame
+  if not frame then return end
+  local advanced = Main.Advanced()
+  for _, name in ipairs(Main.TABS) do
+    if advanced then frame.tabs[name]:Show() else frame.tabs[name]:Hide() end
+  end
+  if advanced then frame.status:Show() else frame.status:Hide() end
+  local home = frame.panels.home
+  home:ClearAllPoints()
+  home:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, advanced and -74 or -32)
+  home:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 22)
+  frame.viewButton:SetText(L(advanced and "BTN_SIMPLE" or "BTN_ADVANCED"))
+  if not advanced then Main.tab = "home" end
+end
+
+function Main.SetAdvanced(on, tab)
+  local app = ns.app
+  app.store:Settings().advancedView = on and true or false
+  Main.ApplyView()
+  Main.SelectTab(on and (tab or Main.tab) or "home")
 end
 
 Main.CLASS_COLORS = { vendor_confirmed = W.EMERALD, prudent = W.GOLD, speculative = W.MUTED }
@@ -364,7 +396,7 @@ function Main.RefreshTable()
   local app = ns.app
   local results = Main.Results()
   frame.status:SetText(Main.StatusLine(app, results))
-  frame.title:SetText("Forever Gold " .. ns.VERSION .. (Main.demoResults and ("  " .. W.Color(L("DEMO_BANNER"), W.WARN)) or ""))
+  frame.title:SetText("Forever Gold" .. (Main.demoResults and ("  " .. W.Color(L("DEMO_BANNER"), W.WARN)) or ""))
   local list = Main.Visible(results, Main.filters)
   local maxOffset = math.max(0, #list - (Main.visibleRows or 1))
   if Main.offset > maxOffset then Main.offset = maxOffset end
@@ -539,6 +571,9 @@ function Main.Ensure()
 
   frame.title = W.Text(frame, "GameFontNormal", "LEFT")
   frame.title:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -6)
+  frame.title:SetText("Forever Gold")
+  frame.viewButton = W.Button(frame, L("BTN_ADVANCED"), 110, function() Main.SetAdvanced(not Main.Advanced()) end)
+  frame.viewButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -26)
   frame.status = W.Text(frame, "GameFontHighlightSmall")
   frame.status:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -56)
   frame.status:SetPoint("RIGHT", frame, "RIGHT", -14, 0)
@@ -577,7 +612,10 @@ function Main.Ensure()
   version:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 6)
   version:SetText(L("FOOTER"))
 
-  frame:SetScript("OnShow", function() Main.SelectTab(Main.tab) end)
+  frame:SetScript("OnShow", function()
+    Main.ApplyView()
+    Main.SelectTab(Main.tab)
+  end)
   -- Once a second while open: countdown on the scan button, data age.
   local elapsedSince = 0
   frame:SetScript("OnUpdate", function(_, elapsed)
@@ -588,6 +626,7 @@ function Main.Ensure()
     end
   end)
   layoutRows()
+  Main.ApplyView()
   return frame
 end
 
@@ -604,5 +643,10 @@ end
 function Main.Open(tab)
   local frame = Main.Ensure()
   frame:Show()
+  -- A command asking for another tab (/fg crafting...) opens the advanced view.
+  if tab and tab ~= "home" and not Main.Advanced() then
+    Main.SetAdvanced(true, tab)
+    return
+  end
   Main.SelectTab(tab or Main.tab)
 end

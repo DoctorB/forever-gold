@@ -134,21 +134,25 @@ function Selling:Blocked()
   return nil
 end
 
--- The next auction to create: lot, action; or nil.
-function Selling:Next()
+-- The next auction to create (of `itemID` when given): lot, action; or nil.
+function Selling:Next(itemID)
   local plan = self.plan or self:Plan()
   local lot = plan.lots[1]
+  if itemID then
+    lot = nil
+    for _, candidate in ipairs(plan.lots) do if candidate.itemID == itemID then lot = candidate end end
+  end
   if not lot then return nil end
   return lot, lot.actions[1]
 end
 
--- Creates ONE auction. Called only from the Sell button's click.
--- Returns true, or false, reason.
-function Selling:PostNext()
+-- Creates ONE auction (of `itemID` when given). Called only from a button
+-- click (Sell tab, "To do" screen). Returns true, or false, reason.
+function Selling:PostNext(itemID)
   local blocked = self:Blocked()
   if blocked then return false, blocked end
   self:Plan()
-  local lot, action = self:Next()
+  local lot, action = self:Next(itemID)
   if not lot then return false, "nothing" end
   local okMoney, money = self.client:Call(nil, "GetMoney")
   local deposit = Deposit.ForUnits(self.market(lot.itemID).sellPrice or 0, action.quantity, lot.commodity, nil,

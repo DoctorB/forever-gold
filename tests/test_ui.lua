@@ -483,3 +483,25 @@ T.Case("history: price chart of one item, one bar per scan, from a click", funct
     local _ = ah and eventFrame
   end)
 end)
+
+T.Case("the window opens on the simple 'To do' screen; Advanced shows the tabs", function()
+  withClient(function(ns)
+    ns.UI.Commands.Handle("")
+    local Main = ns.UI.Main
+    local frame = Main.frame
+    T.Eq(Main.tab, "home")
+    T.Ok(frame.panels.home:IsShown(), "To do screen shown")
+    T.NotOk(frame.tabs.opportunities:IsShown(), "no tab bar in the simple view")
+    T.NotOk(frame.status:IsShown(), "no technical status line")
+    T.Eq(frame.viewButton:GetText(), ns.L.BTN_ADVANCED)
+    local home = frame.panels.home
+    T.Ok(home.empty:GetText():find("Open the auction house", 1, true), home.empty:GetText())
+    frame.viewButton.scripts.OnClick()
+    T.Ok(frame.tabs.opportunities:IsShown(), "tabs in the advanced view")
+    T.Eq(ns.app.store:Settings().advancedView, true, "remembered")
+    for _, tab in ipairs(Main.TABS) do Main.SelectTab(tab) end
+    frame.viewButton.scripts.OnClick()
+    T.Eq(Main.tab, "home")
+    T.NotOk(frame.tabs.history:IsShown())
+  end)
+end)

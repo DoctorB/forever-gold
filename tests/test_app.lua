@@ -1294,3 +1294,18 @@ T.Case("trainer: Forever's (name, icon, type) order and class spells left out", 
   T.Eq(skills.Protection, nil, "class spells saved before are cleaned")
   T.Eq(app.store.db.diagnostics.trainer.samples[1].kind, "available")
 end)
+
+T.Case("'To do' screen: sell and craft actions, best gain first", function()
+  local app, ns = sellingApp({ { itemID = 301, stackCount = 1 } })
+  local model = ns.UI.Panels.home.Model(app)
+  local kinds = {}
+  for _, action in ipairs(model.actions) do kinds[action.kind] = action end
+  T.Ok(kinds.sell, "sell the Bar")
+  T.Ok(kinds.sell.text:find("Sell 1 Bar on the AH at", 1, true), kinds.sell.text)
+  T.Eq(kinds.sell.enabled, true)
+  T.Ok(kinds.craft, "craft action")
+  T.Ok(kinds.craft.text:find("Make", 1, true), kinds.craft.text)
+  for index = 2, #model.actions do T.Ok(model.actions[index - 1].gain >= model.actions[index].gain) end
+  kinds.sell.run()
+  T.Eq(app.selling.pending.itemID, 301, "posted the chosen lot")
+end)

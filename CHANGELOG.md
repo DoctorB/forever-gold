@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- "To do" screen, the new default view: one list of concrete actions, best
+  gain first, each with one button: sell items from your bags on the AH,
+  buy an AH offer a merchant pays more for (first click checks the price,
+  second click buys), make a known recipe that pays off ("How?" opens the
+  details); below, up to three recipes worth learning with skill and trainer
+  cost. One line says how fresh the AH prices are. Every other tab, the
+  settings and the test tools are behind "Advanced".
 - Sell tab: the items your known recipes make that sell better on the AH
   than to a merchant, from your bags, with price (1 copper under the lowest
   listing), quantity (what the AH takes now), 8 h duration and deposit

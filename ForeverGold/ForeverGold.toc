@@ -62,6 +62,7 @@ UI\Details.lua
 UI\PurchasePanel.lua
 UI\Settings.lua
 UI\Panels.lua
+UI\Home.lua
 UI\Tooltips.lua
 UI\Feedback.lua
 UI\Commands.lua

@@ -28,6 +28,7 @@ Store.DEFAULT_SETTINGS = {
   autoScan = false, -- read-only AH scan when the cooldown ends, AH window open (Services/AutoScan)
   maxPurchase = 5000, -- spending cap per assisted purchase (50 silver)
   locale = "auto", -- "auto" (client language), "itIT" or "enUS"
+  advancedView = false, -- false: only the "To do" screen; true: all the tabs
 }
 
 Store.RETENTION = {

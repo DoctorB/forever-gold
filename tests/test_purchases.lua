@@ -955,3 +955,29 @@ T.Case("browse fallback: only variants at or under the lot price are searched", 
   T.Eq(s.ah.searchCalls, searches, "no search: every variant is dearer than the lot")
   T.Eq(p.current.reason, "lot_gone")
 end)
+
+T.Case("'To do' screen: a buy action asks the server, then confirms on the second click", function()
+  local s = setup()
+  local Home = s.ns.UI.Panels.home
+  local model = Home.Model(s.app)
+  local buy
+  for _, action in ipairs(model.actions) do if action.kind == "buy" then buy = action end end
+  T.Ok(buy, "buy action listed")
+  T.Ok(buy.text:find("Buy", 1, true) and buy.text:find("merchant", 1, true), buy.text)
+  T.Eq(buy.button, "Buy")
+  T.Eq(buy.enabled, true)
+  T.Eq(s.ah.spendCalls, 0)
+  buy.run()
+  T.Eq(s.ah.spendCalls, 0, "the first click only asks for a quote")
+  local waiting
+  for _, action in ipairs(Home.Model(s.app).actions) do if action.kind == "buy" then waiting = action end end
+  T.Eq(waiting.enabled, false)
+  T.Eq(waiting.button, "Checking...")
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 35, 700)
+  local confirm
+  for _, action in ipairs(Home.Model(s.app).actions) do if action.kind == "buy" then confirm = action end end
+  T.Ok(confirm.button:find("Confirm", 1, true), confirm.button)
+  T.Eq(confirm.enabled, true)
+  confirm.run()
+  T.Eq(s.ah.spendCalls, 1, "bought on the second click")
+end)

@@ -191,6 +191,8 @@ server; the lot was already gone.
 Row 31 (23:46): first auction created from the Sell tab (Camp Tent x2,
 `PostCommodity`, confirmed by AUCTION_HOUSE_AUCTION_CREATED); trainer
 requirements read (38 recipes); deposit rounds down (D55).
+2026-11-08: the window opens on a single "To do" screen (D56); the tabs are
+under "Advanced".
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 
