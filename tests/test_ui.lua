@@ -226,8 +226,15 @@ T.Case("banner says clearly whether a real gain is available", function()
     local function o(class, profit, capital) return { class = class, profit = profit, capital = capital, lots = { { cost = capital } } } end
     local text = Main.Banner({ list = { o("vendor_confirmed", 300, 700), o("prudent", 50, 100) } }, 9676)
     T.Eq(text, "Verified gain available: +3s 0c (1 offers)  ·  your gold 96s 76c")
-    text = Main.Banner({ list = { o("prudent", 400, 1100) } }, 500)
-    T.Eq(text, "Probable gain: +4s 0c (1 offers)  ·  your gold 5s 0c")
+    text = Main.Banner({ list = { o("prudent", 400, 1100) } }, 1500)
+    T.Eq(text, "Probable gain: +4s 0c (1 offers)  ·  your gold 15s 0c")
+    -- Seen in game 2026-11-07: a verified 15s offer, 1s 74c in the bags.
+    local color
+    text, color = Main.Banner({ list = { o("vendor_confirmed", 400, 1500) } }, 174)
+    T.Eq(text, "Verified gain +4s 0c (1 offers), but none you can pay for with your gold  ·  your gold 1s 74c")
+    T.Eq(color, ns.UI.Widgets.MUTED)
+    text = Main.Banner({ list = { o("vendor_confirmed", 400, 1500), o("vendor_confirmed", 100, 100) } }, 174)
+    T.Eq(text, "Verified gain available: +5s 0c (2 offers, 1 within your gold)  ·  your gold 1s 74c")
     T.Ok(Main.Banner({ list = { o("speculative", 1, 1) } }, nil):find("speculative", 1, true) ~= nil)
     T.Eq(Main.Banner({ list = {} }, nil), ns.L.BANNER_NONE)
   end)

@@ -733,3 +733,21 @@ T.Case("crafting: a merchant reagent prices recipes and is used only when cheape
   -- Same visit again: nothing new, no re-pricing.
   T.Eq(app:ObserveMerchant(), 0)
 end)
+
+T.Case("status line describes the last full scan, not the restored or searched view", function()
+  local app, ns, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(30)
+  local Main = ns.UI.Main
+  local before = Main.StatusLine(app, app.opportunities.results)
+  T.Ok(before:find("3 auctions read · 2 items", 1, true), before)
+  -- After /reload only the opportunity's auctions come back (1 of 3 here).
+  local reloaded, ns2 = Fakes.App({ saved = app.store.db, items = ITEMS, clock = clock })
+  clock.advance(5)
+  T.Eq(reloaded.opportunities.results.counts.listings, 1, "the restored view is smaller than the scan")
+  local after = ns2.UI.Main.StatusLine(reloaded, reloaded.opportunities.results)
+  T.Ok(after:find("Last scan 0 min ago · 3 auctions read · 2 items", 1, true), after)
+end)

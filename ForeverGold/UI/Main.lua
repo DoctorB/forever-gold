@@ -76,12 +76,35 @@ end
 
 -- One plain line: what the scanner is doing or when the data was read.
 -- Technical details (coverage, denominators) live in the History tab.
+-- The last full AH scan recorded in history: { t, rows, items } or nil.
+-- The list in memory may hold less (after /reload only the auctions behind
+-- the opportunities are restored; a search in the AH window replaces one
+-- item): in game it read "19 auctions read · 1 items" 13 minutes after a
+-- 108,000-row scan.
+function Main.LastScan(app)
+  local market = app and app.store and app.store:Market(app:MarketKey(), false)
+  local snapshots = market and market.snapshots or {}
+  for index = #snapshots, 1, -1 do
+    local s = snapshots[index]
+    if s.mode == "replicate" and s.t then
+      local counts = s.counts or {}
+      return { t = s.t, rows = counts.valid or counts.rows or 0, items = s.items or counts.itemKeys or 0 }
+    end
+  end
+  return nil
+end
+
 function Main.StatusLine(app, results)
   if results and results.demo then return W.Color(L("DEMO_BANNER"), W.WARN) end
   if Main.progress then return Main.ProgressText(Main.progress) end
   local scanner = app and app.scanner
   local parts = {}
-  if results and results.snapshot and results.snapshot.finished and app and app.clock then
+  local scan = app and app.clock and Main.LastScan(app)
+  if scan then
+    local age = app.clock() - scan.t
+    parts[#parts + 1] = string.format(L("STATUS_LAST"), Main.Age(age), scan.rows, scan.items)
+    if age > 600 then parts[#parts + 1] = L("STATUS_OLD") end
+  elseif results and results.snapshot and results.snapshot.finished and app and app.clock then
     local c = results.counts
     local age = app.clock() - results.snapshot.finished
     parts[#parts + 1] = string.format(L("STATUS_LAST"), Main.Age(age), c.listings, c.itemKeys)
@@ -231,10 +254,20 @@ function Main.Banner(results, money)
   end
   local suffix = money and string.format(L("BANNER_MONEY"), Money.Format(money)) or ""
   local confirmed, prudent = totals.vendor_confirmed, totals.prudent
+  -- Offers the player cannot pay for are not "available": in game the
+  -- banner announced a verified 15s offer to a player with 1s 74c.
+  local function headline(key, t, color)
+    if t.affordable == 0 then
+      return string.format(L(key .. "_NONE"), Money.Format(t.profit), t.n) .. suffix, W.MUTED
+    elseif t.affordable < t.n then
+      return string.format(L(key .. "_SOME"), Money.Format(t.profit), t.n, t.affordable) .. suffix, color
+    end
+    return string.format(L(key), Money.Format(t.profit), t.n) .. suffix, color
+  end
   if confirmed then
-    return string.format(L("BANNER_VERIFIED"), Money.Format(confirmed.profit), confirmed.n) .. suffix, W.EMERALD
+    return headline("BANNER_VERIFIED", confirmed, W.EMERALD)
   elseif prudent then
-    return string.format(L("BANNER_PROBABLE"), Money.Format(prudent.profit), prudent.n) .. suffix, W.GOLD
+    return headline("BANNER_PROBABLE", prudent, W.GOLD)
   elseif totals.speculative then
     return L("BANNER_SPECULATIVE") .. suffix, W.MUTED
   end
