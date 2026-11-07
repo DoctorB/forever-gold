@@ -77,9 +77,23 @@ Closed on 2026-11-06 by the owner:
 - [x] **alpha.3 done.**
 
 "Buy all" first try on live (API-AUDIT row 23): safe (nothing spent), but
-13 of 15 searches and quotes got no answer within 10 s. Next, before trying
-again: trace the throttled-message events and each request's answer time,
-and make the search and quote timeouts longer (they were sized on beta).
+13 of 15 searches and quotes got no answer within 10 s. The saved trace
+(read 2026-11-07) shows the silent requests were **never answered, not even
+late**: no `ITEM_SEARCH_RESULTS_UPDATED` or quote event arrived in the 47 s
+to 2.5 min before the AH was closed. The only two answers came 128 s apart
+(21:04:03 and 21:06:11), each within 1 s of its request. Possible cause: a
+per-player request limit on live, or evening server load (the next morning,
+2026-11-07 08:18, the replica answered in 8 s instead of 150–330 s).
+
+Changed after that (not yet seen in game):
+- search and quote timeouts 10 → 30 s;
+- "Buy all" stops after two unanswered requests in a row (`server_silent`);
+- every request is traced with the throttle state, every answer with its
+  delay, late ones included (trace 400 entries);
+- an unanswered search no longer hides the offer as gone.
+
+Next try in game: "Buy all" with a small limit, ideally at a quiet hour,
+then read the `request` / `item_results` / `purchase_event` trace entries.
 
 Watch list: `evaluate_finish` grew to 40–45 ms (sorting for the saved
 view), still below 50 ms; answer delays reached 327 s, past the 300 s

@@ -2,6 +2,25 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer versions.
 
+## [Unreleased]
+
+### Changed
+
+- "Buy all" stops after two searches or quotes in a row get no answer,
+  instead of sending the rest of the queue to a server that is not
+  answering. On the live server one run sent 13 requests that all went
+  unanswered.
+- Searches and commodity quotes wait 30 seconds instead of 10, which was
+  sized on the beta.
+- Every search, browse and quote request is traced with the throttle state
+  at sending, and every answer with its delay, late answers included
+  (`/fg diagnostics` trace, now 400 entries).
+
+### Fixed
+
+- An offer whose search got no answer is no longer hidden as "gone": no
+  answer says nothing about the offer.
+
 ## [0.1.0-alpha.3] - 2026-11-06
 
 Verified in game on the live build 1.60.1.70790: three full scans (about

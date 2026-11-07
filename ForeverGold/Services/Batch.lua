@@ -12,6 +12,12 @@ local Money = ns.Economy.Money
 local Batch = {}
 ns.Services.Batch = Batch
 
+-- Requests in a row without any answer before the run stops. Live 70790
+-- (2026-11-06): once the server stopped answering, the run went on to send
+-- 13 more requests that all went unanswered.
+Batch.MAX_SILENT = 2
+Batch.SILENT_REASONS = { no_answer = true, no_quote = true }
+
 -- deps: { purchases, client, bus, clock, stale?() -> { [itemID] = true } }
 function Batch.New(deps)
   return setmetatable({
@@ -49,7 +55,7 @@ function Batch:Start(list, cap)
   if #queue == 0 then return false, "nothing" end
   self.active, self.queue, self.index, self.cap = true, queue, 0, cap
   self.spent, self.expected, self.bought, self.skipped = 0, 0, 0, 0
-  self.ready, self.stopReason = false, nil
+  self.ready, self.stopReason, self.silent = false, nil, 0
   self:Next()
   return true
 end
@@ -90,6 +96,16 @@ function Batch:OnPurchase(current)
   -- Only the purchase this batch started counts (not one replaced by it).
   if not self.active or not current or current ~= self.purchase then return end
   local state = current.state
+  if state == "rejected" and Batch.SILENT_REASONS[current.reason] then
+    self.silent = (self.silent or 0) + 1
+    if self.silent >= Batch.MAX_SILENT then
+      self.skipped = self.skipped + 1
+      self:Stop("server_silent")
+      return
+    end
+  elseif state == "quoted" or state == "located" or state == "rejected" or state == "failed" then
+    self.silent = 0 -- the server answered (a refusal is an answer too)
+  end
   if state == "quoted" or state == "located" then
     self.ready = true
     self.amount = current.quote and current.quote.total or (current.auction and current.auction.amount)

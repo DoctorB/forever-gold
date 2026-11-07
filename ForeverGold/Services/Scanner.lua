@@ -50,7 +50,10 @@ Scanner.DEFAULTS = {
   infoRounds = 4, -- bounded number of such re-reads
   samples = 8, -- multi-unit rows kept as evidence of the buyout meaning
   links = 6, -- item strings kept as evidence of the link format
-  searchTimeout = 10,
+  -- Live 70790 (2026-11-06 evening): of 11 searches sent back to back, two
+  -- were answered within 1 s, 128 s apart; the others never got an answer,
+  -- not even late. 10 s was sized on beta, where every search answered at once.
+  searchTimeout = 30,
   observeDedupe = 60, -- identical observation of one item ignored this long
   budgetMs = 2,
   progressEvery = 250, -- rows between progress events
@@ -116,6 +119,26 @@ end
 
 local function current(self, task)
   return self.task == task and task ~= nil
+end
+
+-- Records a read-only search request, so that every answer (late ones
+-- included) is traced with its delay and the throttle state at sending.
+local function noteRequest(self, kind, itemID)
+  local ready = self.adapter:IsReady()
+  self.lastRequest = { kind = kind, itemID = itemID, at = self.clock() }
+  self:Trace("request", { kind = kind, itemID = itemID, ready = ready == nil and "unknown" or ready })
+end
+
+local function answerFields(self, itemID)
+  local fields = { itemID = itemID, state = self.state }
+  local last = self.lastRequest
+  if last then
+    fields.after = self.clock() - last.at
+    fields.forItem = last.itemID
+    local task = self.task
+    if not (task and (task.mode == "search" or task.mode == "browse")) then fields.late = true end
+  end
+  return fields
 end
 
 local function finish(self, task, state, reason)
@@ -601,7 +624,7 @@ local function handleResults(self, itemID, suffix, commodity, readFn)
 end
 
 function Scanner:OnCommodityResults(itemID)
-  self:Trace("commodity_results", { itemID = itemID, state = self.state })
+  self:Trace("commodity_results", answerFields(self, itemID))
   handleResults(self, itemID, 0, true, function()
     local rows, full = self.adapter:ReadCommodityResults(itemID)
     return rows, full, true
@@ -611,7 +634,7 @@ end
 function Scanner:OnItemResults(itemKey)
   local itemID = itemKey.itemID
   if type(itemID) ~= "number" then return end
-  self:Trace("item_results", { itemID = itemID, state = self.state })
+  self:Trace("item_results", answerFields(self, itemID))
   handleResults(self, itemID, itemKey.itemSuffix, false, function()
     local rows, full = self.adapter:ReadItemResults(itemKey)
     return rows, full, false
@@ -629,6 +652,7 @@ function Scanner:Search(itemID, suffix, callback, itemLevel, key)
   local task = { mode = "search", itemID = itemID, attempts = 1, callback = callback }
   self.task = task
   self.snapshot = newSnapshot(self, "search", Schema.ItemKey(itemID, suffix or 0))
+  noteRequest(self, "search", itemID)
   local ok, err = self.adapter:SendSearch(itemID, suffix, itemLevel, key)
   if not ok then
     fail(self, task, "request_failed:" .. tostring(err))
@@ -650,6 +674,7 @@ function Scanner:Browse(name, callback)
   self.scheduler:Invalidate()
   local task = { mode = "browse", callback = callback }
   self.task = task
+  noteRequest(self, "browse", nil)
   local ok, err = self.adapter:SendBrowse(name)
   if not ok then
     self.task = nil
@@ -667,6 +692,7 @@ end
 
 function Scanner:OnBrowseResults()
   local task = self.task
+  self:Trace("browse_results", answerFields(self, nil))
   if not task or task.mode ~= "browse" then return end
   if task.timeoutTimer then task.timeoutTimer.Cancel() end
   local results = self.adapter:ReadBrowseResults()

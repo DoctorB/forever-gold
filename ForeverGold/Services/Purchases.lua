@@ -19,7 +19,9 @@ local Schema = ns.Data.Schema
 local Purchases = {}
 ns.Services.Purchases = Purchases
 
-Purchases.QUOTE_TIMEOUT = 10
+-- Live 70790 (2026-11-06 evening): 4 of 4 commodity quotes got no answer
+-- within 10 s (sized on beta, where quotes came at once).
+Purchases.QUOTE_TIMEOUT = 30
 Purchases.CONFIRM_TIMEOUT = 20
 
 Purchases.READY_TRIES = 15 -- seconds of waiting for the AH throttle before giving up
@@ -150,6 +152,11 @@ end
 function Purchases:Send(current)
   local plan = current.plan
   if plan.kind == "commodity" then
+    if self.trace then
+      local ready = self.isReady and self.isReady()
+      self.trace("request", { kind = "quote", itemID = plan.itemID, ready = ready == nil and "unknown" or ready })
+    end
+    current.sentAt = self.clock()
     local ok, err = self.purchase:StartCommodity(plan.itemID, plan.quantity)
     if not ok then
       set(self, "failed", "request_failed:" .. tostring(err))
@@ -206,6 +213,12 @@ local function keyText(key)
   return string.format("%s/%s/%s", tostring(key.itemLevel), tostring(key.itemSuffix), tostring(key.battlePetSpeciesID))
 end
 
+-- The scanner gives up on a search first; this step waits just past it.
+function Purchases:SearchTimeout()
+  local opts = self.scanner and self.scanner.opts
+  return opts and opts.searchTimeout or Purchases.QUOTE_TIMEOUT
+end
+
 -- Locates the auction with a direct search (built key, or an exact key
 -- from browse results). Steps are bounded and each has its own timeout.
 function Purchases:Locate(current, key)
@@ -242,7 +255,7 @@ function Purchases:Locate(current, key)
   if current.state ~= "locating" then set(self, "locating") end
   -- A step may get no answer (or another search may replace it): stop
   -- waiting instead of leaving the panel on "waiting for the server".
-  self.scheduler:After(Purchases.QUOTE_TIMEOUT + 2, function()
+  self.scheduler:After(self:SearchTimeout() + 2, function()
     if alive(self, current, { locating = true }) and current.step == step then set(self, "rejected", "no_answer") end
   end)
   return true
@@ -279,7 +292,7 @@ function Purchases:BrowseFallback(current)
     set(self, "rejected", "lot_gone")
     return
   end
-  self.scheduler:After(Purchases.QUOTE_TIMEOUT + 2, function()
+  self.scheduler:After(self:SearchTimeout() + 2, function()
     if alive(self, current, { locating = true }) and current.step == step then set(self, "rejected", "no_answer") end
   end)
 end
@@ -291,7 +304,7 @@ function Purchases:OnEvent(event, a, b)
   local plan = current.plan
   if self.trace then
     self.trace("purchase_event", { event = event, a = a ~= nil and tostring(a) or nil, b = b ~= nil and tostring(b) or nil,
-      state = current.state, itemID = plan.itemID })
+      state = current.state, itemID = plan.itemID, after = current.sentAt and self.clock() - current.sentAt or nil })
   end
   if event == "COMMODITY_PRICE_UPDATED" and current.state == "quoting" then
     local unit, total = Money.Normalize(a), Money.Normalize(b)

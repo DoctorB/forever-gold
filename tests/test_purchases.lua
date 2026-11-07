@@ -274,10 +274,60 @@ T.Case("individual auction: no answer to the search stops waiting", function()
   p:Begin(s.find(201), 5000)
   p:Prepare()
   T.Eq(p.current.state, "locating")
-  s.clock.advance(30)
+  s.clock.advance(25)
+  T.Eq(p.current.state, "locating", "still waiting past the old 10 s timeout")
+  s.clock.advance(10)
   T.Eq(p.current.state, "rejected")
   T.Eq(p.current.reason, "no_answer")
   T.Eq(s.ah.spendCalls, 0)
+end)
+
+T.Case("search requests and their answers are traced with the delay", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.clock.advance(40) -- given up on
+  s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 93 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  local request, answer
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "request" and e.kind == "search" then request = e end
+    if e.k == "item_results" then answer = e end
+  end
+  T.Ok(request, "request traced")
+  T.Eq(request.itemID, 201)
+  T.Ok(request.ready ~= nil, "throttle state at sending")
+  T.Ok(answer, "late answer traced")
+  T.Eq(answer.after, 40)
+  T.Eq(answer.forItem, 201)
+  T.Eq(answer.late, true)
+end)
+
+T.Case("a quote request is traced and its answer carries the delay", function()
+  local s = setup()
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  p:Prepare()
+  s.clock.advance(12)
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 35, 700)
+  T.Eq(p.current.state, "quoted", "a quote after 12 s is still accepted")
+  local request, answer
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "request" and e.kind == "quote" then request = e end
+    if e.k == "purchase_event" and e.event == "COMMODITY_PRICE_UPDATED" then answer = e end
+  end
+  T.Ok(request)
+  T.Eq(request.itemID, 101)
+  T.Eq(answer.after, 12)
+end)
+
+T.Case("an unanswered search or quote does not hide the offer", function()
+  local s = setup()
+  local reasons = s.ns.UI.PurchasePanel.STALE_REASONS
+  T.Ok(reasons.lot_gone, "a lot found gone still hides it")
+  T.Eq(reasons.no_answer, nil)
+  T.Eq(reasons.no_quote, nil)
 end)
 
 T.Case("vendor purchase accepts any variant of the item; the attempt is traced", function()
@@ -469,6 +519,35 @@ T.Case("buy all: a dearer offer is skipped, an uncertain outcome stops everythin
   T.Eq(batch.stopReason, "uncertain")
   T.Eq(s.ah.calls.StartCommoditiesPurchase, 2, "no further quote after an uncertain outcome")
   T.Eq(s.ah.spendCalls, 1)
+end)
+
+T.Case("buy all: two requests in a row without an answer stop the run", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 5000)
+  s.clock.advance(35) -- Linen: no quote
+  T.Ok(batch.active, "one silence is not enough")
+  T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
+  s.clock.advance(35) -- Eye: no quote
+  T.NotOk(batch.active)
+  T.Eq(batch.stopReason, "server_silent")
+  T.Eq(batch.skipped, 2)
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 2, "Ore never requested")
+  T.Eq(s.ah.spendCalls, 0)
+end)
+
+T.Case("buy all: an answer between silences resets the count", function()
+  local s = setup({ rows = BATCH_ROWS })
+  local batch = s.app.batch
+  batch:Start(s.app.opportunities.results.list, 5000)
+  s.clock.advance(35) -- Linen: no quote
+  s.app:OnEvent("COMMODITY_PRICE_UPDATED", 30, 900) -- Eye dearer: an answer
+  T.Ok(batch.active)
+  T.Eq(batch.silent, 0)
+  s.clock.advance(35) -- Ore: no quote, end of the queue
+  T.NotOk(batch.active)
+  T.Eq(batch.stopReason, "done")
+  T.Eq(batch.skipped, 3)
 end)
 
 T.Case("buy all: closing the AH stops the run", function()

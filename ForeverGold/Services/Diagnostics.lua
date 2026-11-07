@@ -9,7 +9,7 @@ local Capabilities = ns.Core.Capabilities
 local Diagnostics = {}
 ns.Services.Diagnostics = Diagnostics
 
-Diagnostics.TRACE_LIMIT = 200
+Diagnostics.TRACE_LIMIT = 400
 Diagnostics.SAMPLE_LIMIT = 8
 
 -- deps: { client, capabilities, store, clock, events = { registered, rejected } }

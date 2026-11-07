@@ -227,7 +227,9 @@ function PurchasePanel.Show(opportunity)
 end
 
 -- Rejections that mean the offer in the list no longer exists as shown.
-PurchasePanel.STALE_REASONS = { lot_gone = true, price_up = true, unavailable = true, no_answer = true }
+-- A search the server never answered proves nothing about the offer
+-- (live 70790: most searches went unanswered), so no_answer is not one.
+PurchasePanel.STALE_REASONS = { lot_gone = true, price_up = true, unavailable = true }
 
 function PurchasePanel.Attach(app)
   app.bus:Subscribe("purchase.state", function(current)
