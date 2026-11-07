@@ -104,6 +104,7 @@ function AutoScan:OnScannerState(state, reason)
   if not self.pending then return end
   if state == "COMPLETE" or state == "PARTIAL" then
     self.pending, self.silentInRow = false, 0
+    self.justAnswered = true -- read by Core/App after the evaluation (alert)
     self.memory.answered = self.memory.answered + 1
     self.memory.lastAnswerAt = self.clock()
   elseif state == "FAILED" or state == "CANCELLED" then

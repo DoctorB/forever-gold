@@ -395,7 +395,7 @@ T.Case("item info arrives later: opportunities re-evaluate once", function()
   T.Eq(app.opportunities.results.counts.infoPending, 1)
   pending[101] = ITEMS[101]
   app:OnEvent("GET_ITEM_INFO_RECEIVED", 101, true)
-  clock.advance(2)
+  clock.advance(5) -- after RESOLVE_QUIET (3 s) without new item data
   T.Eq(#app.opportunities.results.list, 1)
 end)
 
@@ -955,4 +955,42 @@ T.Case("crafting is re-priced once the bags are quiet", function()
   T.Eq(runs(), before, "still changing: not yet")
   clock.advance(30)
   T.Eq(runs(), before + 1, "one re-pricing after the bags settled")
+end)
+
+T.Case("auto-scan: a scan that finds offers says so in chat with a sound", function()
+  local sounds = {}
+  local app, ns, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS,
+    globals = { PlaySound = function(kit) sounds[#sounds + 1] = kit end } })
+  ns.printed = {}
+  app.autoScan:SetEnabled(true)
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  answer(app, ah, clock)
+  local found
+  for _, line in ipairs(ns.printed) do if line:find("automatic scan: 1 offers", 1, true) then found = line end end
+  T.Ok(found, table.concat(ns.printed, "\n"))
+  T.Eq(#sounds, 1)
+  T.Eq(sounds[1], 8959)
+  -- A scan from the button gets the usual summary, no alert.
+  app.store:Settings().autoScan = false
+  T.NotOk(app:AlertAutoScan(app.opportunities.results))
+end)
+
+T.Case("item data arriving in bursts starts one evaluation after a quiet moment", function()
+  local app, _, clock, ah = Fakes.App({ rows = replicateRows(), items = ITEMS })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  answer(app, ah, clock)
+  local function passes()
+    local n = 0
+    for _, timing in ipairs(app.store.db.diagnostics.timings) do if timing.phase == "evaluate_begin" then n = n + 1 end end
+    return n
+  end
+  local before = passes()
+  for _ = 1, 6 do
+    app.bus:Publish("items.resolved", 101)
+    clock.advance(1)
+  end
+  T.Eq(passes(), before, "still arriving")
+  clock.advance(10)
+  T.Eq(passes(), before + 1, "one pass for the whole burst")
 end)

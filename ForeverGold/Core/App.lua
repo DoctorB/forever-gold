@@ -218,13 +218,22 @@ end
 function App:Subscribe()
   local bus = self.bus
   bus:Subscribe("scanner.snapshot", function(snapshot, listings) self:Process(snapshot, listings) end)
+  -- Item data arrives in bursts after a scan: re-evaluate once it has been
+  -- quiet for RESOLVE_QUIET seconds, and later if a pipeline is running (in
+  -- game every burst started a full pass: three per scan, ~1.4 s CPU each).
   bus:Subscribe("items.resolved", function()
+    self.resolvedAt = self.clock()
     if self.reevaluatePending then return end
     self.reevaluatePending = true
-    self.scheduler:After(1, function()
+    local function check()
+      if self.processing or self.clock() - self.resolvedAt < App.RESOLVE_QUIET then
+        self.scheduler:After(App.RESOLVE_QUIET, check)
+        return
+      end
       self.reevaluatePending = false
-      if not self.processing then self:EvaluateChunked() end
-    end)
+      self:EvaluateChunked()
+    end
+    self.scheduler:After(App.RESOLVE_QUIET, check)
   end)
   bus:Subscribe("quotes.invalidate", function(reason)
     self.transactions:Invalidate(reason)
@@ -306,14 +315,40 @@ function App:RecordHistory(snapshot, job, ingest, votes)
       History.FinishRecord(job)
       self.opportunities:FinishIngest(ingest)
     end)
-    self:EvaluateChunked(function()
+    self:EvaluateChunked(function(results)
       -- A user scan is summarised by UI/Feedback; notices are for the rest.
-      if snapshot.mode == "replicate" then return end
+      if snapshot.mode == "replicate" then
+        self:AlertAutoScan(results)
+        return
+      end
       self.opportunities:NotifyIfDue(function(good, counts)
         ns.Print(string.format(ns.L["NOTIFY_FOUND"], good, counts.itemKeys))
       end)
     end, snapshot.mode)
   end)
+end
+
+App.RESOLVE_QUIET = 3
+
+-- After an automatic scan: one chat line and a sound when it found offers
+-- that are not speculative (the player may be away from the screen).
+App.ALERT_SOUND = 8959 -- SOUNDKIT.RAID_WARNING
+
+function App:AlertAutoScan(results)
+  if not self.autoScan or not self.autoScan.justAnswered then return false end
+  self.autoScan.justAnswered = false
+  if not self.store:Settings().notify or not results then return false end
+  local good, profit = 0, 0
+  for _, opportunity in ipairs(results.list or {}) do
+    if opportunity.class ~= "speculative" then
+      good, profit = good + 1, profit + (opportunity.profit or 0)
+    end
+  end
+  if good == 0 then return false end
+  ns.Print(string.format(ns.L["AUTO_FOUND"], good, ns.Economy.Money.Format(profit)))
+  local kit = type(self.client.env.SOUNDKIT) == "table" and self.client.env.SOUNDKIT.RAID_WARNING or App.ALERT_SOUND
+  self.client:Call(nil, "PlaySound", kit)
+  return true
 end
 
 function App:EvaluateChunked(after, mode)

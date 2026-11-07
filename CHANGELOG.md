@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Automatic scan alert: when an automatic scan finds offers that are not
+  speculative, one chat line with the count and the gain, and a sound
+  (with "Aggregated notifications" on).
 - History: click an item in the prices table to see its price chart (one
   bar per scan, a lighter bar where a day starts, lowest and highest price
   and the dates covered); click the chart to go back to the scans.
@@ -93,6 +96,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- After a scan, item data arriving in bursts started a full evaluation each
+  time (three passes of about 1.4 s CPU in game) and data arriving during a
+  pass was not re-evaluated: one pass now starts after 3 s without new data.
 - The scan cooldown waits the time proven to be enough (a past answer)
   instead of the time proven to be too short (a past silence): in game the
   first automatic request went out at +871 s, stayed unanswered for 5
