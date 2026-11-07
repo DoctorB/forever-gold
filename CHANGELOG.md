@@ -36,6 +36,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   or merchant; the row tooltip marks merchant reagents. Recipes whose
   reagents only merchants sell (thread, flux, spices, water...) are priced
   once that merchant has been visited. Nothing is bought or sold.
+- Reagents you can make: a reagent with no price (not on the AH, no merchant
+  seen) is costed by the cheapest recipe that produces it, up to three
+  levels (e.g. Solid Grinding Stone from Solid Stone). If a step of the
+  chain is a recipe you do not know, the result is listed with the
+  learnable recipes and the tooltip says what else to learn.
 - The "current lowest" AH price of a crafted item is used only with at least
   3 listings: single overpriced weapons and armour made unlearned recipes
   look worth 100-250 gold.

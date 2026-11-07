@@ -132,6 +132,15 @@ open merchant window, lowest unlimited gold price per unit, used by
 crafting when cheaper than the AH. The merchant API shape on Forever is
 not verified: both `C_MerchantFrame.GetItemInfo` and `GetMerchantItemInfo`
 are tried and the first rows are kept in `diagnostics.merchant`.
+Merchant prices checked in game 2026-11-07 10:55-11:02 (build 70862): only
+`C_MerchantFrame.GetItemInfo` exists (table: `name`, `price`, `stackCount`,
+`numAvailable` -1 for unlimited, `hasExtendedCost`, `isPurchasable`), item
+IDs from `GetMerchantItemID`; 82 prices from four merchants. Unpriced
+recipes went only from 338 to 336: the blocking reagents are high-level
+materials not on the AH yet (Thorium Bar 114 recipes, Arcanite Bar 82,
+Solid Grinding Stone 52). Reagents the player can make are now costed by
+their recipe (up to three levels; on the real catalogue: 338 -> 317
+blocked).
 Next: several crafts at real depth, deposit.
 
 ## Implemented

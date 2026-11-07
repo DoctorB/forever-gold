@@ -150,3 +150,80 @@ T.Case("vendor: unknown sell price is excluded and counted", function()
   T.Eq(#list, 0)
   T.Eq(excluded.sell_price_unknown, 1)
 end)
+
+-- Reagents made by the player (crafting chains). Market: ore 30 each on the
+-- AH (commodity), the bar sold on the AH at 200+ (3 listings), the grinding
+-- stone nowhere.
+local function chainMarket(itemID)
+  if itemID == 102 then return { levels = { { quantity = 100, unitPrice = 30, divisible = true, buyable = true } } } end
+  if itemID == 301 then
+    local levels = {}
+    for index = 1, 3 do levels[index] = { quantity = 1, buyoutTotal = 190 + index * 10, divisible = false, buyable = true } end
+    return { levels = levels, sellPrice = 10 }
+  end
+  return { levels = {}, sellPrice = 0 }
+end
+local CHAIN_SETTINGS = { feeBp = 500, bufferBp = 500 }
+
+T.Case("crafting chain: a reagent nobody sells is costed by the recipe that makes it", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  local recipes = {
+    { id = 5, name = "Grinding Stone", learned = true, outputs = { { itemID = 778, quantity = 1 } },
+      reagents = { { itemID = 102, quantity = 2 } } },
+    { id = 6, name = "Sword", learned = true, outputs = { { itemID = 301, quantity = 1 } },
+      reagents = { { itemID = 778, quantity = 1 }, { itemID = 102, quantity = 1 } } },
+  }
+  local result = Crafting.EvaluateRecipes(recipes, chainMarket, CHAIN_SETTINGS)
+  T.Eq(#result.learned, 1, "the stone has no value of its own; the sword is priced")
+  local sword = result.learned[1]
+  -- Stone: 2 ore = 60; sword: 60 + 30 = 90; bar 200 - 5% = 190, - 5% fee = 180.
+  T.Eq(sword.cost, 90)
+  T.Eq(sword.profit, 90)
+  T.Eq(sword.reagents[1].crafted.name, "Grinding Stone")
+  T.Eq(sword.reagents[1].crafted.learned, true)
+  T.Eq(sword.alsoLearn, nil)
+end)
+
+T.Case("crafting chain: an unknown step moves the result to the learnable list", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  local recipes = {
+    { id = 5, name = "Grinding Stone", learned = false, outputs = { { itemID = 778, quantity = 2 } },
+      reagents = { { itemID = 102, quantity = 2 } } },
+    { id = 6, name = "Sword", learned = true, outputs = { { itemID = 301, quantity = 1 } },
+      reagents = { { itemID = 778, quantity = 3 } } },
+  }
+  local result = Crafting.EvaluateRecipes(recipes, chainMarket, CHAIN_SETTINGS)
+  T.Eq(#result.learned, 0)
+  local sword = result.learnable[1]
+  T.Ok(sword, "priced as learnable")
+  -- 3 stones need 2 crafts of 2 (whole crafts): 4 ore = 120.
+  T.Eq(sword.reagents[1].crafted.crafts, 2)
+  T.Eq(sword.cost, 120)
+  T.Eq(sword.profit, 60)
+  T.Eq(sword.alsoLearn[1], "Grinding Stone")
+end)
+
+T.Case("crafting chain: cycles and long chains stop, the recipe stays unpriced", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  local recipes = {
+    { id = 1, name = "A from B", learned = true, outputs = { { itemID = 801, quantity = 1 } }, reagents = { { itemID = 802, quantity = 1 } } },
+    { id = 2, name = "B from A", learned = true, outputs = { { itemID = 802, quantity = 1 } }, reagents = { { itemID = 801, quantity = 1 } } },
+    { id = 3, name = "Sword from A", learned = true, outputs = { { itemID = 301, quantity = 1 } }, reagents = { { itemID = 801, quantity = 1 } } },
+    -- Four levels deep: 901 <- 902 <- 903 <- 904 <- ore.
+    { id = 11, learned = true, outputs = { { itemID = 904, quantity = 1 } }, reagents = { { itemID = 102, quantity = 1 } } },
+    { id = 12, learned = true, outputs = { { itemID = 903, quantity = 1 } }, reagents = { { itemID = 904, quantity = 1 } } },
+    { id = 13, learned = true, outputs = { { itemID = 902, quantity = 1 } }, reagents = { { itemID = 903, quantity = 1 } } },
+    { id = 14, name = "Deep", learned = true, outputs = { { itemID = 301, quantity = 1 } }, reagents = { { itemID = 902, quantity = 1 } } },
+  }
+  local result = Crafting.EvaluateRecipes(recipes, chainMarket, CHAIN_SETTINGS)
+  for _, row in ipairs(result.learned) do
+    T.NotOk(row.recipeID == 3, "no price from a cycle")
+  end
+  local deep
+  for _, row in ipairs(result.learned) do if row.recipeID == 14 then deep = row end end
+  T.Ok(deep, "three levels are allowed (902 <- 903 <- 904 <- ore)")
+  T.Ok(result.excluded.reagent_not_on_ah >= 1)
+end)

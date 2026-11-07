@@ -256,8 +256,13 @@ function Professions.Rows(app, list)
     if row.quantity > 1 then name = row.quantity .. " x " .. name end
     local tip = { name, string.format(L("CRAFT_TIP_RECIPE"), row.name or "?", row.profession or "?"), L("CRAFT_TIP_REAGENTS") }
     for _, reagent in ipairs(row.reagents or {}) do
+      local source = reagent.merchant and L("CRAFT_TIP_MERCHANT") or ""
+      if reagent.crafted then
+        source = string.format(L(reagent.crafted.learned and "CRAFT_TIP_CRAFTED" or "CRAFT_TIP_CRAFTED_UNLEARNED"),
+          reagent.crafted.name or "?")
+      end
       tip[#tip + 1] = string.format("  %d x %s: %s%s", reagent.quantity, itemName(app, reagent.itemID), fmt(reagent.cost),
-        reagent.merchant and L("CRAFT_TIP_MERCHANT") or "")
+        source)
     end
     for _, exit in ipairs(row.exits or {}) do
       tip[#tip + 1] = string.format(L("CRAFT_TIP_EXIT"), L("CRAFT_EXIT_" .. exit.exit), fmt(exit.net))
@@ -265,6 +270,7 @@ function Professions.Rows(app, list)
     if row.listings and row.listings > 0 then
       tip[#tip + 1] = string.format(L("CRAFT_TIP_COMPETITION"), row.listings, row.units or 0)
     end
+    if row.alsoLearn then tip[#tip + 1] = string.format(L("CRAFT_TIP_ALSO_LEARN"), table.concat(row.alsoLearn, ", ")) end
     if row.exit ~= "vendor" then tip[#tip + 1] = L("CRAFT_TIP_SPECULATIVE") end
     local gain, gainColor = signed(row.profit)
     rows[#rows + 1] = {

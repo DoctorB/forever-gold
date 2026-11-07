@@ -135,26 +135,115 @@ end
 -- output sold at its best exit. market(itemID) -> { levels, sellPrice?, estimate? } or nil;
 -- cache: per-run table shared by all recipes (reagent costs by item and quantity).
 -- Returns a row, or nil, reason.
-function Crafting.EvaluateRecipe(recipe, market, settings, cache)
-  local output = recipe.outputs and recipe.outputs[1]
-  if not output or not Money.IsQuantity(output.quantity) then return nil, "output_unknown" end
-  local cost, reagents = 0, {}
-  for _, reagent in ipairs(recipe.reagents or {}) do
-    local key = reagent.itemID .. "x" .. reagent.quantity
-    local purchase = cache[key]
-    if purchase == nil then
-      local entry = market(reagent.itemID)
-      local levels = entry and (entry.reagentLevels or entry.levels)
-      purchase = levels and #levels > 0 and Depth.BuyCost(levels, reagent.quantity) or false
-      cache[key] = purchase
+-- Reagents the player can make: a reagent with no price (not on the AH,
+-- no merchant seen) or too few units is costed by the cheapest recipe of
+-- the catalogue that produces it, down to MAX_CHAIN levels. In game
+-- (2026-11-07) Solid Grinding Stone alone blocked 20 recipes, and it is made
+-- from Solid Stone.
+Crafting.MAX_CHAIN = 3
+
+-- Recipes by the item they produce.
+function Crafting.Producers(recipes)
+  local producers = {}
+  for _, recipe in ipairs(recipes or {}) do
+    local output = recipe.outputs and recipe.outputs[1]
+    if output and Money.IsQuantity(output.quantity) then
+      local list = producers[output.itemID] or {}
+      producers[output.itemID] = list
+      list[#list + 1] = recipe
     end
-    if not purchase then return nil, "reagent_not_on_ah" end
-    if not purchase.complete then return nil, "reagent_depth" end
-    cost = cost + purchase.cost
+  end
+  return producers
+end
+
+local acquire
+
+-- Cheapest way to make `quantity` units with a producing recipe, or nil.
+-- Returns { cost, crafts, recipe, learned (whole chain), alsoLearn = { names } }.
+local function craftCost(itemID, quantity, ctx, depth, visiting)
+  local list = ctx.producers and ctx.producers[itemID]
+  if not list or depth >= Crafting.MAX_CHAIN then return nil end
+  visiting[itemID] = true
+  local best
+  for _, producer in ipairs(list) do
+    local per = producer.outputs[1].quantity
+    local crafts = math.ceil(quantity / per)
+    local cost, learned, alsoLearn, ok = 0, producer.learned == true, {}, true
+    if not learned then alsoLearn[#alsoLearn + 1] = producer.name or ("#" .. tostring(producer.id)) end
+    for _, reagent in ipairs(producer.reagents or {}) do
+      local part = (not visiting[reagent.itemID]) and acquire(reagent.itemID, reagent.quantity * crafts, ctx, depth + 1, visiting)
+      if not part then
+        ok = false
+        break
+      end
+      cost = cost + part.cost
+      if part.crafted then
+        learned = learned and part.crafted.learned
+        for _, name in ipairs(part.crafted.alsoLearn) do alsoLearn[#alsoLearn + 1] = name end
+      end
+    end
+    -- Prefer recipes already known, then the cheaper one.
+    if ok and (not best or (learned and not best.learned) or (learned == best.learned and cost < best.cost)) then
+      best = { cost = cost, crafts = crafts, recipe = producer, learned = learned, alsoLearn = alsoLearn }
+    end
+  end
+  visiting[itemID] = nil
+  return best
+end
+
+-- Cost of `quantity` units: AH and merchant first, otherwise made by the
+-- player. Returns { cost, merchant, crafted? } or nil, reason.
+acquire = function(itemID, quantity, ctx, depth, visiting)
+  local key = itemID .. "x" .. quantity
+  local cached = ctx.buys[key]
+  if cached ~= nil and depth == 0 then
+    if cached then return cached end
+    return nil, ctx.reasons[key]
+  end
+  local entry = ctx.market(itemID)
+  local levels = entry and (entry.reagentLevels or entry.levels)
+  local purchase = levels and #levels > 0 and Depth.BuyCost(levels, quantity) or nil
+  local result, reason
+  if purchase and purchase.complete then
     local merchant = false
     for _, use in ipairs(purchase.used) do if use.level and use.level.merchant then merchant = true end end
-    reagents[#reagents + 1] = { itemID = reagent.itemID, quantity = reagent.quantity, cost = purchase.cost,
-      merchant = merchant }
+    result = { cost = purchase.cost, merchant = merchant }
+  else
+    reason = purchase and "reagent_depth" or "reagent_not_on_ah"
+    local made = craftCost(itemID, quantity, ctx, depth, visiting)
+    if made then result = { cost = made.cost, merchant = false, crafted = made } end
+  end
+  if depth == 0 then
+    ctx.buys[key] = result or false
+    ctx.reasons[key] = reason
+  end
+  return result, reason
+end
+
+-- Context shared by all recipes of one run (caches and producers).
+function Crafting.Context(recipes, market)
+  return { buys = {}, reasons = {}, market = market, producers = Crafting.Producers(recipes) }
+end
+
+function Crafting.EvaluateRecipe(recipe, market, settings, ctx)
+  local output = recipe.outputs and recipe.outputs[1]
+  if not output or not Money.IsQuantity(output.quantity) then return nil, "output_unknown" end
+  ctx = ctx or Crafting.Context(nil, market)
+  ctx.buys, ctx.reasons, ctx.market = ctx.buys or {}, ctx.reasons or {}, ctx.market or market
+  local cost, reagents, learned, alsoLearn = 0, {}, recipe.learned == true, {}
+  for _, reagent in ipairs(recipe.reagents or {}) do
+    local part, reason = acquire(reagent.itemID, reagent.quantity, ctx, 0, { [output.itemID] = true })
+    if not part then return nil, reason end
+    cost = cost + part.cost
+    local crafted = part.crafted
+    if crafted then
+      learned = learned and crafted.learned
+      for _, name in ipairs(crafted.alsoLearn) do alsoLearn[#alsoLearn + 1] = name end
+    end
+    reagents[#reagents + 1] = { itemID = reagent.itemID, quantity = reagent.quantity, cost = part.cost,
+      merchant = part.merchant,
+      crafted = crafted and { recipeID = crafted.recipe.id, name = crafted.recipe.name, crafts = crafted.crafts,
+        learned = crafted.learned } or nil }
   end
   local outputMarket = market(output.itemID)
   local best, exits = Crafting.Exits(outputMarket, output.quantity, settings)
@@ -167,7 +256,9 @@ function Crafting.EvaluateRecipe(recipe, market, settings, cache)
   local profit = best.net - cost
   return {
     strategy = "crafting", recipeID = recipe.id, name = recipe.name, profession = recipe.profession,
-    learned = recipe.learned == true, difficulty = recipe.difficulty,
+    -- Known only when every recipe of the chain is known; otherwise the
+    -- recipes still to learn are listed (alsoLearn, besides this one).
+    learned = learned, alsoLearn = #alsoLearn > 0 and alsoLearn or nil, difficulty = recipe.difficulty,
     outputItemID = output.itemID, quantity = output.quantity, quantityMax = recipe.quantityMax,
     cost = cost, reagents = reagents, exit = best.exit, gross = best.gross, fee = best.fee, revenue = best.net,
     profit = profit, roi = cost > 0 and profit / cost or nil, exits = exits,
@@ -185,7 +276,7 @@ end
 -- a positive profit only, best profit first.
 function Crafting.BeginRecipes(recipes, market, settings)
   return {
-    recipes = recipes, market = market, settings = settings, cache = {},
+    recipes = recipes, market = market, settings = settings, cache = Crafting.Context(recipes, market),
     result = { learned = {}, learnable = {}, excluded = {}, counts = { recipes = #recipes, evaluated = 0 } },
   }
 end
