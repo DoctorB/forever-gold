@@ -464,7 +464,27 @@ end
 function App:CharacterKey()
   local ok, name = self.client:Call(nil, "UnitName", "player")
   if not ok or self.client:IsSecret(name) or type(name) ~= "string" or name == "" then return nil end
-  return name .. "-" .. (self.client:MarketFields().realm or "?")
+  -- GetNormalizedRealmName may be empty right after login, and the fallback
+  -- GetRealmName has spaces: in game one Rogue got two records
+  -- ("CAMWOWEU5Realm5PvE" and "CAMWOW EU5 Realm 5 PvE"). Spaces are dropped.
+  local realm = (self.client:MarketFields().realm or "?"):gsub("[%s%-]", "")
+  return name .. "-" .. realm
+end
+
+-- Records saved under the same name and realm written differently are
+-- merged into `key`: per profession the latest observation wins.
+function App:MergeCharacterRecords(key)
+  local characters = self.store.db.characters or {}
+  local record = characters[key]
+  for other, data in pairs(characters) do
+    if other ~= key and other:gsub("[%s%-]", "") == key:gsub("[%s%-]", "") then
+      for name, profession in pairs(data.professions or {}) do
+        local mine = record.professions[name]
+        if not mine or (profession.at or 0) > (mine.at or 0) then record.professions[name] = profession end
+      end
+      characters[other] = nil
+    end
+  end
 end
 
 -- The current character's professions record, or nil when the character is
@@ -478,6 +498,7 @@ function App:CharacterProfessions()
   local record = db.characters[key] or {}
   db.characters[key] = record
   record.professions = record.professions or {}
+  self:MergeCharacterRecords(key)
   -- Version 2: in game the first pass (same skill only) gave the Rogue
   -- Skinning and Cooking but not Leatherworking and First Aid.
   if record.migrated ~= 2 then
@@ -547,9 +568,21 @@ function App:ObserveTrainer()
   local db = self.store.db
   db.trainer = db.trainer or {}
   db.trainer.skills = db.trainer.skills or {}
+  -- Class spells recorded before the profession filter.
+  for name, list in pairs(db.trainer.skills) do
+    if not (db.recipes and db.recipes[name]) then
+      local keep = false
+      for _, entry in pairs(list) do if (entry.skill or 0) > 0 then keep = true end end
+      if not keep then db.trainer.skills[name] = nil end
+    end
+  end
   local now, changed, recorded = self.clock(), 0, 0
   for _, row in ipairs(report.rows) do
-    if type(row.skillName) == "string" and row.skillName ~= "" and type(row.skill) == "number" then
+    -- Class spells carry their talent tree and skill 0 (seen: "Arms" Rend):
+    -- only profession recipes are kept.
+    local profession = type(row.skillName) == "string" and row.skillName ~= ""
+      and ((db.recipes and db.recipes[row.skillName]) or (type(row.skill) == "number" and row.skill > 0))
+    if profession and type(row.skill) == "number" then
       local byName = db.trainer.skills[row.skillName] or {}
       db.trainer.skills[row.skillName] = byName
       local known = byName[row.name]

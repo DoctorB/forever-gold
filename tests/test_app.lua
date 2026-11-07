@@ -1249,3 +1249,48 @@ T.Case("buy: an offer already found gone is not tried again before the next scan
   T.Eq(current, nil)
   T.Eq(reason, "gone_seen")
 end)
+
+T.Case("deposit check: kept quotes are compared again with the corrected formula", function()
+  local saved = { schema = 2, depositChecks = { items = { [8178] = "mismatch" }, samples = {
+    { itemID = 8178, quantity = 1, commodity = false, sellPrice = 306, quotes = { 100, 100, 183 }, formula = { 100, 100, 184 } },
+  } } }
+  local app = Fakes.App({ saved = saved })
+  T.Eq(app.store.db.depositChecks.items[8178], "match_rate", "183 = floor(183.6), above the minimum")
+end)
+
+T.Case("characters: the same realm written with or without spaces is one record", function()
+  local saved = { schema = 2, characters = {
+    ["Roggo-CAMWOW EU5 Realm 5 PvE"] = { migrated = 2, professions = { Leatherworking = { at = 20, skill = 53, learned = {} } } },
+    ["Roggo-CAMWOWEU5Realm5PvE"] = { migrated = 2, professions = { Skinning = { at = 10, skill = 67, learned = {} },
+      Leatherworking = { at = 5, skill = 38, learned = {} } } },
+  } }
+  local app = Fakes.App({ saved = saved, globals = {
+    UnitName = function() return "Roggo" end, GetNormalizedRealmName = function() return "CAMWOWEU5Realm5PvE" end,
+  } })
+  local key = app:CharacterKey()
+  T.Eq(key, "Roggo-CAMWOWEU5Realm5PvE")
+  local characters = app.store.db.characters
+  T.Eq(characters["Roggo-CAMWOW EU5 Realm 5 PvE"], nil, "merged away")
+  T.Eq(characters[key].professions.Leatherworking.skill, 53, "the latest observation wins")
+  T.Eq(characters[key].professions.Skinning.skill, 67)
+end)
+
+T.Case("trainer: Forever's (name, icon, type) order and class spells left out", function()
+  local services = {
+    { "Light Leather Quiver", 134401, "available", "Leatherworking", 25, 100 },
+    { "Rend", 132155, "available", "Arms", 0, 700 },
+  }
+  local app = Fakes.App({ saved = { schema = 2, recipes = { Leatherworking = { at = 1, list = {} } },
+    trainer = { skills = { Protection = { Bloodrage = { skill = 0, cost = 700 } } } } }, globals = {
+    GetNumTrainerServices = function() return #services end,
+    GetTrainerServiceInfo = function(i) local s = services[i] return s[1], s[2], s[3] end,
+    GetTrainerServiceSkillReq = function(i) local s = services[i] return s[4], s[5], true end,
+    GetTrainerServiceCost = function(i) return services[i][6] end,
+  } })
+  app:ObserveTrainer()
+  local skills = app.store.db.trainer.skills
+  T.Eq(skills.Leatherworking["Light Leather Quiver"].skill, 25)
+  T.Eq(skills.Arms, nil, "class spell")
+  T.Eq(skills.Protection, nil, "class spells saved before are cleaned")
+  T.Eq(app.store.db.diagnostics.trainer.samples[1].kind, "available")
+end)

@@ -289,15 +289,34 @@ function Purchases:BrowseFallback(current)
   local step = current.step
   local ok = self.scanner:Browse(plan.name, function(results)
     if not alive(self, current, { locating = true }) then return end
-    local keys, texts = {}, {}
+    -- Only variants whose lowest price fits the lot (in game 2026-11-07
+    -- 23:47 five dearer variants were searched one by one for nothing), the
+    -- plan's own variant first.
+    local candidates, sameItem = {}, 0
+    local wantMax = plan.lot and plan.lot.buyoutTotal
+    local wantQuantity = plan.lot and plan.lot.quantity or 1
     for _, result in ipairs(results) do
-      if result.itemKey.itemID == plan.itemID and #keys < 5 then
-        keys[#keys + 1] = result.itemKey
-        texts[#texts + 1] = keyText(result.itemKey)
+      if result.itemKey.itemID == plan.itemID then
+        sameItem = sameItem + 1
+        local unit = result.minPrice
+        if not (Money.IsCopper(unit) and Money.IsCopper(wantMax)) or unit * wantQuantity <= wantMax then
+          candidates[#candidates + 1] = result
+        end
       end
     end
+    table.sort(candidates, function(a, b)
+      local exactA = a.itemKey.itemSuffix == current.suffix
+      local exactB = b.itemKey.itemSuffix == current.suffix
+      if exactA ~= exactB then return exactA end
+      return (a.minPrice or 0) < (b.minPrice or 0)
+    end)
+    local keys, texts = {}, {}
+    for index = 1, math.min(5, #candidates) do
+      keys[index] = candidates[index].itemKey
+      texts[index] = keyText(candidates[index].itemKey)
+    end
     if self.trace then
-      self.trace("purchase_browse", { results = #results, sameItem = #keys, keys = table.concat(texts, ",") })
+      self.trace("purchase_browse", { results = #results, sameItem = sameItem, tried = #keys, keys = table.concat(texts, ",") })
     end
     if #keys == 0 then
       set(self, "rejected", "lot_gone")

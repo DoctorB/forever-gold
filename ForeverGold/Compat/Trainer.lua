@@ -43,6 +43,9 @@ function Trainer:Read()
   for index = 1, math.min(count, Trainer.MAX_SERVICES) do
     local okInfo, name, subText, kind = c:Call(nil, "GetTrainerServiceInfo", index)
     name, kind = okInfo and plain(c, name) or nil, okInfo and plain(c, kind) or nil
+    -- On Forever the second value is the icon and the third the type
+    -- ("available"...): seen in game 2026-11-07 (kind 134401, subText "available").
+    if type(kind) == "number" and type(subText) == "string" then kind, subText = subText, kind end
     if type(name) == "string" and kind ~= "header" then
       local okReq, skillName, skill, hasReq = c:Call(nil, "GetTrainerServiceSkillReq", index)
       local okCost, cost = c:Call(nil, "GetTrainerServiceCost", index)

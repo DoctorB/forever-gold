@@ -188,6 +188,9 @@ Sell tab (D54): one auction per click for crafted items in the bags; not
 posted in game yet (19:29: nothing to sell).
 Targeted searches answered at once at 18:59 (row 30): "Buy all" reaches the
 server; the lot was already gone.
+Row 31 (23:46): first auction created from the Sell tab (Camp Tent x2,
+`PostCommodity`, confirmed by AUCTION_HOUSE_AUCTION_CREATED); trainer
+requirements read (38 recipes); deposit rounds down (D55).
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 

@@ -26,7 +26,35 @@ function DepositCheck.New(deps)
   local self = setmetatable(deps, { __index = DepositCheck })
   self.memory.samples = self.memory.samples or {}
   self.memory.items = self.memory.items or {}
+  self:Recheck()
   return self
+end
+
+-- Compares the kept quotes with the current formula again (the formula was
+-- corrected once: rounding down, not up). Items without a kept sample keep
+-- their result.
+function DepositCheck:Recheck()
+  local memory = self.memory
+  for _, sample in ipairs(memory.samples) do
+    if type(sample.quotes) == "table" and sample.sellPrice and sample.quantity then
+      local match, above, quoted = true, false, 0
+      sample.formula = sample.formula or {}
+      for duration = 1, #Deposit.RATES_BP do
+        local quote = sample.quotes[duration]
+        local formula = Deposit.Estimate(sample.sellPrice, sample.quantity, duration)
+        sample.formula[duration] = formula
+        if quote then
+          quoted = quoted + 1
+          if quote ~= formula then match = false end
+          if quote > Deposit.MINIMUM then above = true end
+        end
+      end
+      if quoted > 0 then
+        sample.match, sample.aboveMinimum = match, above or nil
+        memory.items[sample.itemID] = match and (above and "match_rate" or "match") or "mismatch"
+      end
+    end
+  end
 end
 
 function DepositCheck:OnShow()

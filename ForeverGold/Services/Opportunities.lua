@@ -86,7 +86,9 @@ function Opportunities:FinishIngest(job)
     self.latest[snapshot.scope] = nil
   end
   for itemKey, list in pairs(grouped) do
-    if snapshot.mode ~= "search" then self.stale[Schema.ItemIDOf(itemKey) or 0] = nil end
+    -- Only a full scan clears "gone" marks (above): in game a late duplicate
+    -- answer to a purchase search, read as an own search, cleared it and the
+    -- same gone lot was tried again 11 s later (2026-11-07 23:47).
     self.latest[itemKey] = {
       listings = list, seen = snapshot.finished, coverage = snapshot.coverage, mode = snapshot.mode,
       scanId = snapshot.id, source = list[1].source,

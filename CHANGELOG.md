@@ -111,6 +111,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- AH deposit rounded down like the server (merchant price 306, 24 h: 183,
+  not 184); quotes already checked are compared again.
+- A purchase found gone was cleared by a late duplicate answer of the
+  server and tried again: only a full scan clears it now.
+- "Buy all" browse fallback: only variants whose lowest price fits the lot
+  are searched, the lot's own variant first.
+- One character could get two records when the realm name came with
+  spaces: the records are merged.
+- Trainer: Forever's order of the service fields (icon, then type); class
+  spells are no longer kept as recipe requirements.
 - An offer a purchase attempt already found gone can no longer be tried
   again until the next scan (in game the same gone lot was tried three
   times in 20 seconds).

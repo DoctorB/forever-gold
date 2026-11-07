@@ -674,7 +674,7 @@ T.Case("variant auction not reached by the built key: browse finds the server ke
   s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 501, level = 22 } }
   s.ah.browse = {
     { itemKey = { itemID = 999, itemLevel = 5, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 10 },
-    { itemKey = { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 1300 },
+    { itemKey = { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 200 },
   }
   local function results(level)
     s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = level, itemSuffix = 0, battlePetSpeciesID = 0 })
@@ -913,4 +913,45 @@ T.Case("fee test refuses without the item or with the AH closed", function()
   T.Eq(select(2, s.app.feeTest:Start(2840)), "no_item")
   s.app:OnEvent("AUCTION_HOUSE_CLOSED")
   T.Eq(select(2, s.app.feeTest:Start(2840)), "ah_closed")
+end)
+
+T.Case("a lot found gone is not tried again (through the panel's handler)", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  s.ns.UI.PurchasePanel.Attach(s.app)
+  local p = s.app.purchases
+  local offer = s.find(201)
+  p:Begin(offer, 5000)
+  p:Prepare()
+  s.ah.items[201] = { { quantity = 1, buyout = 600, auctionID = 9 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.reason, "lot_gone")
+  T.Eq(s.app.opportunities.stale[201], true, "marked stale")
+  s.clock.advance(11)
+  T.Eq(s.app.opportunities.stale[201], true, "still stale after the re-evaluation")
+  -- A late duplicate answer, read as an own search, must not clear it.
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  s.clock.advance(11)
+  T.Eq(s.app.opportunities.stale[201], true, "still stale after a late answer")
+  local again, reason = p:Begin(offer, 5000)
+  T.Eq(again, nil)
+  T.Eq(reason, "gone_seen")
+end)
+
+T.Case("browse fallback: only variants at or under the lot price are searched", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200,
+    link = "|Hitem:201::::::::20:1486::1:1:12725:::::|h[Green Sword]|h" } } })
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.clock.advance(40) -- built key: no answer
+  T.Eq(s.ah.browseCalls, 1)
+  s.ah.browse = {
+    { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14308, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 500 },
+    { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14320, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 1600 },
+  }
+  local searches = s.ah.searchCalls
+  s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  s.clock.advance(2)
+  T.Eq(s.ah.searchCalls, searches, "no search: every variant is dearer than the lot")
+  T.Eq(p.current.reason, "lot_gone")
 end)

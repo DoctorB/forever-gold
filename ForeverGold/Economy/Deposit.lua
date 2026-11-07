@@ -1,5 +1,8 @@
 -- Deposit: AH deposit estimated from the merchant price. Pure.
---   deposit = max(MINIMUM, ceil(sellPrice * quantity * rate(duration)))
+--   deposit = max(MINIMUM, floor(sellPrice * quantity * rate(duration)))
+-- Rounded down: in game (2026-11-07 23:43, API-AUDIT row 31) an item with
+-- merchant price 306 was quoted 183 for 24 h (60% = 183.6), the first quote
+-- above the minimum after the 120 of the 20 Copper Bars.
 -- Durations 1/2/3 = 2/8/24 h on Forever. One measurement backs it (audit
 -- rows 14-15, 20 Copper Bars, merchant price 10): quotes 100 / 100 / 120,
 -- i.e. 60% for 24 h and a 100-copper minimum; the 15% / 30% rates of 2 / 8 h
@@ -26,7 +29,7 @@ function Deposit.Estimate(sellPrice, quantity, duration)
   if not rate then return nil, "duration" end
   if not Money.IsCopper(sellPrice) then return nil, "sell_price_unknown" end
   if not Money.IsQuantity(quantity) then return nil, "quantity" end
-  local raw = Money.DivCeil(Money.Mul(sellPrice, quantity) * rate, Money.BP)
+  local raw = Money.DivFloor(Money.Mul(sellPrice, quantity) * rate, Money.BP)
   if raw < Deposit.MINIMUM then return Deposit.MINIMUM end
   return raw
 end
