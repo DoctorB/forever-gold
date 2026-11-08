@@ -6,6 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Sales watching: each full AH scan is compared with the previous one (at
+  most 30 minutes before, with a similar number of auctions read): units
+  gone at their price count as sold. Only items with at least 5 auctions
+  and no random variant. After an hour of watching, the item tooltip says
+  "sells about N an hour, at about P each"; Advanced > History shows how
+  many items are watched. Nothing is bought or posted: it only measures.
 - "To do" screen, the new default view: one list of concrete actions, best
   gain first, each with one button: sell items from your bags on the AH,
   buy an AH offer a merchant pays more for (first click checks the price,

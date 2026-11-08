@@ -39,6 +39,13 @@ function Tooltips.CraftRow(app, itemID)
 end
 
 -- Every line for an item link (may be empty).
+-- "12", "0.5", "< 0.1" units per hour.
+function Tooltips.Rate(perHour)
+  if perHour >= 10 then return string.format("%d", math.floor(perHour + 0.5)) end
+  if perHour >= 0.1 then return string.format("%.1f", perHour) end
+  return "< 0.1"
+end
+
 function Tooltips.Lines(app, link)
   local lines = {}
   local line = Tooltips.Line(app, link)
@@ -49,6 +56,11 @@ function Tooltips.Lines(app, link)
   if row and row.run then
     lines[#lines + 1] = string.format(L(row.learned and "TIP_CRAFT_KNOWN" or "TIP_CRAFT_LEARN"),
       Money.Format(row.run.profit), row.run.crafts, row.name or "?")
+  end
+  local sales = app.sellThrough and app.sellThrough:Stats(Schema.ItemKey(itemID, 0))
+  if sales then
+    lines[#lines + 1] = string.format(L("TIP_SALES"), Tooltips.Rate(sales.perHour), Money.Format(sales.clearPrice or 0),
+      math.floor(sales.hours + 0.5))
   end
   local merchant = app.MerchantPrice and app:MerchantPrice(itemID)
   if merchant then lines[#lines + 1] = string.format(L("TIP_MERCHANT"), Money.Format(merchant)) end

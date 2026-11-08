@@ -48,8 +48,13 @@ function History.SummaryLine(app)
   if store.sessionOnly then persistence = L("SESSION_ONLY") end
   local fields = app.client:MarketFields()
   local where = (fields.realm or "?") .. (fields.faction and (" (" .. fields.faction .. ")") or "")
-  return string.format(L("HIST_SUMMARY"), where, market and market.itemCount or 0, math.floor(bytes / 1024),
+  local line = string.format(L("HIST_SUMMARY"), where, market and market.itemCount or 0, math.floor(bytes / 1024),
     math.floor(Store.RETENTION.budgetBytes / 1024), persistence)
+  if app.sellThrough then
+    local sales = app.sellThrough:Summary()
+    line = line .. "  " .. string.format(L("SALES_SUMMARY"), sales.watched, sales.rated, math.floor(sales.hours))
+  end
+  return line
 end
 
 -- Rows for the scans table, newest first.

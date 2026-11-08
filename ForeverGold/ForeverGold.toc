@@ -54,6 +54,7 @@ Services\FeeTest.lua
 Services\AutoScan.lua
 Services\DepositCheck.lua
 Services\Selling.lua
+Services\SellThrough.lua
 Core\App.lua
 UI\Widgets.lua
 UI\Table.lua

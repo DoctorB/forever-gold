@@ -47,6 +47,9 @@ function App:Load(saved)
   local professions = self.store.db.diagnostics and self.store.db.diagnostics.professions
   if professions then professions.unknown = nil end
   self.history = ns.Data.History.New(self.store, clock)
+  self.store.db.sellThrough = self.store.db.sellThrough or {}
+  self.sellThrough = ns.Services.SellThrough.New(self.store.db.sellThrough, clock)
+  self.salesWork = ns.Core.Scheduler.New(self.schedulerEnv) -- sell-through steps
   self.events = { registered = {}, rejected = {} }
   self.diagnostics = ns.Services.Diagnostics.New({
     client = self.client, capabilities = self.capabilities, store = self.store, clock = clock, events = self.events,
@@ -317,6 +320,24 @@ function App:Process(snapshot, listings)
   end)
 end
 
+-- Sell-through (Services/SellThrough): this full scan against the previous
+-- one, spread over frames like the history (about 3,000 item keys).
+function App:ObserveSales(snapshot, grouped)
+  local sales = self.sellThrough
+  local counts = snapshot.counts or {}
+  local job = sales:Begin(grouped or {}, snapshot.finished or self.clock(), counts.rows or counts.valid)
+  local work = self.salesWork
+  work:Invalidate()
+  work:Chunk(1, #job.keys, self.store:Settings().frameBudgetMs, function(index)
+    sales:Step(job, index)
+  end, function(done)
+    if not done then return end
+    local run = sales:Finish(job)
+    self.diagnostics:Trace("sell_through", { items = run.items, compared = run.compared, units = run.units,
+      reason = run.reason })
+  end)
+end
+
 function App:RecordHistory(snapshot, job, ingest, votes)
   local History = ns.Data.History
   local total = #job.order
@@ -336,6 +357,7 @@ function App:RecordHistory(snapshot, job, ingest, votes)
       History.FinishRecord(job)
       self.opportunities:FinishIngest(ingest)
     end)
+    if snapshot.mode == "replicate" then self:ObserveSales(snapshot, ingest.grouped) end
     self:EvaluateChunked(function(results)
       -- A user scan is summarised by UI/Feedback; notices are for the rest.
       if snapshot.mode == "replicate" then

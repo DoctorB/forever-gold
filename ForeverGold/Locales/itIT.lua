@@ -522,3 +522,5 @@ L.HOME_LEARN_ELSEWHERE = "%s, da un oggetto ricetta o da un trainer più avanzat
 L.HOME_READING = "Leggo i prezzi dell'AH..."
 L.HOME_READING_PCT = "Leggo i prezzi dell'AH... %d%%"
 L.PR_is_commodity = "questo oggetto si vende a unità: clicca di nuovo Compra, chiederà un preventivo a unità"
+L.TIP_SALES = "si vende circa %s all'ora, a circa %s l'uno (osservato %d h)"
+L.SALES_SUMMARY = "Vendite osservate: %d oggetti, %d con dati sufficienti (fino a %d h)."

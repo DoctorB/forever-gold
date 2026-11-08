@@ -193,6 +193,8 @@ Row 31 (23:46): first auction created from the Sell tab (Camp Tent x2,
 requirements read (38 recipes); deposit rounds down (D55).
 2026-11-08: the window opens on a single "To do" screen (D56); the tabs are
 under "Advanced". First assisted purchase completed from it (row 32).
+Sales watching started (D58): needs the AH open with auto-scan for a few
+hours before rates appear.
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 

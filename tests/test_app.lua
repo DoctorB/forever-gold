@@ -1309,3 +1309,63 @@ T.Case("'To do' screen: sell and craft actions, best gain first", function()
   kinds.sell.run()
   T.Eq(app.selling.pending.itemID, 301, "posted the chosen lot")
 end)
+
+T.Case("sell-through: units gone between two close scans count as sold", function()
+  local ns = T.LoadAddon()
+  local memory = {}
+  local sales = ns.Services.SellThrough.New(memory, function() return 0 end)
+  local function lots(spec)
+    local list = {}
+    for _, l in ipairs(spec) do list[#list + 1] = { quantity = l[1], buyoutTotal = l[1] * l[2], buyable = true } end
+    return list
+  end
+  local function run(grouped, t, rows)
+    local job = sales:Begin(grouped, t, rows)
+    for i = 1, #job.keys do sales:Step(job, i) end
+    return sales:Finish(job)
+  end
+  -- Linen: 6 lots; a thin item (2 lots) and a variant are not watched.
+  local first = {
+    ["i:2589:0"] = lots({ { 20, 10 }, { 20, 10 }, { 5, 12 }, { 10, 15 }, { 1, 20 }, { 1, 30 } }),
+    ["i:999:0"] = lots({ { 1, 100 }, { 1, 120 } }),
+    ["i:15969:0:b12725"] = lots({ { 1, 5 }, { 1, 5 }, { 1, 5 }, { 1, 5 }, { 1, 5 } }),
+  }
+  T.Eq(run(first, 1000, 1000).reason, "first")
+  -- 15 minutes later: 25 at 10 bought (15 left), the lot at 12 gone, a new lot at 9.
+  local second = { ["i:2589:0"] = lots({ { 15, 10 }, { 10, 15 }, { 1, 20 }, { 1, 30 }, { 40, 9 } }) }
+  local r = run(second, 1900, 990)
+  T.Eq(r.compared, 1)
+  T.Eq(r.units, 30, "25 at 10 and 5 at 12")
+  local s = memory.items["i:2589:0"]
+  T.Eq(s.g, 25 * 10 + 5 * 12)
+  T.Eq(memory.items["i:999:0"], nil, "thin item not watched")
+  T.Eq(memory.items["i:15969:0:b12725"], nil, "variant not watched")
+  T.Eq(sales:Stats("i:2589:0"), nil, "a quarter of an hour is not enough for a rate")
+  -- A scan that read far fewer rows: nothing counted, only reseeded.
+  local third = { ["i:2589:0"] = lots({ { 1, 30 }, { 1, 31 }, { 1, 32 }, { 1, 33 }, { 1, 34 } }) }
+  local r3 = run(third, 2800, 500)
+  T.Eq(r3.compared, 0)
+  T.Eq(r3.reason, "gap_or_rows")
+  -- Too far apart: not compared either.
+  T.Eq(run(second, 2800 + 4000, 1000).compared, 0)
+  -- Enough watching: a rate and a clearing price.
+  memory.items["i:2589:0"].h = 2
+  local stats = sales:Stats("i:2589:0")
+  T.Eq(stats.perHour, 15)
+  T.Ok(stats.clearPrice == 10 or stats.clearPrice == 12)
+end)
+
+T.Case("sell-through runs after each full scan of the app", function()
+  local app, _, clock, ah = Fakes.App({ rows = {
+    { itemID = 101, count = 5, buyout = 50 }, { itemID = 101, count = 5, buyout = 50 }, { itemID = 101, count = 5, buyout = 50 },
+    { itemID = 101, count = 5, buyout = 60 }, { itemID = 101, count = 5, buyout = 70 },
+  }, items = { [101] = { name = "Linen", sellPrice = 1 } } })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(60)
+  local prev = app.store.db.sellThrough.prev
+  T.Ok(prev and prev.levels["i:101:0"], "levels of the first scan kept")
+  T.Eq(app.store.db.sellThrough.lastRun.reason, "first")
+end)

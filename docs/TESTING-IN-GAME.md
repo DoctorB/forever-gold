@@ -29,6 +29,7 @@ Copper Bars for Copper Rod).
 | R10 | Trainer of a profession you have | Open the trainer window, then `/fg` → Crafting | hovering a recipe to learn shows "Requires <profession> N (read at the trainer)" and the cost; the summary says how many recipes need more skill | trainer requirements (D53) |
 | R11 | AH open, crafted items in the bags | `/fg` → Sell, check the row (price under the lowest, quantity, deposit), click "Sell ..." once | the auction appears in the AH Auctions tab; next to the button "on the AH" (or the server's refusal) | assisted selling (D54) |
 | R12 | `/fg` | Open the window | the "To do" screen: title, gold, how fresh the prices are, actions with one button each; "Advanced" shows the old tabs | simple view (D56) |
+| R13 | AH open, auto-scan on, 1-2 h | Leave the AH open; then hover Linen Cloth or Copper Ore in the bags | "sells about N an hour, at about P each (watched H h)"; Advanced > History: "Sales watched: N items" | sell-through (D58) |
 | R9 | anywhere | `/reload` | — (saves deposit checks, auto-scan and Buy all traces) | evidence |
 
 ## Installing the alpha
