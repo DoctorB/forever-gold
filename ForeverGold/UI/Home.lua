@@ -115,6 +115,10 @@ function Home.Model(app)
         kind = "buy", text = text, gain = opportunity.profit, button = label, enabled = enabled, tip = tip,
         run = function()
           settings.assistedBuy = true -- clicking "Buy" is the consent
+          -- In game the details window of another offer stayed open and
+          -- showed this purchase under that offer's name.
+          local details = ns.UI.Details and ns.UI.Details.frame
+          if details and details:IsShown() and ns.UI.Details.current ~= opportunity then details:Hide() end
           if state == "confirm" then
             app.purchases:Confirm()
           else

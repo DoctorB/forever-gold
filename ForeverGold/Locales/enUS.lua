@@ -510,3 +510,4 @@ L.HOME_EMPTY_NOTHING = "Nothing pays off right now. The list updates by itself a
 L.HOME_LEARN_ELSEWHERE = "%s, from a recipe item or a higher trainer"
 L.HOME_READING = "Reading the AH prices..."
 L.HOME_READING_PCT = "Reading the AH prices... %d%%"
+L.PR_is_commodity = "this item is sold by the unit: click Buy again, it will ask for a unit-price quote"

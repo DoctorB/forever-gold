@@ -46,7 +46,12 @@ function AuctionHouse:OnEvent(event, ...)
     fire(self, "onReplicateUpdate")
   elseif event == "COMMODITY_SEARCH_RESULTS_UPDATED" then
     local itemID = ...
-    if not self.client:IsSecret(itemID) and type(itemID) == "number" then fire(self, "onCommodityResults", itemID) end
+    if not self.client:IsSecret(itemID) and type(itemID) == "number" then
+      -- The server answered as for a commodity: that is what the item is
+      -- (in game 2026-11-08 Golem Isospring was planned as an auction).
+      self.commodity[itemID] = true
+      fire(self, "onCommodityResults", itemID)
+    end
   elseif event == "ITEM_SEARCH_RESULTS_UPDATED" then
     local itemKey = ...
     if type(itemKey) == "table" and not self.client:IsSecret(itemKey) then fire(self, "onItemResults", itemKey) end

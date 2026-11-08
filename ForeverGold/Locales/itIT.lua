@@ -521,3 +521,4 @@ L.HOME_EMPTY_NOTHING = "Niente di conveniente adesso. La lista si aggiorna da so
 L.HOME_LEARN_ELSEWHERE = "%s, da un oggetto ricetta o da un trainer più avanzato"
 L.HOME_READING = "Leggo i prezzi dell'AH..."
 L.HOME_READING_PCT = "Leggo i prezzi dell'AH... %d%%"
+L.PR_is_commodity = "questo oggetto si vende a unità: clicca di nuovo Compra, chiederà un preventivo a unità"

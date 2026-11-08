@@ -982,3 +982,19 @@ T.Case("'To do' screen: a buy action asks the server, then confirms on the secon
   confirm.run()
   T.Eq(s.ah.spendCalls, 1, "bought on the second click")
 end)
+
+T.Case("an item the server answers as a commodity is bought as one next time", function()
+  -- In game 2026-11-08: Golem Isospring planned as an auction of 9.
+  local s = setup({ rows = { { itemID = 201, count = 9, buyout = 180 } } })
+  local p = s.app.purchases
+  local offer = s.find(201)
+  T.Eq(offer.commodity, false)
+  p:Begin(offer, 5000)
+  p:Prepare()
+  s.ah.commodity[201] = { { quantity = 2647, unitPrice = 45 } }
+  s.app:OnEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 201)
+  T.Eq(p.current.reason, "is_commodity")
+  T.Eq(s.app.opportunities.stale[201], nil, "not hidden: the offer may still be good")
+  local again = p:Begin(offer, 5000)
+  T.Eq(again.plan.kind, "commodity", "planned by the unit now")
+end)

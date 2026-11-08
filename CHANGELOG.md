@@ -118,6 +118,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- An item the scan took for a single auction but the server answers as a
+  commodity is now bought by the unit on the next click.
+- A purchase started from "To do" closes the details window of another
+  offer, which showed the new purchase under the old offer's name.
 - Buying an item with a random variant ("of the Bear"...): the add-on looks
   it up by name right away instead of waiting 30 seconds for a search the
   server never answers.

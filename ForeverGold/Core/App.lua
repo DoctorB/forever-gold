@@ -75,6 +75,7 @@ function App:Load(saved)
     trace = function(kind, data) self.diagnostics:Trace(kind, data) end,
     isReady = function() return self.ah:IsReady() end,
     stale = function() return self.opportunities and self.opportunities.stale end,
+    isCommodity = function(itemID) return self.ah:IsCommodity(itemID) end,
   })
   self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
     stale = function() return self.opportunities.stale end })

@@ -31,7 +31,8 @@ Purchases.READY_TRIES = 15 -- seconds of waiting for the AH throttle before givi
 function Purchases.New(deps)
   return setmetatable({
     purchase = deps.purchase, client = deps.client, scanner = deps.scanner, scheduler = deps.scheduler,
-    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, isReady = deps.isReady, stale = deps.stale, current = nil,
+    clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, isReady = deps.isReady, stale = deps.stale,
+    isCommodity = deps.isCommodity, current = nil,
   }, { __index = Purchases })
 end
 
@@ -115,6 +116,14 @@ function Purchases:Begin(opportunity, cap)
   local itemID = opportunity.itemID or Schema.ItemIDOf(opportunity.itemKey)
   local stale = self.stale and self.stale()
   if stale and itemID and stale[itemID] then return nil, "gone_seen" end
+  -- What the client knows now beats what the scan assumed.
+  local known = self.isCommodity and itemID and self.isCommodity(itemID)
+  if type(known) == "boolean" and known ~= (opportunity.commodity == true) then
+    local copy = {}
+    for key, value in pairs(opportunity) do copy[key] = value end
+    copy.commodity = known
+    opportunity = copy
+  end
   local plan, reason = Purchases.Plan(opportunity, self.client:Money(), cap)
   if not plan then return nil, reason end
   self.current = { plan = plan, state = "planned", generation = self.scheduler:Invalidate() }
@@ -246,6 +255,11 @@ function Purchases:Locate(current, key)
   end
   local ok, reason = self.scanner:Search(plan.itemID, suffix, function(_, listings)
     if not alive(self, current, { locating = true }) then return end
+    if self.isCommodity and self.isCommodity(plan.itemID) == true then
+      -- Answered as a commodity: it is bought by the unit, with a quote.
+      set(self, "rejected", "is_commodity")
+      return
+    end
     local best, matched, cheapest = matchLots(plan, listings)
     if self.trace then
       self.trace("purchase_locate", { rows = #listings, matched = matched, cheapest = cheapest,
