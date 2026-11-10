@@ -394,6 +394,11 @@ function Purchases:OnEvent(event, a, b)
     elseif event == "ITEM_PURCHASED" and plan.kind == "auction" and a == plan.itemID then
       self:Finish("done")
     elseif event == "AUCTION_HOUSE_SHOW_ERROR" then
+      -- The reason shown in the window: the client's name for the code.
+      local name = self.client.AuctionErrorName and self.client:AuctionErrorName(a)
+      current.errorName = name
+      current.errorCode = type(a) == "number" and a or nil
+      if self.trace then self.trace("purchase_error", { code = current.errorCode, name = name }) end
       set(self, "failed", "server_error")
     end
   end

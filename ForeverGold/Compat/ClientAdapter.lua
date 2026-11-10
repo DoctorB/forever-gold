@@ -195,6 +195,19 @@ function ClientAdapter:SellerInvoices()
   return list
 end
 
+-- Name of an AUCTION_HOUSE_SHOW_ERROR code ("HigherBid"...), read from the
+-- client's own Enum.AuctionHouseError, so no numbering is assumed. nil when
+-- the code or the enum is not readable.
+function ClientAdapter:AuctionErrorName(code)
+  if type(code) ~= "number" or self:IsSecret(code) then return nil end
+  local enum = type(self.env.Enum) == "table" and self.env.Enum.AuctionHouseError
+  if type(enum) ~= "table" then return nil end
+  for name, value in pairs(enum) do
+    if value == code and type(name) == "string" then return name end
+  end
+  return nil
+end
+
 -- Player money in copper, or nil.
 function ClientAdapter:Money()
   local ok, money = self:Call(nil, "GetMoney")

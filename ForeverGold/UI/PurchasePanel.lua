@@ -18,6 +18,15 @@ local function reasonText(reason)
   return ns.L["PR_" .. key] or ns.L["REASON_" .. key] or tostring(reason)
 end
 
+-- Why the auction house refused a purchase: our sentence for the client's
+-- error name, else the name itself, else the bare code.
+function PurchasePanel.AuctionErrorText(current)
+  local name = current.errorName
+  if name then return ns.L["AHERR_" .. name] or name end
+  if current.errorCode then return string.format(L("AHERR_CODE"), tostring(current.errorCode)) end
+  return L("AHERR_UNKNOWN")
+end
+
 -- Pure view model: text and button states for the current situation.
 -- view: { enabled, demo, ahOpen, current, beginError, beginNeed, money, cap, quoteLeft }
 -- The second button always reads "2. Buy" (with the amount once known): in
@@ -91,7 +100,9 @@ function PurchasePanel.Model(view)
   elseif state == "uncertain" then
     lines[#lines + 1] = W.Color(L("PB_UNCERTAIN"), W.WARN)
   else
-    lines[#lines + 1] = W.Color(L("PB_STOPPED") .. " " .. reasonText(current.reason), W.WARN)
+    local text = reasonText(current.reason)
+    if current.reason == "server_error" then text = text .. ": " .. PurchasePanel.AuctionErrorText(current) end
+    lines[#lines + 1] = W.Color(L("PB_STOPPED") .. " " .. text, W.WARN)
   end
   model.text = table.concat(lines, "\n")
   if not model.buy then model.buyLabel = string.format(L("PB_BUY"), fmt(plan.expectedTotal)) end

@@ -191,6 +191,35 @@ T.Case("individual auction: read-only search locates it, one click buys it", fun
   T.Eq(p.current.state, "done")
 end)
 
+T.Case("individual auction refused: the window shows the client's reason", function()
+  local function refused(code, enum)
+    local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+    s.app.client.env.Enum = enum
+    local p = s.app.purchases
+    p:Begin(s.find(201), 5000)
+    p:Prepare()
+    s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 77 } }
+    s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+    T.Ok(p:Confirm())
+    s.app:OnEvent("AUCTION_HOUSE_SHOW_ERROR", code)
+    T.Eq(p.current.state, "failed")
+    return s.ns.UI.PurchasePanel.Model({ enabled = true, ahOpen = true, current = p.current }).text, p.current, s
+  end
+  local text, current, s = refused(1, { AuctionHouseError = { NotEnoughMoney = 0, HigherBid = 1 } })
+  T.Eq(current.errorName, "HigherBid")
+  T.Ok(text:find(s.ns.L.AHERR_HigherBid, 1, true), text)
+  local found
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "purchase_error" then found = e end
+  end
+  T.Eq(found.code, 1)
+  T.Eq(found.name, "HigherBid")
+  text = refused(42, { AuctionHouseError = { NewName = 42 } })
+  T.Ok(text:find("NewName", 1, true), "an unknown name is shown as is: " .. text)
+  text = refused(3, nil)
+  T.Ok(text:find(string.format(s.ns.L.AHERR_CODE, "3"), 1, true), "no enum: the code is shown: " .. text)
+end)
+
 T.Case("individual auction gone or dearer: rejected, nothing bought", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases

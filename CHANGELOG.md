@@ -112,6 +112,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Changed
 
+- When the auction house refuses a purchase, the buy window now says why
+  (for example "there is already a higher bid") instead of only "AH error".
+  The reason comes from the game; an unknown one is shown by name or code.
 - "Buy all" stops after two searches or quotes in a row get no answer,
   instead of sending the rest of the queue to a server that is not
   answering. On the live server one run sent 13 requests that all went
