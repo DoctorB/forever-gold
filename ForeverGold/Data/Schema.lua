@@ -112,6 +112,7 @@ function Schema.NewListing(raw)
   }
   listing.id = raw.auctionID or ((raw.scanId or "?") .. ":" .. tostring(raw.index or "?"))
   if raw.bid ~= nil then listing.bid = Money.Normalize(raw.bid) end
+  if raw.currentBid ~= nil then listing.currentBid = Money.Normalize(raw.currentBid) end
   if listing.divisible then
     local unit = Money.Normalize(raw.unitPrice)
     if unit and unit > 0 then

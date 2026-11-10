@@ -91,7 +91,8 @@ function Fakes.AuctionHouse(rows)
     local row = itemRows(itemKey)[index]
     if not row then return nil end
     return { itemKey = itemKey, owners = {}, totalNumberOfOwners = 1, timeLeft = 1, auctionID = row.auctionID,
-      quantity = row.quantity, buyoutAmount = row.buyout, containsOwnerItem = false, containsAccountItem = false,
+      quantity = row.quantity, buyoutAmount = row.buyout, bidAmount = row.bid, minBid = row.minBid,
+      containsOwnerItem = false, containsAccountItem = false,
       containsSocketedItem = false }
   end
   function api.HasFullItemSearchResults() return true end

@@ -556,6 +556,7 @@ local function searchListings(self, snapshot, rows, commodity)
       raw.itemKey = Schema.ItemKey(row.itemID, suffix or row.suffix or 0, false, bonus)
       raw.divisible, raw.buyoutTotal, raw.bid, raw.source = false, row.buyout, row.minBid, "search_item"
       raw.rawBuyout = row.buyout
+      raw.currentBid = row.bid -- bidAmount: the highest bid so far, nil without bids
       if row.quantity ~= 1 then
         -- Verified in game (probe, 2026-10-20): a multi-unit item-search row
         -- groups single auctions at one price and buyoutAmount is per unit

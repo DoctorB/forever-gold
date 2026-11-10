@@ -172,17 +172,51 @@ function AuctionHouse:ReadItemResults(itemKey)
   local rows = {}
   local ok, count = c:Call("C_AuctionHouse", "GetNumItemSearchResults", itemKey)
   if not ok or type(count) ~= "number" then return rows, nil end
+  self.searchInfo = {}
   for index = 1, math.min(count, 500) do
     local okRow, info = c:Call("C_AuctionHouse", "GetItemSearchResultInfo", itemKey, index)
     if okRow and type(info) == "table" then
       rows[#rows + 1] = {
         itemID = itemKey.itemID, suffix = itemKey.itemSuffix, quantity = info.quantity,
-        buyout = info.buyoutAmount, minBid = info.minBid, auctionID = info.auctionID, link = info.itemLink,
-        own = info.containsOwnerItem == true,
+        buyout = info.buyoutAmount, minBid = info.minBid, bid = info.bidAmount, auctionID = info.auctionID,
+        link = info.itemLink, own = info.containsOwnerItem == true,
       }
+      if info.auctionID ~= nil then self.searchInfo[info.auctionID] = self:Flatten(info) end
     end
   end
   return rows, self:FullFlag("HasFullItemSearchResults", itemKey)
+end
+
+-- Every readable field of a client result table, flattened for the trace:
+-- numbers and booleans as they are, strings cut to 64 characters, nested
+-- tables as "k=v,k=v" (owners as a name list). Secret values are skipped.
+function AuctionHouse:Flatten(info)
+  local c, out = self.client, {}
+  for key, value in pairs(info) do
+    if type(key) == "string" and not c:IsSecret(value) then
+      local kind = type(value)
+      if kind == "number" or kind == "boolean" then
+        out[key] = value
+      elseif kind == "string" then
+        out[key] = value:sub(1, 64)
+      elseif kind == "table" then
+        local parts = {}
+        for k, v in pairs(value) do
+          if not c:IsSecret(v) and type(v) ~= "table" and type(v) ~= "function" then
+            parts[#parts + 1] = (type(k) == "number" and "" or tostring(k) .. "=") .. tostring(v)
+          end
+        end
+        table.sort(parts)
+        out[key] = table.concat(parts, ","):sub(1, 64)
+      end
+    end
+  end
+  return out
+end
+
+-- Fields of an auction from the last item search (see Flatten), or nil.
+function AuctionHouse:SearchInfo(auctionID)
+  return self.searchInfo and self.searchInfo[auctionID] or nil
 end
 
 -- Targeted read-only search (used for quote refresh before an assisted

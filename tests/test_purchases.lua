@@ -220,6 +220,43 @@ T.Case("individual auction refused: the window shows the client's reason", funct
   T.Ok(text:find(string.format(s.ns.L.AHERR_CODE, "3"), 1, true), "no enum: the code is shown: " .. text)
 end)
 
+T.Case("individual auction with a bid at its buyout: skipped, every field traced", function()
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  local p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.ah.items[201] = { { quantity = 1, buyout = 200, bid = 200, minBid = 150, auctionID = 77 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "rejected")
+  T.Eq(p.current.reason, "has_bid")
+  T.Eq(s.ah.spendCalls, 0)
+  local locate
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do if e.k == "purchase_locate" then locate = e end end
+  T.Eq(locate.blocked, 1)
+  T.Eq(locate.row1, "77 q1 b200 cb200 mb150")
+
+  -- A lower bid does not block the buyout; the row and the send are traced.
+  s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
+  p = s.app.purchases
+  p:Begin(s.find(201), 5000)
+  p:Prepare()
+  s.ah.items[201] = { { quantity = 1, buyout = 200, bid = 120, minBid = 130, auctionID = 78 } }
+  s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(p.current.state, "located")
+  T.Ok(p:Confirm())
+  T.Eq(s.ah.args.PlaceBid[2], 200)
+  local row, send
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do
+    if e.k == "purchase_row" then row = e elseif e.k == "purchase_send" then send = e end
+  end
+  T.Eq(row.bidAmount, 120)
+  T.Eq(row.minBid, 130)
+  T.Eq(row.timeLeft, 1)
+  T.Eq(send.amount, 200)
+  T.Eq(send.bidAmount, 120)
+  T.Eq(send.found, true)
+end)
+
 T.Case("individual auction gone or dearer: rejected, nothing bought", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases

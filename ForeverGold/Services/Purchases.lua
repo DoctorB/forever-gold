@@ -201,8 +201,15 @@ end
 -- Best auction in search results for the plan. For a merchant sale a lot
 -- with more units at no higher price is never worse (the replicate and the
 -- search may count a lot differently); resale needs the same lot.
+-- In game (2026-11-10, item 2078): an auction whose current bid already
+-- equals its buyout price refused PlaceBid at that price with "HigherBid".
+-- Such an auction cannot be bought at its buyout: skipped.
+local function blockedByBid(listing)
+  return listing.currentBid ~= nil and listing.buyoutTotal ~= nil and listing.currentBid >= listing.buyoutTotal
+end
+
 local function matchLots(plan, listings)
-  local best, matched, cheapest = nil, 0, nil
+  local best, matched, cheapest, blocked = nil, 0, nil, 0
   for _, listing in ipairs(listings) do
     local sameItem = listing.itemKey == plan.itemKey
       or (plan.anyVariant and Schema.ItemIDOf(listing.itemKey) == plan.itemID)
@@ -210,11 +217,21 @@ local function matchLots(plan, listings)
     if listing.buyoutTotal and (not cheapest or listing.buyoutTotal < cheapest) then cheapest = listing.buyoutTotal end
     if listing.buyable and listing.auctionID ~= nil and sameItem and enough
       and listing.buyoutTotal <= plan.lot.buyoutTotal then
-      matched = matched + 1
-      if not best or listing.buyoutTotal < best.buyoutTotal then best = listing end
+      if blockedByBid(listing) then
+        blocked = blocked + 1
+      else
+        matched = matched + 1
+        if not best or listing.buyoutTotal < best.buyoutTotal then best = listing end
+      end
     end
   end
-  return best, matched, cheapest
+  return best, matched, cheapest, blocked
+end
+
+-- One search row for the trace: "auctionID qty buyout bid minBid".
+local function rowText(listing)
+  return string.format("%s q%s b%s cb%s mb%s", tostring(listing.auctionID), tostring(listing.quantity),
+    tostring(listing.buyoutTotal), tostring(listing.currentBid), tostring(listing.bid))
 end
 
 -- Runs fn once the AH can take a request (spending nothing meanwhile).
@@ -260,15 +277,21 @@ function Purchases:Locate(current, key)
       set(self, "rejected", "is_commodity")
       return
     end
-    local best, matched, cheapest = matchLots(plan, listings)
+    local best, matched, cheapest, blocked = matchLots(plan, listings)
+    current.blocked = (current.blocked or 0) + blocked
     if self.trace then
-      self.trace("purchase_locate", { rows = #listings, matched = matched, cheapest = cheapest,
+      local entry = { rows = #listings, matched = matched, cheapest = cheapest, blocked = blocked,
         wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
         level = current.itemLevel, suffix = suffix, key = key and keyText(key) or nil,
-        firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity })
+        firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity,
+        best = best and best.auctionID or nil }
+      for index = 1, math.min(#listings, 8) do entry["row" .. index] = rowText(listings[index]) end
+      self.trace("purchase_locate", entry)
     end
     if best then
-      current.auction = { auctionID = best.auctionID, amount = best.buyoutTotal, quantity = best.quantity }
+      current.auction = { auctionID = best.auctionID, amount = best.buyoutTotal, quantity = best.quantity,
+        currentBid = best.currentBid, minBid = best.bid }
+      self:TraceAuction("purchase_row", best.auctionID)
       set(self, "located")
     elseif current.browseKeys and #current.browseKeys > 0 then
       local nextKey = table.remove(current.browseKeys, 1)
@@ -276,6 +299,8 @@ function Purchases:Locate(current, key)
     elseif #listings == 0 and not current.browsed and plan.anyVariant and plan.name then
       -- No row at all: the built key does not reach this variant.
       self:WhenReady(current, function() self:BrowseFallback(current) end)
+    elseif current.blocked > 0 then
+      set(self, "rejected", "has_bid")
     else
       set(self, "rejected", "lot_gone")
     end
@@ -404,6 +429,19 @@ function Purchases:OnEvent(event, a, b)
   end
 end
 
+-- Traces every field the client gave for an auction in the last item search.
+function Purchases:TraceAuction(kind, auctionID, extra)
+  if not self.trace then return end
+  local adapter = self.scanner and self.scanner.adapter
+  local info = adapter and adapter.SearchInfo and adapter:SearchInfo(auctionID)
+  local entry = {}
+  for key, value in pairs(info or {}) do entry[key] = value end
+  for key, value in pairs(extra or {}) do entry[key] = value end
+  entry.auctionID = auctionID
+  entry.found = info ~= nil
+  self.trace(kind, entry)
+end
+
 -- Spending step. Called only from a button click (UI/PurchasePanel).
 function Purchases:Confirm()
   local current = self.current
@@ -434,6 +472,8 @@ function Purchases:Confirm()
       return false, "unaffordable"
     end
     current.moneyBefore = money
+    self:TraceAuction("purchase_send", current.auction.auctionID, { amount = current.auction.amount, money = money,
+      planBid = current.auction.currentBid, planMinBid = current.auction.minBid })
     local ok = self.purchase:Buyout(current.auction.auctionID, current.auction.amount)
     if not ok then
       set(self, "failed", "request_failed")
