@@ -2,6 +2,9 @@
 -- Ranked by prudent profit within constraints, never by the biggest discount.
 -- Without a verified fee the opportunity is downgraded to speculative; with
 -- insufficient history only a scenario is shown, nothing is ranked.
+-- Without units seen selling (entry.sales, Services/SellThrough) nothing is
+-- offered either; with them the resale price is at most the clearing price
+-- and the quantity at most what the AH bought in a few hours.
 local _, ns = ...
 
 local Money = ns.Economy.Money
@@ -32,7 +35,7 @@ function Resale.EvaluatePrefix(book, k, cost, units, entry, settings)
   local nextLevel = book[k + 1]
   local prudent, reason = MarketValue.PrudentResale({
     estimate = entry.estimate, competitor = nextLevel and unitCost(nextLevel) or nil, units = units,
-    bufferBp = settings.bufferBp,
+    bufferBp = settings.bufferBp, sales = entry.sales, requireSales = true,
   })
   if not prudent then return nil, reason end
   -- Deposit: estimated from the merchant price (Economy/Deposit) and
@@ -97,6 +100,12 @@ function Resale.Evaluate(context)
     elseif not entry.estimate or entry.estimate.status ~= "ok" then
       count(excluded, "insufficient_history")
       scenarios[itemKey] = { status = "insufficient_history", lowest = Depth.LowestUnit(entry.listings) }
+    elseif not entry.sales then
+      -- Asking prices alone made unsold listings look like resale profit
+      -- (D58): a resale needs units seen selling between scans.
+      count(excluded, "no_sales_evidence")
+    elseif not MarketValue.SalesLimit(entry.sales) then
+      count(excluded, "no_sales")
     else
       local best = Resale.Best(entry, settings, itemCap)
       if not best then
@@ -149,6 +158,7 @@ function Resale.Evaluate(context)
             unitPrice = best.prudent.unitPrice, basePrice = best.prudent.basePrice,
             reference = estimate.reference, window = estimate.window, competitor = best.prudent.competitor,
             sellUnits = best.prudent.sellUnits, residualUnits = best.prudent.residualUnits,
+            perHour = entry.sales.perHour, clearPrice = entry.sales.clearPrice,
           },
           provenance = { source = scan.mode, scanId = scan.id, seen = scan.finished },
         }

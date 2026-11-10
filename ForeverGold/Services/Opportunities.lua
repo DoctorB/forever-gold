@@ -16,7 +16,7 @@ function Opportunities.New(deps)
   local self = setmetatable({
     store = deps.store, history = deps.history, items = deps.items, clock = deps.clock, bus = deps.bus,
     commodity = deps.commodity, merchantPrice = deps.merchantPrice, depositVerified = deps.depositVerified,
-    ownedCount = deps.ownedCount,
+    ownedCount = deps.ownedCount, sales = deps.sales, -- sales: Services/SellThrough or nil
     latest = {}, marketKey = nil, results = nil, lastNotify = 0,
     stale = {}, -- itemID -> true: a purchase attempt found the offer gone
   }, { __index = Opportunities })
@@ -164,6 +164,7 @@ function Opportunities:EvaluateStep(job, index)
     estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp }),
     depositFor = Opportunities.DepositFor(info and info.sellPrice, commodity, info and info.stackCount),
     depositVerified = self.depositVerified and self.depositVerified() or false,
+    sales = self.sales and self.sales:Stats(itemKey) or nil,
   }
   local context = {
     items = { [itemKey] = entry }, settings = settings,
@@ -193,6 +194,11 @@ end
 function Opportunities:FinishEvaluate(job)
   local results = job.results
   results.list = Opportunities.MergeVendor(results.list, job.settings, results.excluded)
+  if self.sales then
+    local snapshot = self.lastSnapshot
+    local full = snapshot ~= nil and snapshot.mode == "replicate"
+    self.sales:MarkPersisted(results.list, full and snapshot.finished or nil, full)
+  end
   Opportunities.Rank(results.list)
   Opportunities.Allocate(results.list, job.settings)
   results.counts.opportunities = #results.list
@@ -250,6 +256,7 @@ function Opportunities:BeginCrafting(recipes, skills)
         local estimate = MarketValue.Estimate(self.history, itemKey, self.marketKey, now, { bufferBp = settings.bufferBp })
         if estimate.status == "ok" then entry.estimate = estimate end
       end
+      if not entry.sales and self.sales then entry.sales = self.sales:Stats(itemKey) end
     end
     -- A merchant sells any quantity at its price: one more divisible
     -- level, bought from only when it is the cheapest. Not part of the
@@ -392,11 +399,14 @@ function Opportunities.MergeVendor(list, settings, excluded)
   return kept
 end
 
--- Class first (confirmed vendor, prudent, speculative), then prudent profit.
+-- Class first (confirmed vendor, prudent, speculative), then offers still
+-- there after a scan interval (SellThrough:MarkPersisted), then prudent profit.
 function Opportunities.Rank(list)
   table.sort(list, function(a, b)
     local ca, cb = Risk.CLASS_ORDER[a.class] or 9, Risk.CLASS_ORDER[b.class] or 9
     if ca ~= cb then return ca < cb end
+    local pa, pb = (a.persisted or 0) > 0, (b.persisted or 0) > 0
+    if pa ~= pb then return pa end
     if a.profit ~= b.profit then return a.profit > b.profit end
     return tostring(a.itemKey) < tostring(b.itemKey)
   end)

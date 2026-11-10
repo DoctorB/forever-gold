@@ -1355,6 +1355,89 @@ T.Case("sell-through: units gone between two close scans count as sold", functio
   T.Ok(stats.clearPrice == 10 or stats.clearPrice == 12)
 end)
 
+T.Case("sell-through: relisted stacks are not sales, partial buys count the difference", function()
+  local ns = T.LoadAddon()
+  local Sold = ns.Services.SellThrough.Sold
+  -- 200 Silk at 199 cancelled and relisted at 198; a 20 stack really bought.
+  local sold = Sold({ [199] = { [200] = 1, [20] = 1 } }, { [198] = { [200] = 1 } })
+  T.Eq(sold[199], 20)
+  -- A commodity auction of 200 partly bought: 150 left at the same price.
+  sold = Sold({ [5] = { [200] = 1 } }, { [5] = { [150] = 1 } })
+  T.Eq(sold[5], 50)
+  -- Relisted higher (expired and posted again): not a sale either.
+  sold = Sold({ [5] = { [20] = 2 } }, { [5] = { [20] = 1 }, [7] = { [20] = 1 } })
+  T.Eq(sold[5], nil)
+  -- With all 8 levels kept, an old stack above the 8th price is not "new".
+  local before, after = {}, {}
+  for price = 1, 8 do before[price] = { [20] = 1 } after[price] = { [20] = 1 } end
+  before[1] = { [20] = 1 }
+  after[1] = nil
+  after[50] = { [20] = 1 }
+  T.Eq(Sold(before, after)[1], 20, "bought, not relisted at 50")
+  -- Old saved data (counted without the relist check) is dropped.
+  local memory = { items = { x = { h = 9, u = 900, g = 1, p = {} } } }
+  ns.Services.SellThrough.New(memory, function() return 0 end)
+  T.Eq(next(memory.items), nil)
+  T.Eq(memory.version, ns.Services.SellThrough.VERSION)
+end)
+
+T.Case("vendor offers still there after a scan interval are marked and come first", function()
+  local ns = T.LoadAddon()
+  local memory = {}
+  local sales = ns.Services.SellThrough.New(memory, function() return 0 end)
+  local function offer(id, profit, lots)
+    local list = {}
+    for i, l in ipairs(lots) do
+      list[i] = { listing = { itemKey = "i:" .. id .. ":0", quantity = l[1], buyoutTotal = l[2] }, quantity = l[1] }
+    end
+    return { strategy = "vendor", itemKey = "i:" .. id .. ":0", itemID = id, profit = profit, class = "vendor_confirmed",
+      lots = list }
+  end
+  sales:MarkPersisted({ offer(1, 10, { { 5, 100 } }) }, 1000, true)
+  local old, fresh = offer(1, 10, { { 5, 100 }, { 3, 50 } }), offer(2, 500, { { 1, 20 } })
+  local list = { fresh, old }
+  sales:MarkPersisted(list, 1900, true)
+  T.Eq(old.persisted, 5)
+  T.Eq(old.lots[1].persisted, true)
+  T.Eq(old.lots[2].persisted, nil)
+  T.Eq(fresh.persisted, 0)
+  -- The same scan evaluated again (items resolved) keeps the marks.
+  old.persisted = nil
+  sales:MarkPersisted(list, 1900, true)
+  T.Eq(old.persisted, 5)
+  -- An evaluation after a search compares the last two full scans too.
+  old.persisted = nil
+  sales:MarkPersisted(list, nil, false)
+  T.Eq(old.persisted, 5)
+  ns.Services.Opportunities.Rank(list)
+  T.Eq(list[1], old, "seen twice beats a bigger fresh offer")
+  local queue = ns.Services.Batch.Queue(list)
+  T.Eq(queue[1], old)
+  -- Scans too far apart: nothing marked.
+  sales:MarkPersisted({ offer(1, 10, { { 5, 100 } }) }, 1900 + 4000, true)
+  local again = offer(1, 10, { { 5, 100 } })
+  sales:MarkPersisted({ again }, 1900 + 4000 + 4000, true)
+  T.Eq(again.persisted, 0)
+end)
+
+T.Case("crafting exits follow sales evidence: none sold drops the AH, sold caps price and units", function()
+  local ns = T.LoadAddon()
+  local Crafting = ns.Strategies.Crafting
+  local settings = { feeBp = 500, bufferBp = 0 }
+  local levels = {}
+  for i = 1, 5 do levels[i] = { quantity = 20, buyoutTotal = 2000, buyable = true } end -- 100 each, 100 units
+  local best = Crafting.Exits({ levels = levels, sellPrice = 10, sales = { perHour = 0, hours = 3, units = 0 } }, 10, settings)
+  T.Eq(best.exit, "vendor", "watched and not selling: merchant only")
+  best = Crafting.Exits({ levels = levels, sellPrice = 0, sales = { perHour = 1, clearPrice = 80, hours = 3, units = 3 } },
+    10, settings)
+  T.Eq(best.exit, "ah_now")
+  T.Eq(best.sold, 4, "what the AH bought in 4 h")
+  T.Eq(best.gross, 4 * 80, "at the clearing price, below the lowest listing")
+  -- Without evidence: the old guess (5% of the units listed).
+  best = Crafting.Exits({ levels = levels, sellPrice = 0 }, 10, settings)
+  T.Eq(best.sold, 5)
+end)
+
 T.Case("sell-through runs after each full scan of the app", function()
   local app, _, clock, ah = Fakes.App({ rows = {
     { itemID = 101, count = 5, buyout = 50 }, { itemID = 101, count = 5, buyout = 50 }, { itemID = 101, count = 5, buyout = 50 },

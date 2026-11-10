@@ -195,6 +195,10 @@ requirements read (38 recipes); deposit rounds down (D55).
 under "Advanced". First assisted purchase completed from it (row 32).
 Sales watching started (D58): needs the AH open with auto-scan for a few
 hours before rates appear.
+Step 2 (D59, 2026-11-10, not yet seen in game): relists no longer count as
+sales (old rates dropped), resale needs units seen selling and is priced on
+the clearing price, crafting AH exits follow the same evidence, merchant
+offers still listed since the previous scan come first.
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 

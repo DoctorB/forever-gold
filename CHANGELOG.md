@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Resale and crafting now rely on what really sells: an AH resale is
+  offered only for items seen selling between scans, priced at most at the
+  price they sold for and limited to what sold in about 4 hours. A crafted
+  item that was watched and never sold is no longer counted as sold on the
+  AH. Auctions taken down and put back up at another price no longer count
+  as sales (earlier sales data is reset once). Merchant offers still listed
+  since the previous scan come first and say so on the "To do" screen.
 - Sales watching: each full AH scan is compared with the previous one (at
   most 30 minutes before, with a similar number of auctions read): units
   gone at their price count as sold. Only items with at least 5 auctions

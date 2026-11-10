@@ -172,6 +172,7 @@ function Main.RowTooltip(o)
   lines[#lines + 1] = string.format(L(key), o.quantity, Money.Format(o.cost), Money.Format(o.revenuePrudent))
   lines[#lines + 1] = string.format(L("TIP_ROW_GAIN"), Money.Format(o.profit))
   lines[#lines + 1] = L("DETAIL_CLASS_" .. o.class)
+  if (o.persisted or 0) > 0 then lines[#lines + 1] = string.format(L("TIP_ROW_STILL_THERE"), o.persisted) end
   lines[#lines + 1] = L("TIP_ROW_CLICK")
   return lines
 end

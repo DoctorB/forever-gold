@@ -76,7 +76,7 @@ end
 local MarketValue = ns.Economy.MarketValue
 
 -- Best exit for `quantity` crafted units of one output.
--- market: { levels, sellPrice?, estimate? }. Returns { exit, net, gross, fee }
+-- market: { levels, sellPrice?, estimate?, sales? (SellThrough:Stats) }. Returns { exit, net, gross, fee }
 -- for the merchant and for the AH (history-based or, without three days of
 -- history, the lowest current listing), the better one first; nil if none.
 -- The "current lowest" AH price is used only with at least this many
@@ -141,28 +141,39 @@ function Crafting.Exits(market, quantity, settings)
   local levels = market and market.levels or {}
   local feeBp = settings.feeBp or 500
   local _, _, competitor = Crafting.Liquidity(market)
+  -- Sales evidence (Services/SellThrough): watched long enough and nothing
+  -- sold means no AH exit at all; units sold cap price and quantity.
+  local sales = market and market.sales
+  local salePrice, saleUnits = MarketValue.SalesLimit(sales)
+  if sales and not salePrice then
+    table.sort(exits, function(a, b) return a.net > b.net end)
+    return exits[1], exits
+  end
   local resale = market and market.estimate and MarketValue.PrudentResale({
     estimate = market.estimate, competitor = competitor, units = quantity, bufferBp = settings.bufferBp,
+    sales = sales,
   })
   if resale then
     local net, fee = Costs.NetRevenue(resale.prudentGross, feeBp)
     net = net and net - depositLoss(market, resale.sellUnits, settings)
     if net and net > 0 then
       exits[#exits + 1] = withRest({ exit = "ah", gross = resale.prudentGross, net = net, fee = fee,
-        deposit = market.depositFor and market.depositFor(resale.sellUnits) }, resale.sellUnits, quantity, sellPrice)
+        deposit = market.depositFor and market.depositFor(resale.sellUnits), sales = sales ~= nil },
+        resale.sellUnits, quantity, sellPrice)
     end
   else
     local listings, units, lowest = Crafting.Liquidity(market)
     if lowest and listings >= Crafting.MIN_LISTINGS then
+      if salePrice and salePrice < lowest then lowest = salePrice end
       local unit = lowest - Money.ShareUp(lowest, settings.bufferBp or 0)
-      local cap = math.max(1, math.floor(units * Crafting.AH_NOW_SHARE_BP / Money.BP))
+      local cap = saleUnits or math.max(1, math.floor(units * Crafting.AH_NOW_SHARE_BP / Money.BP))
       local sold = math.min(quantity, cap)
       local gross = Money.Mul(unit, sold)
       local net, fee = Costs.NetRevenue(gross, feeBp)
       net = net and net - depositLoss(market, sold, settings)
       if net and net > 0 then
         exits[#exits + 1] = withRest({ exit = "ah_now", gross = gross, net = net, fee = fee,
-          deposit = market.depositFor and market.depositFor(sold) }, sold, quantity, sellPrice)
+          deposit = market.depositFor and market.depositFor(sold), sales = sales ~= nil }, sold, quantity, sellPrice)
       end
     end
   end

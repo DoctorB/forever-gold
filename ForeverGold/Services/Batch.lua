@@ -35,7 +35,11 @@ function Batch.Queue(list, stale)
       queue[#queue + 1] = o
     end
   end
+  -- Offers already there at the previous full scan first: fresh lots were
+  -- mostly gone at the click (2026-11-08, 9 of 10).
   table.sort(queue, function(a, b)
+    local pa, pb = (a.persisted or 0) > 0, (b.persisted or 0) > 0
+    if pa ~= pb then return pa end
     if a.profit ~= b.profit then return a.profit > b.profit end
     return (a.roi or 0) > (b.roi or 0)
   end)

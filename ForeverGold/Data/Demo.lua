@@ -26,6 +26,18 @@ function Demo.Items()
   return provider
 end
 
+-- Fictional sales evidence (the shape of Services/SellThrough:Stats).
+local SALES = {
+  [Schema.ItemKey(900002, 0)] = { perHour = 4, clearPrice = 1500, hours = 6, units = 24 },
+}
+
+function Demo.Sales()
+  local provider = {}
+  function provider.Stats(_, itemKey) return SALES[itemKey] end
+  function provider.MarkPersisted() end
+  return provider
+end
+
 local function lot(now, itemID, suffix, quantity, total, index, variantUnknown)
   return Schema.NewListing({
     marketKey = Demo.MARKET, itemKey = Schema.ItemKey(itemID, suffix, variantUnknown), quantity = quantity,

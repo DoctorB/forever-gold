@@ -70,6 +70,7 @@ function App:Load(saved)
     merchantPrice = function(itemID) return self:MerchantPrice(itemID) end,
     depositVerified = function() return self.depositCheck ~= nil and self.depositCheck:Status().verified end,
     ownedCount = function(itemID) return self.client:ItemCount(itemID) end,
+    sales = self.sellThrough,
   })
   self.transactions = ns.Services.Transactions.New(clock)
   self.purchases = ns.Services.Purchases.New({
@@ -871,7 +872,8 @@ function App:Demo()
   local demo = ns.Data.Demo
   local store = ns.Data.Store.New(nil, { now = self.clock() })
   local history = ns.Data.History.New(store, self.clock)
-  local opportunities = ns.Services.Opportunities.New({ store = store, history = history, clock = self.clock })
+  local opportunities = ns.Services.Opportunities.New({ store = store, history = history, clock = self.clock,
+    sales = demo.Sales() })
   local snapshot, listings = demo.Build(self.clock(), history)
   opportunities:Ingest(snapshot, listings)
   opportunities.items = demo.Items()

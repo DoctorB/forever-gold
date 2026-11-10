@@ -101,6 +101,7 @@ T.Case("resale: prudent opportunity ranked as speculative while the fee is a sce
   local entry = {
     listings = { listing(5, 10, 3000, 1), listing(5, 10, 10000, 2), listing(5, 10, 10000, 3) },
     estimate = MarketValue.Estimate(history, itemKey, MARKET, now), depositPerUnit = 10,
+    sales = { perHour = 2, clearPrice = 1000, hours = 5, units = 10 },
   }
   local settings = { feeBp = 500, feeVerified = false, bufferBp = 500, minRoiBp = 1500, minProfit = 1000 }
   local list = Resale.Evaluate({ items = { [itemKey] = entry }, settings = settings, scan = { ageSeconds = 60, partial = true } })
@@ -111,8 +112,32 @@ T.Case("resale: prudent opportunity ranked as speculative while the fee is a sce
   T.Eq(o.cost, 3000)
   T.Ok(o.profit > 1000)
   T.Eq(o.formula.feeVerified, false)
-  -- Units beyond liquidity are inventory, not profit.
+  -- Units beyond what the AH bought in 4 h (2/h) are inventory, not profit.
+  T.Eq(o.formula.sellUnits, 8)
   T.Eq(o.formula.sellUnits + o.formula.residualUnits, 10)
+end)
+
+T.Case("resale: needs units seen selling, priced at most at the clearing price", function()
+  local now = 200 * DAY
+  local _, history = seededHistory({ 1000, 1000, 1000, 1000, 1000, 1000, 1000 }, now)
+  local itemKey = Schema.ItemKey(5, 0)
+  local function entry(sales)
+    return { listings = { listing(5, 10, 3000, 1), listing(5, 10, 10000, 2) },
+      estimate = MarketValue.Estimate(history, itemKey, MARKET, now), depositPerUnit = 10, sales = sales }
+  end
+  local settings = { feeBp = 500, bufferBp = 500, minRoiBp = 1500, minProfit = 100 }
+  local list, excluded = Resale.Evaluate({ items = { [itemKey] = entry(nil) }, settings = settings })
+  T.Eq(#list, 0)
+  T.Eq(excluded.no_sales_evidence, 1, "asking prices alone are not enough")
+  list, excluded = Resale.Evaluate({ items = { [itemKey] = entry({ perHour = 0, hours = 3, units = 0 }) }, settings = settings })
+  T.Eq(#list, 0)
+  T.Eq(excluded.no_sales, 1, "watched and nothing sold")
+  -- Sold at 450 while listed at 1000: the resale is priced on 450.
+  list = Resale.Evaluate({ items = { [itemKey] = entry({ perHour = 10, clearPrice = 450, hours = 3, units = 30 }) },
+    settings = settings })
+  T.Eq(#list, 1)
+  T.Eq(list[1].formula.basePrice, 450)
+  T.Eq(list[1].formula.clearPrice, 450)
 end)
 
 T.Case("resale: insufficient history yields a scenario, not a ranked deal", function()

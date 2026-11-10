@@ -22,6 +22,7 @@ MarketValue.DEFAULTS = {
   minSamples = 3, -- independent days before a reference exists
   bufferBp = 500, -- prudent buffer below the reference
   liquidityBp = 2000, -- sell at most 20% of the typical listed depth at once
+  saleHours = 4, -- with sales evidence: sell at most what the AH bought in 4 h (half an 8 h auction)
 }
 
 local function option(opts, key)
@@ -149,7 +150,11 @@ end
 -- Prudent resale for `units` already bought.
 -- args: { estimate, remaining (levels after the purchase, own lots excluded)
 --         or competitor (lowest remaining unit price), units, bufferBp?,
---         liquidityBp? }
+--         liquidityBp?, sales? = { perHour, clearPrice } (SellThrough:Stats),
+--         requireSales? }
+-- With sales evidence the price is at most the clearing price and the
+-- quantity at most what the AH bought in saleHours; without it the quantity
+-- is a share of the listed depth, or nothing when requireSales is set.
 -- Returns { unitPrice, sellUnits, residualUnits, prudentGross, baseGross,
 --           competitor } or nil, reason.
 function MarketValue.PrudentResale(args, opts)
@@ -161,10 +166,20 @@ function MarketValue.PrudentResale(args, opts)
   end
   local base = estimate.reference
   if competitor and competitor < base then base = competitor end
+  local liquidity
+  if args.sales then
+    local price, units = MarketValue.SalesLimit(args.sales, args.saleHours or option(opts, "saleHours"))
+    if not price then return nil, "no_sales", { competitor = competitor } end
+    if price < base then base = price end
+    liquidity = units
+  elseif args.requireSales then
+    return nil, "no_sales_evidence", { competitor = competitor }
+  else
+    local depth = estimate.typicalDepth or 0
+    liquidity = math.max(1, math.floor(depth * (args.liquidityBp or option(opts, "liquidityBp")) / Money.BP))
+  end
   local bufferBp = args.bufferBp or option(opts, "bufferBp")
   local unitPrice = base - Money.ShareUp(base, bufferBp)
-  local depth = estimate.typicalDepth or 0
-  local liquidity = math.max(1, math.floor(depth * (args.liquidityBp or option(opts, "liquidityBp")) / Money.BP))
   local sellUnits = math.min(args.units, liquidity)
   return {
     unitPrice = unitPrice,
@@ -176,4 +191,13 @@ function MarketValue.PrudentResale(args, opts)
     competitor = competitor,
     liquidity = liquidity,
   }
+end
+
+-- What sales evidence allows: the clearing price and the units the AH
+-- bought in `hours` (at least one), or nil when nothing was seen selling.
+function MarketValue.SalesLimit(sales, hours)
+  if not sales or not sales.clearPrice or not sales.perHour or sales.perHour <= 0 then return nil end
+  local units = math.floor(sales.perHour * (hours or MarketValue.DEFAULTS.saleHours))
+  if units < 1 then return nil end
+  return sales.clearPrice, units
 end

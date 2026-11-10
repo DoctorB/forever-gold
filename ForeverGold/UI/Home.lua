@@ -108,7 +108,11 @@ function Home.Model(app)
     for _, opportunity in ipairs(queue) do
       local label, enabled, state = buyButton(app, opportunity, money)
       local text = string.format(L("HOME_BUY"), opportunity.quantity, opportunity.name or opportunity.itemKey)
-      if state == "gold" then text = text .. "  " .. W.Color(L("HOME_NEEDS_GOLD"), W.MUTED) end
+      if state == "gold" then
+        text = text .. "  " .. W.Color(L("HOME_NEEDS_GOLD"), W.MUTED)
+      elseif (opportunity.persisted or 0) > 0 then
+        text = text .. "  " .. W.Color(L("HOME_STILL_THERE"), W.EMERALD)
+      end
       local tip = ns.UI.Main.RowTooltip(opportunity)
       tip[#tip] = L(state == "confirm" and "HOME_TIP_CONFIRM" or "HOME_TIP_BUY")
       model.actions[#model.actions + 1] = {
