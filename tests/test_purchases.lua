@@ -234,6 +234,11 @@ T.Case("individual auction with a bid at its buyout: skipped, every field traced
   for _, e in ipairs(s.app.store.db.diagnostics.trace) do if e.k == "purchase_locate" then locate = e end end
   T.Eq(locate.blocked, 1)
   T.Eq(locate.row1, "77 q1 b200 cb200 mb150")
+  local blockedRow
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do if e.k == "purchase_blocked" then blockedRow = e end end
+  T.Eq(blockedRow.auctionID, 77)
+  T.Eq(blockedRow.bidAmount, 200)
+  T.Eq(blockedRow.buyoutAmount, 200)
 
   -- A lower bid does not block the buyout; the row and the send are traced.
   s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })

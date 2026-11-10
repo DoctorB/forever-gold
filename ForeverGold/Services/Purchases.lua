@@ -279,6 +279,16 @@ function Purchases:Locate(current, key)
     end
     local best, matched, cheapest, blocked = matchLots(plan, listings)
     current.blocked = (current.blocked or 0) + blocked
+    if blocked > 0 then
+      -- Every field of the auctions skipped for their bid (at most 3).
+      local traced = 0
+      for _, listing in ipairs(listings) do
+        if traced < 3 and blockedByBid(listing) then
+          traced = traced + 1
+          self:TraceAuction("purchase_blocked", listing.auctionID)
+        end
+      end
+    end
     if self.trace then
       local entry = { rows = #listings, matched = matched, cheapest = cheapest, blocked = blocked,
         wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
@@ -364,7 +374,16 @@ function Purchases:BrowseFallback(current)
       texts[index] = keyText(candidates[index].itemKey)
     end
     if self.trace then
-      self.trace("purchase_browse", { results = #results, sameItem = sameItem, tried = #keys, keys = table.concat(texts, ",") })
+      -- Lowest price and quantity of each variant of the item ("level/suffix:price x qty").
+      local seen = {}
+      for _, result in ipairs(results) do
+        if result.itemKey.itemID == plan.itemID and #seen < 4 then
+          seen[#seen + 1] = string.format("%s/%s:%sx%s", tostring(result.itemKey.itemLevel),
+            tostring(result.itemKey.itemSuffix), tostring(result.minPrice), tostring(result.totalQuantity))
+        end
+      end
+      self.trace("purchase_browse", { results = #results, sameItem = sameItem, tried = #keys, keys = table.concat(texts, ","),
+        wantMax = wantMax, prices = table.concat(seen, " "):sub(1, 64) })
     end
     if #keys == 0 then
       set(self, "rejected", "lot_gone")
