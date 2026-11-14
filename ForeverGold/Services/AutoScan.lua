@@ -121,9 +121,12 @@ function AutoScan:OnScannerState(state, reason)
 end
 
 -- ADDON_ACTION_BLOCKED / ADDON_ACTION_FORBIDDEN (addonName, functionName).
+-- Only our own blocks are traced: other add-ons' blocks filled the trace
+-- (88 entries in one second on 2026-11-14) and pushed the scan entries out.
 function AutoScan:OnBlocked(event, addon, fn)
+  if addon ~= AutoScan.ADDON then return false end
   trace(self, "action_blocked", { event = event, addon = addon, fn = fn })
-  if addon ~= AutoScan.ADDON or not self.requestedAt then return false end
+  if not self.requestedAt then return false end
   if self.clock() - self.requestedAt > AutoScan.BLOCK_WINDOW then return false end
   self.memory.blocked = { at = self.clock(), event = event, fn = fn }
   self.settings().autoScan = false

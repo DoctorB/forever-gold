@@ -835,6 +835,25 @@ T.Case("auto-scan: a blocked call switches it off and is remembered", function()
   T.Eq(app2.autoScan:Status(), "scanning")
 end)
 
+T.Case("trace: no entries for other add-ons' blocks or profession list updates", function()
+  local app = autoApp()
+  local trace = app.store.db.diagnostics.trace
+  local function count(kind)
+    local n = 0
+    for _, entry in ipairs(trace) do if entry.k == kind then n = n + 1 end end
+    return n
+  end
+  app:OnEvent("ADDON_ACTION_BLOCKED", "OtherAddon", "Button:SetPassThroughButtons()")
+  T.Eq(count("action_blocked"), 0, "another add-on's block is not traced")
+  app:OnEvent("ADDON_ACTION_BLOCKED", "ForeverGold", "C_AuctionHouse.ReplicateItems()")
+  T.Eq(count("action_blocked"), 1, "our own block is traced")
+  app:OnEvent("TRADE_SKILL_SHOW")
+  app:OnEvent("TRADE_SKILL_LIST_UPDATE")
+  app:OnEvent("TRADE_SKILL_LIST_UPDATE")
+  app:OnEvent("TRADE_SKILL_CLOSE")
+  T.Eq(count("tradeskill"), 2, "only opening and closing are traced")
+end)
+
 T.Case("auto-scan: never while a purchase run uses the AH or with the AH closed", function()
   local app, _, clock, ah = autoApp()
   app.store:Settings().autoScan = true

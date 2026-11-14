@@ -119,6 +119,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Changed
 
+- The diagnostic trace no longer fills up with other add-ons' blocked
+  actions or with the profession window refreshing while you craft, so
+  the scan and purchase entries stay in it longer.
 - When the auction house refuses a purchase, the buy window now says why
   (for example "there is already a higher bid") instead of only "AH error".
   The reason comes from the game; an unknown one is shown by name or code.

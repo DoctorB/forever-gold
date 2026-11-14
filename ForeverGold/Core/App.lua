@@ -843,7 +843,9 @@ function App:OnEvent(event, ...)
   elseif event == "MERCHANT_CLOSED" then
     self.vendorCheck:OnMerchantClosed()
   elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_CLOSE" then
-    self.diagnostics:Trace("tradeskill", { event = event })
+    -- Opening and closing are traced; the list updates are not: they come
+    -- several per second while crafting (256 of 400 entries on 2026-11-14).
+    if event ~= "TRADE_SKILL_LIST_UPDATE" then self.diagnostics:Trace("tradeskill", { event = event }) end
     if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon(event == "TRADE_SKILL_SHOW") end
   elseif event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
     self.autoScan:OnBlocked(event, ...)
