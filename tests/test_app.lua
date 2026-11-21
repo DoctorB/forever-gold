@@ -1741,7 +1741,7 @@ T.Case("equipment upgrades: usable, at the level, better than worn, cheapest gai
     [208] = 100 }) do
     rows[#rows + 1] = { itemID = itemID, count = 1, buyout = price }
   end
-  local app, ns, clock, ah = Fakes.App({ rows = rows, globals = globals })
+  local app, ns, clock, ah = Fakes.App({ rows = rows, globals = globals, wallet = { money = 50000 } })
   app:OnEvent("AUCTION_HOUSE_SHOW")
   app.scanner:Start()
   ah.delivered = true
@@ -1769,6 +1769,27 @@ T.Case("equipment upgrades: usable, at the level, better than worn, cheapest gai
   T.Eq(model.rows[1].price, 300)
   T.Eq(app.store.db.diagnostics.gearFinder.candidates, 5)
   T.Eq(ah.spendCalls, 0)
+  -- Buy from the row: the first click finds the auction, the second buys it.
+  T.Eq(model.rows[1].enabled, true)
+  model.rows[1].run()
+  T.Eq(app.purchases.current.plan.strategy, "gear")
+  T.Eq(app.purchases.current.plan.anyVariant, false, "the scored variant, not any")
+  T.Eq(ah.browseCalls, 1)
+  ah.browse = { { itemKey = { itemID = 202, itemLevel = 20, itemSuffix = 0, battlePetSpeciesID = 0 },
+    totalQuantity = 1, minPrice = 300 } }
+  app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  clock.advance(1)
+  ah.items[202] = { { quantity = 1, buyout = 300, auctionID = 55, level = 20 } }
+  app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 202, itemLevel = 20, itemSuffix = 0, battlePetSpeciesID = 0 })
+  T.Eq(app.purchases.current.state, "located")
+  T.Eq(ah.spendCalls, 0, "nothing spent before the second click")
+  local again = ns.UI.Panels.home.GearModel(app).rows[1]
+  T.Ok(again.button:find("300", 1, true) or again.button:find("3s", 1, true), again.button)
+  again.run()
+  T.Eq(ah.args.PlaceBid[1], 55)
+  app:OnEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 55)
+  T.Eq(app.purchases.current.state, "done")
+  T.Eq(ns.UI.Panels.home.GearModel(app).rows[1].text:find("Jade Band", 1, true), nil, "bought: off the list")
   -- Equipment changed: searched again once it settles.
   app:OnEvent("PLAYER_EQUIPMENT_CHANGED", 12)
   app:OnEvent("PLAYER_EQUIPMENT_CHANGED", 11)

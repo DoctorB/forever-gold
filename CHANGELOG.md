@@ -12,9 +12,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
   per slot, the most improvement for the gold first (for example "Finger:
   Jade Band +8 Stamina", 3s). The value of each stat follows your class and
   talent tree (Warrior protection: Stamina and Defense first, then
-  Strength, armour, Agility, weapon DPS); hover a row for the details. It
-  only shows them: buy them in the AH window. Searched again when you
-  change equipment or level up.
+  Strength, armour, Agility, weapon DPS); hover a row for the details.
+  "Buy" on the row: the first click finds the auction, the second buys it
+  (AH open); then equip it yourself. Searched again when you change
+  equipment or level up.
 
 - "Equipment test" in Advanced > Settings (also `/fg gear`): a read-only
   check of what the game tells the add-on about your class, specialization,

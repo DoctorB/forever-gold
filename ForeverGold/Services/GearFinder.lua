@@ -1,7 +1,9 @@
 -- GearFinder: equipment upgrades from the AH for the character's class and
--- talent tree (docs/STATUS.md, "Planned — equipment upgrades", step 1: a
--- read-only list). Nothing is bought, equipped or asked from the AH: the
--- candidates come from the latest AH view (the full scan already done).
+-- talent tree (docs/STATUS.md, "Planned — equipment upgrades"). The
+-- candidates come from the latest AH view (the full scan already done); the
+-- search itself buys, equips and asks the AH nothing. Buying goes through
+-- the assisted purchase (Services/Purchases), one click per step, from the
+-- row's button (UI/Home): `Opportunity` gives it what to buy.
 --
 -- Checked in game 2026-11-21 (Equipment test): only C_ functions exist; the
 -- tree comes from C_Traits points; C_PlayerInfo.CanUseItem answers for
@@ -172,7 +174,7 @@ function GearFinder:Collect(run)
     end
     if cheapest then
       list[#list + 1] = { itemKey = itemKey, itemID = itemID, loc = seen, price = cheapest.buyoutTotal,
-        link = cheapest.link or ("item:" .. itemID) }
+        link = cheapest.link or ("item:" .. itemID), listing = cheapest }
     end
   end, function(done)
     if not done or self.run ~= run then return end
@@ -205,7 +207,7 @@ function GearFinder:Evaluate(run, candidate, info)
   for _, slot in ipairs(slots) do if run.worn[slot] then replaced[#replaced + 1] = run.worn[slot] end end
   local result = {
     itemKey = candidate.itemKey, itemID = candidate.itemID, loc = candidate.loc, slot = slots[1], name = info.name,
-    price = candidate.price, score = score, baseline = baseline, gain = gain,
+    price = candidate.price, score = score, baseline = baseline, gain = gain, listing = candidate.listing,
     value = gain * 10000 / math.max(candidate.price, 1), -- gain per gold
     changes = Gear.Changes(stats, replaced, run.weights), replaces = replaced[1] and replaced[1].name,
   }
@@ -215,6 +217,28 @@ function GearFinder:Evaluate(run, candidate, info)
   if not kept or result.value > kept.value or (result.value == kept.value and result.gain > kept.gain) then
     run.best[group] = result
   end
+end
+
+-- What the assisted purchase buys for a result: one auction of that exact
+-- item key (the variant's stats are what was scored), at most its price.
+function GearFinder.Opportunity(result)
+  return {
+    itemKey = result.itemKey, itemID = result.itemID, name = result.name, strategy = "gear", commodity = false,
+    quantity = 1, cost = result.price, profit = 0,
+    lots = { { quantity = 1, cost = result.price, listing = result.listing } },
+  }
+end
+
+-- A row bought or found gone: off the list until the next search.
+function GearFinder:Drop(itemKey)
+  local run = self.run
+  if not run then return false end
+  for group, result in pairs(run.best) do
+    if result.itemKey == itemKey then run.best[group] = nil end
+  end
+  self:Rank(run)
+  publish(self)
+  return true
 end
 
 function GearFinder:Rank(run)

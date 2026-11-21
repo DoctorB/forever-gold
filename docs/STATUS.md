@@ -249,7 +249,8 @@ items needed `RequestLoadItemDataByID` (loaded within 2 s): the finder must
 filter locally first (slot, class, subclass from `GetItemInfoInstant`) and
 load only those candidates, a batch at a time.
 
-Step 1 (read-only list) implemented 2026-11-21 (D65), check R19 in game.
+Steps 1 and 2 (list, buy from the row) implemented 2026-11-21 (D65, D66),
+check R19 in game.
 
 Steps: (1) read-only list of upgrades with the reason for each; (2) buy from
 the list through the assisted purchase; (3) stat weights per spec reviewed

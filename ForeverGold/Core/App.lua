@@ -85,6 +85,14 @@ function App:Load(saved)
   self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
     stale = function() return self.opportunities.stale end })
   self.bus:Subscribe("purchase.state", function(current) self.batch:OnPurchase(current) end)
+  -- An equipment upgrade bought, or found gone or dearer: off its list.
+  self.bus:Subscribe("purchase.state", function(current)
+    local plan = current and current.plan
+    local gone = current and current.state == "rejected" and App.GEAR_GONE[current.reason]
+    if plan and plan.strategy == "gear" and (current.state == "done" or gone) then
+      self.gearFinder:Drop(plan.itemKey)
+    end
+  end)
   self.store.db.autoScan = self.store.db.autoScan or {}
   self.autoScan = ns.Services.AutoScan.New({
     scanner = self.scanner, ah = self.ah, scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock,
@@ -519,6 +527,10 @@ end
 -- Equipment or level changed: search the upgrades again once it settles
 -- (changing a set fires one event per slot).
 App.GEAR_QUIET = 2
+-- Rejections after which an upgrade row is not offered again (an
+-- unanswered request is not one: the auction may still be there).
+App.GEAR_GONE = { lot_gone = true, price_up = true, unavailable = true, has_bid = true, price_moved = true,
+  grouped = true, is_commodity = true }
 function App:GearSoon()
   if self.gearPending or not next(self.opportunities.latest) then return end
   self.gearPending = true

@@ -78,6 +78,31 @@ local function buyButton(app, opportunity, money)
   return L("HOME_BTN_BUY"), true, "start"
 end
 
+-- What a buy button does: start (the first click asks the server), send a
+-- commodity quote, or buy (the second click). cap: spending limit.
+local function buyRun(app, opportunity, state, cap)
+  return function()
+    app.store:Settings().assistedBuy = true -- clicking "Buy" is the consent
+    -- In game the details window of another offer stayed open and
+    -- showed this purchase under that offer's name.
+    local details = ns.UI.Details and ns.UI.Details.frame
+    if details and details:IsShown() and ns.UI.Details.current ~= opportunity then details:Hide() end
+    if state == "confirm" then
+      app.purchases:Confirm()
+    elseif state == "quote" then
+      app.purchases:Prepare(true)
+    else
+      local started, reason = app.purchases:Begin(opportunity, cap)
+      if started then
+        app.purchases:Prepare(true)
+      else
+        ns.Print(L("PB_CANNOT") .. " " .. (ns.L["PR_" .. tostring(reason)] or tostring(reason)))
+      end
+    end
+  end
+end
+Home.BuyRun = buyRun
+
 -- Client name of a stat or slot (e.g. ITEM_MOD_STAMINA_SHORT "Stamina"),
 -- else the raw key.
 local function clientText(app, key)
@@ -120,22 +145,28 @@ function Home.GearModel(app)
   else
     gear.title = string.format(L("HOME_GEAR_SEARCHING"), tree, run.evaluated or 0, run.candidates or 0)
   end
+  local money = app.client:Money()
+  local cap = app.store:Settings().gearMaxPrice
   for index, result in ipairs(run.results or {}) do
     if index > Home.MAX_GEAR then break end
+    local opportunity = ns.Services.GearFinder.Opportunity(result)
+    local label, enabled, state = buyButton(app, opportunity, money)
     local slot = clientText(app, result.loc) or result.loc
     local tip = { result.name or "?",
       string.format(L("GEAR_TIP_SCORE"), number(result.gain), number(result.baseline), number(result.score)),
       Home.ChangesText(app, result.changes, 8),
       string.format(L("GEAR_TIP_REPLACES"), result.replaces or L("GEAR_TIP_EMPTY")),
-      L("GEAR_TIP_HOW") }
+      L(state == "confirm" and "HOME_TIP_CONFIRM" or "GEAR_TIP_BUY") }
     gear.rows[#gear.rows + 1] = {
       text = string.format(L("HOME_GEAR_ROW"), slot, result.name or "?", Home.ChangesText(app, result.changes, 3)),
-      price = result.price, tip = tip,
+      price = result.price, tip = tip, button = label, enabled = enabled,
+      run = buyRun(app, opportunity, state, cap),
     }
   end
   if run.state == "done" and #gear.rows == 0 then gear.empty = L("HOME_GEAR_NONE") end
   return gear
 end
+
 
 -- Everything the screen shows. Pure apart from the services' reads.
 -- { actions = { { kind, text, gain, button, enabled, tip, run } }, learn = {...}, empty }
@@ -180,25 +211,7 @@ function Home.Model(app)
       tip[#tip] = L(state == "confirm" and "HOME_TIP_CONFIRM" or "HOME_TIP_BUY")
       model.actions[#model.actions + 1] = {
         kind = "buy", text = text, gain = opportunity.profit, button = label, enabled = enabled, tip = tip,
-        run = function()
-          settings.assistedBuy = true -- clicking "Buy" is the consent
-          -- In game the details window of another offer stayed open and
-          -- showed this purchase under that offer's name.
-          local details = ns.UI.Details and ns.UI.Details.frame
-          if details and details:IsShown() and ns.UI.Details.current ~= opportunity then details:Hide() end
-          if state == "confirm" then
-            app.purchases:Confirm()
-          elseif state == "quote" then
-            app.purchases:Prepare(true)
-          else
-            local started, reason = app.purchases:Begin(opportunity, settings.maxPurchase)
-            if started then
-              app.purchases:Prepare(true)
-            else
-              ns.Print(L("PB_CANNOT") .. " " .. (ns.L["PR_" .. tostring(reason)] or tostring(reason)))
-            end
-          end
-        end,
+        run = buyRun(app, opportunity, state, settings.maxPurchase),
       }
     end
   end
@@ -330,7 +343,7 @@ function Home.Build(panel)
   panel.gearTitle = W.Text(panel, "GameFontNormal")
   panel.gear = {}
   for index = 1, Home.MAX_GEAR do
-    panel.gear[index] = newRow(panel, false)
+    panel.gear[index] = newRow(panel, true)
   end
   if ns.app and ns.app.bus then
     local function refresh() ns.UI.Main.RefreshPanel("home") end
@@ -397,13 +410,20 @@ function Home.Refresh(panel)
   for index, row in ipairs(panel.gear) do
     local item = gear and gear.rows[index]
     local text = item and item.text or (index == 1 and gear and gear.empty) or nil
-    row.tip = item and item.tip
+    row.tip, row.action = item and item.tip, item
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, top - 18 - (index - 1) * Home.ROW_HEIGHT)
     row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
     if text then
       row.text:SetText(text)
       row.gain:SetText(item and fmt(item.price) or "")
+      if item then
+        row.button:SetText(item.button)
+        row.button:SetEnabled(item.enabled)
+        row.button:Show()
+      else
+        row.button:Hide()
+      end
       row:Show()
     else
       row:Hide()
