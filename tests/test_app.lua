@@ -1585,3 +1585,61 @@ T.Case("realm: a per-character name from the client does not split the market", 
   T.Eq(db.characters["Dolcissimo-Cacao"], nil)
   T.Eq(db.characters["Dolcissimo-CAMWOWEU5Realm5PvE"].professions.Mining.skill, 95)
 end)
+
+T.Case("equipment test: read-only answers for the planned upgrade finder", function()
+  local LINK_A = "|Hitem:201::::::::20:1486::1:1:12730:::::|h[Green Sword]|h"
+  local LINK_B = "|Hitem:201::::::::20:1486::1:1:12745:::::|h[Green Sword]|h"
+  local STATS = {
+    [LINK_A] = { ITEM_MOD_STRENGTH_SHORT = 3 }, [LINK_B] = { ITEM_MOD_STAMINA_SHORT = 4 },
+    ["item:202"] = { ITEM_MOD_AGILITY_SHORT = 2 }, ["|Hitem:300|h[Old Ring]|h"] = { ITEM_MOD_SPIRIT_SHORT = 1 },
+  }
+  local LOC = { [201] = "INVTYPE_WEAPON", [202] = "INVTYPE_FINGER", [300] = "INVTYPE_FINGER" }
+  local function id(item) return type(item) == "number" and item or tonumber(tostring(item):match("item:(%d+)")) end
+  local globals = {
+    UnitClass = function() return "Warrior", "WARRIOR" end,
+    UnitLevel = function() return 24 end,
+    GetNumTalentTabs = function() return 3 end,
+    GetTalentTabInfo = function(tab) return ({ "Arms", "Fury", "Protection" })[tab], "icon", tab == 3 and 10 or 0 end,
+    GetNumSkillLines = function() return 2 end,
+    GetSkillLineInfo = function(i)
+      if i == 1 then return "Weapon Skills", true end
+      return "Swords", false, nil, 110, nil, nil, 120
+    end,
+    GetInventoryItemLink = function(_, slot) if slot == 11 then return "|Hitem:300|h[Old Ring]|h" end end,
+    GetItemStats = function(link) return STATS[link] end,
+    GetItemInfoInstant = function(item)
+      local itemID = id(item)
+      return itemID, "Armor", "Misc", LOC[itemID] or "", 1, 4, 0
+    end,
+    IsEquippableItem = function() return true end,
+  }
+  local rows = {
+    { itemID = 201, count = 1, buyout = 500, link = LINK_A }, { itemID = 201, count = 1, buyout = 600, link = LINK_B },
+    { itemID = 202, count = 1, buyout = 300 }, { itemID = 101, count = 5, buyout = 50 },
+  }
+  local app, ns, clock, ah = Fakes.App({ rows = rows, globals = globals })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  clock.advance(30)
+  local report = app.gearProbe:Run(app.clock())
+  T.Eq(report.character.classFile, "WARRIOR")
+  T.Eq(report.character.level, 24)
+  T.Eq(#report.character.trees, 3)
+  T.Eq(report.character.skills[1], "Swords 110/120")
+  T.Eq(report.equippedRead, 1)
+  T.Eq(report.equipped[1].stats, "SPIRIT=1")
+  T.Eq(report.market.equippable, 3, "two sword variants and a ring, not the cloth")
+  T.Eq(report.market.byLoc.INVTYPE_FINGER, 1)
+  T.Eq(report.variants.compared, 1)
+  T.Eq(report.variants.differ, 1, "each variant read from its own link")
+  T.Eq(report.apis.GetItemStats, true)
+  T.Eq(report.apis["C_PlayerInfo.CanUseItem"], false)
+  T.Ok(app.store.db.diagnostics.gear == report, "saved for the analysis")
+  local lines = ns.Services.GearProbe.Summary(report, ns.L)
+  T.Ok(lines[1]:find("Warrior", 1, true), lines[1])
+  T.Ok(lines[5]:find("1 of 1", 1, true), lines[5])
+  T.Eq(ah.spendCalls, 0)
+  T.Eq(ah.replicateCalls, 1, "no AH request")
+end)

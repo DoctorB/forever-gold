@@ -50,6 +50,7 @@ Services\VendorCheck.lua
 Services\Portfolio.lua
 Services\Batch.lua
 Services\Probe.lua
+Services\GearProbe.lua
 Services\FeeTest.lua
 Services\AutoScan.lua
 Services\DepositCheck.lua

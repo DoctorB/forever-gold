@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- "Equipment test" in Advanced > Settings (also `/fg gear`): a read-only
+  check of what the game tells the add-on about your class, specialization,
+  equipped items and the equipment on the AH, to prepare a finder of cheap
+  equipment upgrades. Nothing is bought or requested from the AH.
+
 - Resale and crafting now rely on what really sells: an AH resale is
   offered only for items seen selling between scans, priced at most at the
   price they sold for and limited to what sold in about 4 hours. A crafted

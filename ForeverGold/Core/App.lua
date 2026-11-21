@@ -118,6 +118,9 @@ function App:Load(saved)
     scheduler = ns.Core.Scheduler.New(self.schedulerEnv), clock = clock, store = self.store,
     printer = function(kind, data) self.bus:Publish("probe.progress", kind, data) end,
   })
+  self.gearProbe = ns.Services.GearProbe.New({
+    client = self.client, opportunities = self.opportunities, store = self.store, preciseMs = self.schedulerEnv.preciseMs,
+  })
   self.feeTest = ns.Services.FeeTest.New({
     client = self.client, ah = self.ah, items = self.items, opportunities = self.opportunities, store = self.store,
     clock = clock, printer = function(kind, data) self.bus:Publish("feetest", kind, data) end,
