@@ -202,6 +202,43 @@ offers still listed since the previous scan come first.
 Not started on purpose: buying reagents from the Crafting tab (it would
 reuse the purchase path that is still unanswered on live, see "Buy all").
 
+## Planned — equipment upgrades from the AH (owner request 2026-11-21)
+
+Goal: for the character's class and specialization, find on the AH armour,
+rings, necks, trinkets, weapons and the rest that improve what is equipped
+now for the least gold. Not started; nothing below is verified in game.
+
+What it shows: one row per slot on the "To do" screen, e.g. "Ring: Jade
+Band for 1g 20s, +8 Stamina +3 Strength over the ring you wear", best
+improvement per gold first, with a spending cap of its own; buying goes
+through the existing assisted purchase (one click, one purchase).
+
+How:
+- Character: class (`UnitClass`), level, specialization (talent tree with
+  the most points, the way Forever One Button reads it, unless the client
+  has a spec API), what is equipped (`GetInventoryItemLink`, 19 slots).
+- Candidates from the full scan already done (no extra AH requests): item
+  class and slot from `GetItemInfoInstant` (local, no server), then only
+  items the character can use: armour type, weapon skills, required level
+  at most the character's (optionally +1-2 to plan ahead), not bound on
+  pickup, unique-equipped respected.
+- Value: stats of the exact variant (`GetItemStats` on the item link, so
+  random suffixes like "of the Bear" count), weighted per class and
+  specialization (a table of stat weights, adjustable); weapons by DPS and
+  speed for the spec; compared with the item worn in that slot (rings,
+  trinkets and one-hand weapons against the weaker of the two).
+- Ranking: improvement per gold, an upgrade only above a minimum gain;
+  price from the lot actually listed, checked again before buying.
+
+To verify in game before relying on it: `GetItemStats` on Forever links
+(random suffixes included); that scan rows keep the full item link of each
+variant; how the client reports specialization and weapon skills; that
+items not cached yet resolve fast enough for the candidates only.
+
+Steps: (1) read-only list of upgrades with the reason for each; (2) buy from
+the list through the assisted purchase; (3) stat weights per spec reviewed
+with the owner and editable in the settings.
+
 ## Implemented
 
 - `Economy/`: Money (integer copper, `nil` never zero, safe range, costs
