@@ -20,6 +20,7 @@ Economy\Costs.lua
 Economy\Deposit.lua
 Economy\MarketValue.lua
 Economy\Risk.lua
+Economy\Gear.lua
 Compat\ClientAdapter.lua
 Compat\AuctionHouse.lua
 Compat\Items.lua
@@ -36,6 +37,7 @@ Data\Exchange.lua
 Data\Recipes.lua
 Data\Disenchant.lua
 Data\Demo.lua
+Data\GearWeights.lua
 Strategies\Vendor.lua
 Strategies\Resale.lua
 Strategies\Disenchant.lua
@@ -51,6 +53,7 @@ Services\Portfolio.lua
 Services\Batch.lua
 Services\Probe.lua
 Services\GearProbe.lua
+Services\GearFinder.lua
 Services\FeeTest.lua
 Services\AutoScan.lua
 Services\DepositCheck.lua

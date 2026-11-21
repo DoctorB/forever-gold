@@ -122,6 +122,11 @@ function App:Load(saved)
     client = self.client, opportunities = self.opportunities, store = self.store, preciseMs = self.schedulerEnv.preciseMs,
     after = self.schedulerEnv.after,
   })
+  self.gearFinder = ns.Services.GearFinder.New({
+    client = self.client, opportunities = self.opportunities, store = self.store, bus = self.bus, clock = clock,
+    scheduler = ns.Core.Scheduler.New(self.schedulerEnv),
+    budgetMs = function() return self.store:Settings().frameBudgetMs end,
+  })
   self.feeTest = ns.Services.FeeTest.New({
     client = self.client, ah = self.ah, items = self.items, opportunities = self.opportunities, store = self.store,
     clock = clock, printer = function(kind, data) self.bus:Publish("feetest", kind, data) end,
@@ -511,6 +516,18 @@ end
 -- item data arriving); nil evaluates every item key. A partial run asked
 -- while a full one is going waits for it (the full run may still have read
 -- those keys before the change).
+-- Equipment or level changed: search the upgrades again once it settles
+-- (changing a set fires one event per slot).
+App.GEAR_QUIET = 2
+function App:GearSoon()
+  if self.gearPending or not next(self.opportunities.latest) then return end
+  self.gearPending = true
+  self.scheduler:After(App.GEAR_QUIET, function()
+    self.gearPending = false
+    self.gearFinder:Start("equipment")
+  end)
+end
+
 function App:EvaluateChunked(after, mode, itemIDs)
   local work, opportunities = self.work, self.opportunities
   if itemIDs and self.fullRunning then
@@ -551,6 +568,8 @@ function App:EvaluateChunked(after, mode, itemIDs)
       return finished
     end)
     self:EvaluateCrafting()
+    -- Equipment upgrades from the same AH view, after every full pass.
+    if full and not (results and results.demo) and next(opportunities.latest) then self.gearFinder:Start("scan") end
     self:Progress("done", total, total, mode)
     if after then after(results) end
     if full and self.queuedIDs then
@@ -989,6 +1008,8 @@ function App:OnEvent(event, ...)
     self.purchases:OnBlocked(...)
   elseif event == "NEW_RECIPE_LEARNED" then
     self:OnRecipeLearned(...)
+  elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_LEVEL_UP" then
+    self:GearSoon()
   else
     if event == "AUCTION_HOUSE_SHOW" then self.marketKeyCache = nil end
     self.ah:OnEvent(event, ...)

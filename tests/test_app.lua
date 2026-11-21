@@ -1681,3 +1681,114 @@ T.Case("equipment test: read-only answers for the planned upgrade finder", funct
   T.Eq(ah.spendCalls, 0)
   T.Eq(ah.replicateCalls, 1, "no AH request")
 end)
+
+T.Case("equipment upgrades: usable, at the level, better than worn, cheapest gain first", function()
+  local RING_WORN, CHEST_WORN, SHIELD_WORN = "|Hitem:300|h[Old Ring]|h", "|Hitem:301|h[Old Vest]|h", "|Hitem:302|h[Buckler]|h"
+  -- itemID = { name, minLevel, equipLoc, classID, subclassID, stats }
+  local DB = {
+    [300] = { "Old Ring", 10, "INVTYPE_FINGER", 4, 0, { ITEM_MOD_STAMINA_SHORT = 1 } },
+    [301] = { "Old Vest", 10, "INVTYPE_CHEST", 4, 3, { ITEM_MOD_STAMINA_SHORT = 2 } },
+    [302] = { "Buckler", 10, "INVTYPE_SHIELD", 4, 6, { RESISTANCE0_NAME = 100 } },
+    [202] = { "Jade Band", 20, "INVTYPE_FINGER", 4, 0, { ITEM_MOD_STAMINA_SHORT = 8 } },
+    [203] = { "Chain Vest", 22, "INVTYPE_CHEST", 4, 3,
+      { ITEM_MOD_STAMINA_SHORT = 6, ITEM_MOD_STRENGTH_SHORT = 3, RESISTANCE0_NAME = 100 } },
+    [204] = { "Plate Vest", 40, "INVTYPE_CHEST", 4, 4, { ITEM_MOD_STAMINA_SHORT = 30 } },
+    [205] = { "Big Sword", 20, "INVTYPE_2HWEAPON", 2, 8, { ITEM_MOD_STRENGTH_SHORT = 30 } },
+    [206] = { "Dear Robe", 20, "INVTYPE_ROBE", 4, 1, { ITEM_MOD_STAMINA_SHORT = 40 } },
+    [207] = { "Slow Vest", 20, "INVTYPE_CHEST", 4, 3, { ITEM_MOD_STAMINA_SHORT = 20 } },
+    [208] = { "Engineer Ring", 20, "INVTYPE_FINGER", 4, 0, { ITEM_MOD_STAMINA_SHORT = 30 } },
+  }
+  local cached = { [300] = true, [301] = true, [302] = true, [202] = true, [203] = true, [204] = true, [205] = true,
+    [206] = true, [208] = true }
+  local searching, requests = false, {}
+  local function id(item) return type(item) == "number" and item or tonumber(tostring(item):match("item:(%d+)")) end
+  local globals = {
+    UnitClass = function() return "Warrior", "WARRIOR" end,
+    UnitLevel = function() return 24 end,
+    GetInventoryItemLink = function(_, slot) return ({ [11] = RING_WORN, [5] = CHEST_WORN, [17] = SHIELD_WORN })[slot] end,
+    C_SpecializationInfo = { GetSpecialization = function() return 1 end, GetSpecializationInfo = function() return 71 end },
+    C_ClassTalents = { GetActiveConfigID = function() return 5 end, GetTraitTreeForSpec = function() return 9 end },
+    C_Traits = {
+      GetGroupDisplayInfoByTreeID = function() return { { groupID = 2, displayName = "Protection" } } end,
+      GetGroupCurrencyInfo = function() return { { traitNodeGroupID = 2, currencyInfos = { { spent = 14 } } } } end,
+    },
+    C_PlayerInfo = { CanUseItem = function(itemID) return itemID ~= 208 and DB[itemID][2] <= 24 end },
+    C_Item = {
+      GetItemInfoInstant = function(item)
+        local d = DB[id(item)]
+        if not d then return id(item), "Trade", "Misc", "", 1, 7, 0 end
+        return id(item), "Armor", "Misc", d[3], 1, d[4], d[5]
+      end,
+      GetItemInfo = function(item)
+        local d = DB[id(item)]
+        if not d or not cached[id(item)] then return nil end
+        return d[1], "link", 2, 20, d[2], "Armor", "Mail", 1, d[3], 1, 1, d[4], d[5], 2
+      end,
+      GetItemStats = function(link)
+        local itemID = id(link)
+        return cached[itemID] and DB[itemID] and DB[itemID][6] or nil
+      end,
+      -- The vest arrives at the second request: the first is the price
+      -- evaluation's own, the second the equipment search's.
+      RequestLoadItemDataByID = function(itemID)
+        requests[itemID] = (requests[itemID] or 0) + 1
+        if searching and requests[itemID] >= 2 then cached[itemID] = true end
+      end,
+    },
+  }
+  local rows = {}
+  for itemID, price in pairs({ [202] = 300, [203] = 900, [204] = 500, [205] = 400, [206] = 20000, [207] = 5000,
+    [208] = 100 }) do
+    rows[#rows + 1] = { itemID = itemID, count = 1, buyout = price }
+  end
+  local app, ns, clock, ah = Fakes.App({ rows = rows, globals = globals })
+  app:OnEvent("AUCTION_HOUSE_SHOW")
+  app.scanner:Start()
+  ah.delivered = true
+  searching = false
+  app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
+  -- The search starts by itself after the scan's evaluation.
+  searching = true
+  clock.advance(30)
+  local run = app.gearFinder.run
+  T.Ok(run, "started after the scan")
+  T.Eq(run.tree, "protection")
+  T.Eq(run.state, "done")
+  T.Eq(run.candidates, 5, "no two-hand over the shield, no robe above 1 gold")
+  T.Eq(run.skipped.level, 1, "plate at 40")
+  T.Eq(run.skipped.cannot_use, 1, "the ring the client says no to")
+  T.Ok(run.asked >= 1, "the vest without data was asked for")
+  T.Eq(#run.results, 2)
+  T.Eq(run.results[1].name, "Jade Band", "8 points for 3 silver: most gain per gold")
+  T.Eq(run.results[1].slot, 12, "against the empty ring slot")
+  T.Eq(run.results[2].name, "Chain Vest", "beats the dearer Slow Vest on gain per gold")
+  T.Eq(run.results[2].gain, 6 + 3 * 0.8 + 100 * 0.05 - 2)
+  local model = ns.UI.Panels.home.GearModel(app)
+  T.Ok(model.title:find("protection", 1, true), model.title)
+  T.Ok(model.rows[1].text:find("Jade Band", 1, true) and model.rows[1].text:find("+8", 1, true), model.rows[1].text)
+  T.Eq(model.rows[1].price, 300)
+  T.Eq(app.store.db.diagnostics.gearFinder.candidates, 5)
+  T.Eq(ah.spendCalls, 0)
+  -- Equipment changed: searched again once it settles.
+  app:OnEvent("PLAYER_EQUIPMENT_CHANGED", 12)
+  app:OnEvent("PLAYER_EQUIPMENT_CHANGED", 11)
+  clock.advance(30)
+  T.Ok(app.gearFinder.run ~= run and app.gearFinder.run.reason == "equipment", "a new search")
+end)
+
+T.Case("gear scoring: weakest ring, two-hand against both hands, changes by weight", function()
+  local ns = T.LoadAddon()
+  local Gear = ns.Economy.Gear
+  local w = ns.Data.GearWeights.For("WARRIOR", "protection")
+  T.Eq(w.STAMINA, 1)
+  T.Eq(ns.Data.GearWeights.For("WARRIOR", "fury").STRENGTH, 1, "class default without a tree list")
+  local worn = { [11] = { score = 5 }, [12] = { score = 3 }, [16] = { score = 10 }, [17] = { score = 4 } }
+  local score, slots = Gear.Baseline("INVTYPE_FINGER", worn)
+  T.Eq(score, 3)
+  T.Eq(slots[1], 12)
+  T.Eq((Gear.Baseline("INVTYPE_2HWEAPON", worn)), 14)
+  T.Eq((Gear.Baseline("INVTYPE_HEAD", worn)), 0, "empty slot")
+  local changes = Gear.Changes({ STAMINA = 4, STRENGTH = 5 }, { { stats = { STAMINA = 6 } } }, w)
+  T.Eq(changes[1].key, "STRENGTH")
+  T.Eq(changes[2].delta, -2)
+end)

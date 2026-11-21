@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Added
 
+- Equipment upgrades on the "To do" screen: after each AH scan the add-on
+  looks for armour, rings, weapons and other equipment up to 1 gold that
+  your character can use at its level and that beat what it wears, one row
+  per slot, the most improvement for the gold first (for example "Finger:
+  Jade Band +8 Stamina", 3s). The value of each stat follows your class and
+  talent tree (Warrior protection: Stamina and Defense first, then
+  Strength, armour, Agility, weapon DPS); hover a row for the details. It
+  only shows them: buy them in the AH window. Searched again when you
+  change equipment or level up.
+
 - "Equipment test" in Advanced > Settings (also `/fg gear`): a read-only
   check of what the game tells the add-on about your class, specialization,
   equipped items and the equipment on the AH, to prepare a finder of cheap

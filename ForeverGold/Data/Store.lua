@@ -32,6 +32,8 @@ Store.DEFAULT_SETTINGS = {
   maxPurchase = 5000, -- spending cap per assisted purchase (50 silver)
   locale = "auto", -- "auto" (client language), "itIT" or "enUS"
   advancedView = false, -- false: only the "To do" screen; true: all the tabs
+  gearMaxPrice = 10000, -- equipment upgrades: AH items up to 1 gold (Services/GearFinder)
+  gearMinGain = 2, -- equipment upgrades: least score gain shown
 }
 
 Store.RETENTION = {

@@ -16,6 +16,7 @@ ns.UI.Panels.home = Home
 
 Home.MAX_ACTIONS = 8
 Home.MAX_LEARN = 3
+Home.MAX_GEAR = 3
 Home.ROW_HEIGHT = 26
 
 local function L(key) return ns.L[key] or key end
@@ -75,6 +76,65 @@ local function buyButton(app, opportunity, money)
   if not app.ah:IsOpen() then return L("HOME_BTN_BUY"), false, "closed" end
   if not ns.UI.Main.Affordable(opportunity, money) then return L("HOME_BTN_NO_GOLD"), false, "gold" end
   return L("HOME_BTN_BUY"), true, "start"
+end
+
+-- Client name of a stat or slot (e.g. ITEM_MOD_STAMINA_SHORT "Stamina"),
+-- else the raw key.
+local function clientText(app, key)
+  local env = app.client and app.client.env
+  local text = env and env[key]
+  return type(text) == "string" and text or nil
+end
+
+function Home.StatName(app, key)
+  if key == "RESISTANCE0_NAME" then return clientText(app, "RESISTANCE0_NAME") or L("GEAR_ARMOR") end
+  if key == "DAMAGE_PER_SECOND" then return L("GEAR_DPS") end
+  return clientText(app, "ITEM_MOD_" .. key .. "_SHORT") or clientText(app, "ITEM_MOD_" .. key) or key
+end
+
+local function number(value)
+  if value == math.floor(value) then return tostring(value) end
+  return string.format("%.1f", value)
+end
+
+-- "+8 Stamina, +3 Strength" (the first `limit` changes).
+function Home.ChangesText(app, changes, limit)
+  local parts = {}
+  for index, change in ipairs(changes or {}) do
+    if index > limit then break end
+    parts[#parts + 1] = (change.delta > 0 and "+" or "") .. number(change.delta) .. " " .. Home.StatName(app, change.key)
+  end
+  return table.concat(parts, ", ")
+end
+
+-- Equipment upgrades (Services/GearFinder): title line and rows.
+function Home.GearModel(app)
+  local run = app.gearFinder and app.gearFinder.run
+  if not run then return nil end
+  local gear = { rows = {} }
+  local tree = run.tree or run.class or "?"
+  if run.state == "done" then
+    gear.title = string.format(L("HOME_GEAR_TITLE"), tree, fmt(run.maxPrice or 0))
+  elseif run.state == "no_character" then
+    gear.title = L("HOME_GEAR_NO_CHAR")
+  else
+    gear.title = string.format(L("HOME_GEAR_SEARCHING"), tree, run.evaluated or 0, run.candidates or 0)
+  end
+  for index, result in ipairs(run.results or {}) do
+    if index > Home.MAX_GEAR then break end
+    local slot = clientText(app, result.loc) or result.loc
+    local tip = { result.name or "?",
+      string.format(L("GEAR_TIP_SCORE"), number(result.gain), number(result.baseline), number(result.score)),
+      Home.ChangesText(app, result.changes, 8),
+      string.format(L("GEAR_TIP_REPLACES"), result.replaces or L("GEAR_TIP_EMPTY")),
+      L("GEAR_TIP_HOW") }
+    gear.rows[#gear.rows + 1] = {
+      text = string.format(L("HOME_GEAR_ROW"), slot, result.name or "?", Home.ChangesText(app, result.changes, 3)),
+      price = result.price, tip = tip,
+    }
+  end
+  if run.state == "done" and #gear.rows == 0 then gear.empty = L("HOME_GEAR_NONE") end
+  return gear
 end
 
 -- Everything the screen shows. Pure apart from the services' reads.
@@ -162,7 +222,10 @@ function Home.Model(app)
     }
   end
   table.sort(model.actions, function(a, b) return a.gain > b.gain end)
-  while #model.actions > Home.MAX_ACTIONS do table.remove(model.actions) end
+  model.gear = Home.GearModel(app)
+  -- Room for the equipment rows (title + rows) in the same window.
+  local gearRows = model.gear and (1 + math.max(#model.gear.rows, 1)) or 0
+  while #model.actions > Home.MAX_ACTIONS - gearRows do table.remove(model.actions) end
   for index, row in ipairs(crafting and crafting.learnable or {}) do
     if index > Home.MAX_LEARN then break end
     local requires = row.requires
@@ -264,9 +327,14 @@ function Home.Build(panel)
   for index = 1, Home.MAX_LEARN do
     panel.learn[index] = newRow(panel, false)
   end
+  panel.gearTitle = W.Text(panel, "GameFontNormal")
+  panel.gear = {}
+  for index = 1, Home.MAX_GEAR do
+    panel.gear[index] = newRow(panel, false)
+  end
   if ns.app and ns.app.bus then
     local function refresh() ns.UI.Main.RefreshPanel("home") end
-    for _, topic in ipairs({ "crafting.updated", "selling.updated", "purchase.state", "batch.state" }) do
+    for _, topic in ipairs({ "crafting.updated", "selling.updated", "purchase.state", "batch.state", "gear.updated" }) do
       ns.app.bus:Subscribe(topic, refresh)
     end
   end
@@ -314,6 +382,28 @@ function Home.Refresh(panel)
     if item then
       row.text:SetText(item.text)
       row.gain:SetText(string.format(L("HOME_PER_RUN"), fmt(item.gain)))
+      row:Show()
+    else
+      row:Hide()
+    end
+  end
+  -- Equipment upgrades, below the recipes.
+  local gear = model.gear
+  local top = below - 18 - #model.learn * Home.ROW_HEIGHT - (#model.learn > 0 and 16 or 0)
+  panel.gearTitle:ClearAllPoints()
+  panel.gearTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, top)
+  panel.gearTitle:SetText(gear and gear.title or "")
+  if gear then panel.gearTitle:Show() else panel.gearTitle:Hide() end
+  for index, row in ipairs(panel.gear) do
+    local item = gear and gear.rows[index]
+    local text = item and item.text or (index == 1 and gear and gear.empty) or nil
+    row.tip = item and item.tip
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, top - 18 - (index - 1) * Home.ROW_HEIGHT)
+    row:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
+    if text then
+      row.text:SetText(text)
+      row.gain:SetText(item and fmt(item.price) or "")
       row:Show()
     else
       row:Hide()
