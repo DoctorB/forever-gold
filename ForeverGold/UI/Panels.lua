@@ -66,9 +66,18 @@ function History.ScanRows(app)
     local s = snapshots[index]
     local counts = s.counts or {}
     local full = s.coverage == "full_verified" or s.coverage == "full_unverified"
+    local result = L(full and "HIST_RESULT_full" or "HIST_RESULT_partial")
+    -- Every row read, some without item data after the re-reads (about one
+    -- in five on the live server since 2026-11-19): the scan is complete,
+    -- those rows are what is missing.
+    if not full and s.mode == "replicate" and s.reason == "rows_incomplete" and counts.valid
+      and counts.valid == counts.rows then
+      full = true
+      result = string.format(L("HIST_RESULT_full_missing"), counts.incomplete or 0)
+    end
     rows[#rows + 1] = {
       cells = {
-        app.client:FormatTime(s.t), L("MODE_" .. tostring(s.mode)), L(full and "HIST_RESULT_full" or "HIST_RESULT_partial"),
+        app.client:FormatTime(s.t), L("MODE_" .. tostring(s.mode)), result,
         tostring(counts.valid or counts.rows or "-"), tostring(s.items or 0), tostring(counts.units or "-"),
         s.started and (math.max(0, s.t - s.started) .. " s") or "-",
       },

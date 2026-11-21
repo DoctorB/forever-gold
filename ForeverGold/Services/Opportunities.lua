@@ -19,6 +19,7 @@ function Opportunities.New(deps)
     ownedCount = deps.ownedCount, sales = deps.sales, -- sales: Services/SellThrough or nil
     latest = {}, marketKey = nil, results = nil, lastNotify = 0,
     stale = {}, -- itemID -> true: a purchase attempt found the offer gone
+    keysByItem = {}, -- itemID -> { itemKey = true } in the view
   }, { __index = Opportunities })
   return self
 end
@@ -76,10 +77,14 @@ function Opportunities:FinishIngest(job)
   if snapshot.marketKey ~= self.marketKey then
     self.latest = {}
     self.marketKey = snapshot.marketKey
+    self.keysByItem = {}
+    self.contrib = nil
   end
   if snapshot.mode == "replicate" then
     self.latest = {}
     self.stale = {}
+    self.keysByItem = {}
+    self.contrib = nil -- the next run is a full one
   end
   if snapshot.mode ~= "replicate" and snapshot.scope and not grouped[snapshot.scope] then
     -- Observation of an empty result: the item has no listing right now.
@@ -89,6 +94,11 @@ function Opportunities:FinishIngest(job)
     -- Only a full scan clears "gone" marks (above): in game a late duplicate
     -- answer to a purchase search, read as an own search, cleared it and the
     -- same gone lot was tried again 11 s later (2026-11-07 23:47).
+    local itemID = Schema.ItemIDOf(itemKey)
+    if itemID then
+      self.keysByItem[itemID] = self.keysByItem[itemID] or {}
+      self.keysByItem[itemID][itemKey] = true
+    end
     self.latest[itemKey] = {
       listings = list, seen = snapshot.finished, coverage = snapshot.coverage, mode = snapshot.mode,
       scanId = snapshot.id, source = list[1].source,
@@ -103,19 +113,28 @@ end
 
 -- Evaluation runs in steps (one item key each) so the client can spread it
 -- over frames; Evaluate runs all steps at once.
-function Opportunities:BeginEvaluate()
+-- Each item key leaves its own contribution (counts, exclusions, offers) in
+-- `contrib`, so after a purchase or a search only the keys of those items
+-- are evaluated again (in game 2026-11-21 every purchase attempt re-ran all
+-- 22,354 keys, 16-20 s each time). itemIDs: set of item IDs for such a
+-- partial run; without a previous run of this market view it is a full run.
+function Opportunities:BeginEvaluate(itemIDs)
   local job = {
     now = self.clock(), settings = self.store:Settings(), keys = {},
     strategies = { ns.Strategies.Vendor, ns.Strategies.Resale },
-    results = {
-      marketKey = self.marketKey, list = {}, excluded = {}, scenarios = {},
-      counts = { itemKeys = 0, listings = 0, units = 0, candidates = 0, opportunities = 0, infoPending = 0 },
-      coverage = self.lastSnapshot and self.lastSnapshot.coverage or "none",
-      snapshot = self.lastSnapshot,
-    },
   }
-  job.results.at = job.now
-  for itemKey in pairs(self.latest) do job.keys[#job.keys + 1] = itemKey end
+  if itemIDs and self.contrib then
+    job.partial, job.contrib = true, self.contrib
+    for itemID in pairs(itemIDs) do
+      for itemKey in pairs(self.keysByItem[itemID] or {}) do
+        job.contrib[itemKey] = nil
+        if self.latest[itemKey] then job.keys[#job.keys + 1] = itemKey end
+      end
+    end
+  else
+    job.contrib = {}
+    for itemKey in pairs(self.latest) do job.keys[#job.keys + 1] = itemKey end
+  end
   table.sort(job.keys)
   return job
 end
@@ -126,27 +145,54 @@ function Opportunities:MarkStale(itemID)
   if itemID then self.stale[itemID] = true end
 end
 
+-- A browse by name answered with the lowest buyout per unit of the item:
+-- nothing cheaper exists any more, so the cheaper lots of the view are gone
+-- (in game 2026-11-21 three planned lots were 7-17% under the live price
+-- and each was hidden until the next scan). Returns the lots removed.
+function Opportunities:DropBelow(itemID, unitFloor)
+  if not (itemID and Money.IsCopper(unitFloor)) then return 0 end
+  local removed = 0
+  for itemKey in pairs(self.keysByItem[itemID] or {}) do
+    local view = self.latest[itemKey]
+    if view then
+      local kept = {}
+      for _, listing in ipairs(view.listings) do
+        if listing.buyable and listing.quantity > 0 and listing.buyoutTotal < unitFloor * listing.quantity then
+          removed = removed + 1
+        else
+          kept[#kept + 1] = listing
+        end
+      end
+      view.listings = kept
+    end
+  end
+  return removed
+end
+
 function Opportunities:EvaluateStep(job, index)
   local itemKey = job.keys[index]
   local view = self.latest[itemKey]
   if not view then return end
-  local results, now, settings = job.results, job.now, job.settings
+  local now, settings = job.now, job.settings
   if self.stale[Schema.ItemIDOf(itemKey) or 0] then
-    results.excluded.stale = (results.excluded.stale or 0) + 1
+    job.contrib[itemKey] = { stale = true }
     return
   end
-  results.counts.itemKeys = results.counts.itemKeys + 1
-  results.counts.listings = results.counts.listings + #view.listings
+  -- Contribution of this key: n listings, u units, c candidate, p item
+  -- info pending, cp commodity pending, ex exclusions, sc scenarios, list
+  -- offers.
+  local own = { n = #view.listings, u = 0 }
+  job.contrib[itemKey] = own
   local buyable = 0
   for _, listing in ipairs(view.listings) do
-    results.counts.units = results.counts.units + listing.quantity
+    own.u = own.u + listing.quantity
     if listing.buyable then buyable = buyable + 1 end
   end
-  if buyable > 0 then results.counts.candidates = results.counts.candidates + 1 end
+  if buyable > 0 then own.c = true end
   local itemID = Schema.ItemIDOf(itemKey)
   local info = self.items and self.items:Read(itemID)
   if not info and self.items then
-    results.counts.infoPending = results.counts.infoPending + 1
+    own.p = true
     -- Arrival is announced by the provider (App publishes "items.resolved").
     self.items:Resolve(itemID, function() end)
   end
@@ -155,7 +201,7 @@ function Opportunities:EvaluateStep(job, index)
     commodity = true
   elseif self.commodity and itemID then
     commodity = self.commodity(itemID)
-    if commodity == nil then results.counts.commodityPending = (results.counts.commodityPending or 0) + 1 end
+    if commodity == nil then own.cp = true end
   end
   local listings = view.listings
   if commodity == true and view.source == "replicate" then listings = Opportunities.CommodityLevels(listings) end
@@ -178,32 +224,75 @@ function Opportunities:EvaluateStep(job, index)
   }
   for _, strategy in ipairs(job.strategies) do
     local found, excluded, scenarios = strategy.Evaluate(context)
-    count(results.excluded, excluded)
-    for key, scenario in pairs(scenarios or {}) do results.scenarios[key] = scenario end
+    if excluded and next(excluded) then
+      own.ex = own.ex or {}
+      count(own.ex, excluded)
+    end
+    for key, scenario in pairs(scenarios or {}) do
+      own.sc = own.sc or {}
+      own.sc[key] = scenario
+    end
     for _, opportunity in ipairs(found) do
       opportunity.coverage = view.coverage
       opportunity.category = info and info.classID
       opportunity.commodity = commodity
       opportunity.itemID = itemID
       opportunity.sellPrice = info and info.sellPrice
-      results.list[#results.list + 1] = opportunity
+      own.list = own.list or {}
+      own.list[#own.list + 1] = opportunity
     end
   end
 end
 
-function Opportunities:FinishEvaluate(job)
-  local results = job.results
-  results.list = Opportunities.MergeVendor(results.list, job.settings, results.excluded)
+-- Totals, vendor merge, ranking and allocation over every key's
+-- contribution (offers in item key order, as a full run adds them).
+function Opportunities:Rebuild(now, settings)
+  local results = {
+    marketKey = self.marketKey, list = {}, excluded = {}, scenarios = {},
+    counts = { itemKeys = 0, listings = 0, units = 0, candidates = 0, opportunities = 0, infoPending = 0 },
+    coverage = self.lastSnapshot and self.lastSnapshot.coverage or "none",
+    snapshot = self.lastSnapshot, at = now,
+  }
+  local counts, withOffers = results.counts, {}
+  for itemKey, own in pairs(self.contrib or {}) do
+    if own.stale then
+      results.excluded.stale = (results.excluded.stale or 0) + 1
+    else
+      counts.itemKeys = counts.itemKeys + 1
+      counts.listings = counts.listings + own.n
+      counts.units = counts.units + own.u
+      if own.c then counts.candidates = counts.candidates + 1 end
+      if own.p then counts.infoPending = counts.infoPending + 1 end
+      if own.cp then counts.commodityPending = (counts.commodityPending or 0) + 1 end
+      count(results.excluded, own.ex)
+      for key, scenario in pairs(own.sc or {}) do results.scenarios[key] = scenario end
+      if own.list then withOffers[#withOffers + 1] = itemKey end
+    end
+  end
+  table.sort(withOffers)
+  for _, itemKey in ipairs(withOffers) do
+    for _, opportunity in ipairs(self.contrib[itemKey].list) do results.list[#results.list + 1] = opportunity end
+  end
+  results.list = Opportunities.MergeVendor(results.list, settings, results.excluded)
   if self.sales then
     local snapshot = self.lastSnapshot
     local full = snapshot ~= nil and snapshot.mode == "replicate"
     self.sales:MarkPersisted(results.list, full and snapshot.finished or nil, full)
   end
   Opportunities.Rank(results.list)
-  Opportunities.Allocate(results.list, job.settings)
-  results.counts.opportunities = #results.list
+  Opportunities.Allocate(results.list, settings)
+  counts.opportunities = #results.list
   self.results = results
   if self.bus then self.bus:Publish("opportunities.updated", results) end
+  return results
+end
+
+function Opportunities:FinishEvaluate(job)
+  if not job.partial then self.contrib = job.contrib end
+  local crafting = self.results and self.results.crafting
+  local results = self:Rebuild(job.now, job.settings)
+  -- A partial run keeps the crafting summary until its own run replaces it.
+  if job.partial then results.crafting = crafting end
   return results
 end
 
@@ -374,10 +463,19 @@ function Opportunities.MergeVendor(list, settings, excluded)
       merged.formula.units, merged.formula.B = merged.quantity, merged.cost
     else
       if o.strategy == "vendor" and o.itemID then
+        -- A copy: the offers stay as evaluated, so a rebuild after a
+        -- partial run merges them again from the start.
+        local head = {}
+        for key, value in pairs(o) do head[key] = value end
+        if type(o.formula) == "table" then
+          head.formula = {}
+          for key, value in pairs(o.formula) do head.formula[key] = value end
+        end
         local lots = {}
         for index, lot in ipairs(o.lots) do lots[index] = lot end
-        o.lots, o.variants = lots, 1
-        byItem[o.itemID] = o
+        head.lots, head.variants = lots, 1
+        byItem[o.itemID] = head
+        o = head
       end
       out[#out + 1] = o
     end

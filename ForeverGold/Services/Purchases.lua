@@ -33,7 +33,7 @@ function Purchases.New(deps)
   return setmetatable({
     purchase = deps.purchase, client = deps.client, scanner = deps.scanner, scheduler = deps.scheduler,
     clock = deps.clock, bus = deps.bus, store = deps.store, trace = deps.trace, isReady = deps.isReady, stale = deps.stale,
-    isCommodity = deps.isCommodity, current = nil,
+    isCommodity = deps.isCommodity, priceFloor = deps.priceFloor, current = nil,
   }, { __index = Purchases })
 end
 
@@ -212,10 +212,15 @@ function Purchases:Send(current)
   current.suffix = ns.Compat.AuctionHouse.SuffixForBonus(bonus)
   -- On live the built key of a random-variant item never got an answer (3
   -- of 3, 2026-11-07/08: 30 s lost each time) while the browse by name
-  -- answered at once with the server's keys: variants start with the browse.
-  if current.suffix and plan.name then
+  -- answered at once with the server's keys. Plain items too: on
+  -- 2026-11-21 the built key (item level 0) of 2 of 2 got no answer, the
+  -- server's keys carry the item level (27/0, 20/0). Every item with a name
+  -- starts with the browse.
+  if plan.name then
     set(self, "locating")
-    if self.trace then self.trace("purchase_no_answer", { itemID = plan.itemID, next = "browse", variant = true }) end
+    if self.trace then
+      self.trace("purchase_no_answer", { itemID = plan.itemID, next = "browse", variant = current.suffix ~= nil })
+    end
     self:BrowseFallback(current)
     return true
   end
@@ -374,13 +379,14 @@ function Purchases:BrowseFallback(current)
     -- Only variants whose lowest price fits the lot (in game 2026-11-07
     -- 23:47 five dearer variants were searched one by one for nothing), the
     -- plan's own variant first.
-    local candidates, sameItem = {}, 0
+    local candidates, sameItem, floor = {}, 0, nil
     local wantMax = plan.lot and plan.lot.buyoutTotal
     local wantQuantity = plan.lot and plan.lot.quantity or 1
     for _, result in ipairs(results) do
       if result.itemKey.itemID == plan.itemID then
         sameItem = sameItem + 1
         local unit = result.minPrice
+        if Money.IsCopper(unit) and (floor == nil or unit < floor) then floor = unit end
         if not (Money.IsCopper(unit) and Money.IsCopper(wantMax)) or unit * wantQuantity <= wantMax then
           candidates[#candidates + 1] = result
         end
@@ -407,9 +413,18 @@ function Purchases:BrowseFallback(current)
         end
       end
       self.trace("purchase_browse", { results = #results, sameItem = sameItem, tried = #keys, keys = table.concat(texts, ","),
-        wantMax = wantMax, prices = table.concat(seen, " "):sub(1, 64) })
+        wantMax = wantMax, prices = table.concat(seen, " "):sub(1, 64), floor = floor })
     end
     if #keys == 0 then
+      if floor and self.priceFloor then
+        -- Still listed, only dearer: the cheaper lots of the view are gone;
+        -- the item is priced again at what is listed now instead of being
+        -- hidden until the next scan.
+        local dropped = self.priceFloor(plan.itemID, floor)
+        if self.trace then self.trace("purchase_price_moved", { itemID = plan.itemID, floor = floor, dropped = dropped }) end
+        set(self, "rejected", "price_moved")
+        return
+      end
       set(self, "rejected", "lot_gone")
       return
     end

@@ -80,6 +80,7 @@ function App:Load(saved)
     isReady = function() return self.ah:IsReady() end,
     stale = function() return self.opportunities and self.opportunities.stale end,
     isCommodity = function(itemID) return self.ah:IsCommodity(itemID) end,
+    priceFloor = function(itemID, unit) return self.opportunities:DropBelow(itemID, unit) end,
   })
   self.batch = ns.Services.Batch.New({ purchases = self.purchases, client = self.client, bus = self.bus, clock = clock,
     stale = function() return self.opportunities.stale end })
@@ -325,8 +326,10 @@ function App:Subscribe()
   -- Item data arrives in bursts after a scan: re-evaluate once it has been
   -- quiet for RESOLVE_QUIET seconds, and later if a pipeline is running (in
   -- game every burst started a full pass: three per scan, ~1.4 s CPU each).
-  bus:Subscribe("items.resolved", function()
+  bus:Subscribe("items.resolved", function(itemID)
     self.resolvedAt = self.clock()
+    self.resolvedIDs = self.resolvedIDs or {}
+    if type(itemID) == "number" then self.resolvedIDs[itemID] = true end
     if self.reevaluatePending then return end
     self.reevaluatePending = true
     local function check()
@@ -335,7 +338,11 @@ function App:Subscribe()
         return
       end
       self.reevaluatePending = false
-      self:EvaluateChunked()
+      -- Only the items whose data arrived (in game 2026-11-21 each burst
+      -- re-ran all 22,354 item keys).
+      local ids = self.resolvedIDs
+      self.resolvedIDs = nil
+      self:EvaluateChunked(nil, nil, next(ids or {}) and ids or nil)
     end
     self.scheduler:After(App.RESOLVE_QUIET, check)
   end)
@@ -449,6 +456,17 @@ function App:RecordHistory(snapshot, job, ingest, votes)
       self.opportunities:FinishIngest(ingest)
     end)
     if snapshot.mode == "replicate" then self:ObserveSales(snapshot, ingest.grouped) end
+    -- A search observes one item: only its keys are evaluated again.
+    local itemIDs
+    if snapshot.mode ~= "replicate" then
+      itemIDs = {}
+      for itemKey in pairs(ingest.grouped) do
+        local itemID = ns.Data.Schema.ItemIDOf(itemKey)
+        if itemID then itemIDs[itemID] = true end
+      end
+      local scoped = ns.Data.Schema.ItemIDOf(snapshot.scope)
+      if scoped then itemIDs[scoped] = true end
+    end
     self:EvaluateChunked(function(results)
       -- A user scan is summarised by UI/Feedback; notices are for the rest.
       if snapshot.mode == "replicate" then
@@ -458,7 +476,7 @@ function App:RecordHistory(snapshot, job, ingest, votes)
       self.opportunities:NotifyIfDue(function(good, counts)
         ns.Print(string.format(ns.L["NOTIFY_FOUND"], good, counts.itemKeys))
       end)
-    end, snapshot.mode)
+    end, snapshot.mode, itemIDs)
   end)
 end
 
@@ -485,10 +503,29 @@ function App:AlertAutoScan(results)
   return true
 end
 
-function App:EvaluateChunked(after, mode)
+-- itemIDs: set of item IDs to evaluate again (after a purchase, a search,
+-- item data arriving); nil evaluates every item key. A partial run asked
+-- while a full one is going waits for it (the full run may still have read
+-- those keys before the change).
+function App:EvaluateChunked(after, mode, itemIDs)
   local work, opportunities = self.work, self.opportunities
+  if itemIDs and self.fullRunning then
+    self.queuedIDs = self.queuedIDs or {}
+    for itemID in pairs(itemIDs) do self.queuedIDs[itemID] = true end
+    return
+  end
+  if self.queuedIDs then
+    -- Left by a full run that was cancelled: a partial run takes them, a
+    -- full one covers them.
+    if itemIDs then
+      for itemID in pairs(self.queuedIDs) do itemIDs[itemID] = true end
+    end
+    self.queuedIDs = nil
+  end
   self.processing = true
-  local job = self:Timed("evaluate_begin", nil, function() return opportunities:BeginEvaluate() end)
+  local job = self:Timed("evaluate_begin", nil, function() return opportunities:BeginEvaluate(itemIDs) end)
+  local full = not job.partial
+  if full then self.fullRunning = true end
   local total = #job.keys
   local startedAt = self.clock()
   self:Progress("evaluate", 0, total, mode)
@@ -496,9 +533,10 @@ function App:EvaluateChunked(after, mode)
     opportunities:EvaluateStep(job, index)
     if index % PROGRESS_EVERY == 0 then self:Progress("evaluate", index, total, mode) end
   end, function(done, handle)
+    if full then self.fullRunning = false end
     if not done then return end
     self.processing = false
-    self:ChunkTiming("evaluate", handle, startedAt, function(index)
+    self:ChunkTiming(full and "evaluate" or "evaluate_items", handle, startedAt, function(index)
       local key = job.keys[index]
       local view = key and opportunities.latest[key]
       return key, view and #view.listings or nil
@@ -511,6 +549,11 @@ function App:EvaluateChunked(after, mode)
     self:EvaluateCrafting()
     self:Progress("done", total, total, mode)
     if after then after(results) end
+    if full and self.queuedIDs then
+      local queued = self.queuedIDs
+      self.queuedIDs = nil
+      self:EvaluateChunked(nil, nil, queued)
+    end
   end)
 end
 

@@ -36,6 +36,15 @@ local function setup(options)
   return { app = app, ns = ns, clock = clock, ah = ah, wallet = wallet, bags = bags, find = find, inbox = inbox }
 end
 
+-- Every purchase starts with a browse by name (server keys, item level
+-- included); the fake answers it with one key of the item at minPrice.
+local function browseTo(s, itemID, minPrice, level)
+  s.ah.browse = { { itemKey = { itemID = itemID, itemLevel = level or 0, itemSuffix = 0, battlePetSpeciesID = 0 },
+    totalQuantity = 1, minPrice = minPrice } }
+  s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+  s.clock.advance(1)
+end
+
 T.Case("commodities are recognised and bought in part at the unit price", function()
   local s = setup()
   local o = s.find(101)
@@ -58,6 +67,31 @@ T.Case("commodity status arriving later triggers a re-evaluation", function()
   s.app:OnEvent("ITEM_KEY_ITEM_INFO_RECEIVED", 101)
   s.clock.advance(5)
   T.Eq(s.find(101).commodity, true)
+end)
+
+T.Case("evaluating one item again gives what a full evaluation gives", function()
+  local s = setup({ rows = {
+    { itemID = 101, count = 20, buyout = 700 }, { itemID = 201, count = 1, buyout = 200 },
+    { itemID = 201, count = 1, buyout = 250 }, { itemID = 103, count = 4, buyout = 40 },
+  } })
+  local function shape(results)
+    local rows = {}
+    for _, o in ipairs(results.list) do rows[#rows + 1] = o.itemKey .. ":" .. o.strategy .. ":" .. o.cost .. ":" .. o.quantity end
+    local c = results.counts
+    return table.concat(rows, ",") .. "|" .. c.itemKeys .. "/" .. c.listings .. "/" .. c.units .. "/" .. c.candidates
+      .. "/" .. c.opportunities .. "/" .. c.infoPending
+  end
+  local full = shape(s.app.opportunities.results)
+  s.app:EvaluateChunked(nil, nil, { [201] = true })
+  s.clock.advance(5)
+  T.Eq(shape(s.app.opportunities.results), full, "same offers and counts")
+  local phases = {}
+  for _, e in ipairs(s.app.store.db.diagnostics.timings) do phases[e.phase] = (phases[e.phase] or 0) + 1 end
+  T.Eq(phases.evaluate_items, 1, "a partial run")
+  -- The vendor merge works on copies: merging again does not double the lots.
+  s.app:EvaluateChunked(nil, nil, { [101] = true })
+  s.clock.advance(5)
+  T.Eq(shape(s.app.opportunities.results), full, "again the same")
 end)
 
 T.Case("plan stays within the cap and the player's gold", function()
@@ -180,6 +214,8 @@ T.Case("individual auction: read-only search locates it, one click buys it", fun
   T.Eq(p.current.plan.kind, "auction")
   T.Ok(p:Prepare(true))
   T.Eq(p.current.state, "locating")
+  T.Eq(s.ah.browseCalls, 1, "browse by name first")
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "located")
@@ -198,6 +234,7 @@ T.Case("individual auction refused: the window shows the client's reason", funct
     local p = s.app.purchases
     p:Begin(s.find(201), 5000)
     p:Prepare(true)
+    browseTo(s, 201, 200)
     s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 77 } }
     s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
     T.Ok(p:Confirm())
@@ -225,6 +262,7 @@ T.Case("individual auction with a bid at its buyout: skipped, every field traced
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 1, buyout = 200, bid = 200, minBid = 150, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected")
@@ -245,6 +283,7 @@ T.Case("individual auction with a bid at its buyout: skipped, every field traced
   p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 1, buyout = 200, bid = 120, minBid = 130, auctionID = 78 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "located")
@@ -267,6 +306,7 @@ T.Case("individual auction gone or dearer: rejected, nothing bought", function()
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 1, buyout = 250, auctionID = 78 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected")
@@ -345,26 +385,23 @@ T.Case("individual auction: no answer to the search stops waiting", function()
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
   T.Eq(p.current.state, "locating")
+  T.Eq(s.ah.browseCalls, 1, "browse sent at once")
   s.clock.advance(25)
   T.Eq(p.current.state, "locating", "still waiting past the old 10 s timeout")
   s.clock.advance(10)
-  T.Eq(p.current.state, "locating", "no answer to the built key: browse by name next")
-  s.clock.advance(5)
-  T.Eq(s.ah.browseCalls, 1, "browse sent")
-  s.clock.advance(40)
-  T.Eq(p.current.state, "rejected", "the browse got no answer either")
+  T.Eq(p.current.state, "rejected", "the browse got no answer")
   T.Eq(p.current.reason, "no_answer")
   T.Eq(s.ah.spendCalls, 0)
 end)
 
-T.Case("no answer to the built key: the browse finds the server key and the lot", function()
-  -- In game 2026-11-07 18:26: Lesser Magic Wand, built key unanswered.
+T.Case("plain item: the browse finds the server key (item level included) and the lot", function()
+  -- In game 2026-11-07 18:26 (Lesser Magic Wand) and 2026-11-21 (2 of 2)
+  -- the built key got no answer; the server's keys carry the item level.
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
-  s.clock.advance(40)
-  T.Eq(s.ah.browseCalls, 1)
+  T.Eq(s.ah.browseCalls, 1, "no built-key search first")
   s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 601, level = 13 } }
   s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 13, itemSuffix = 0, battlePetSpeciesID = 0 },
     totalQuantity = 1, minPrice = 200 } }
@@ -379,8 +416,9 @@ T.Case("no answer to the built key: the browse finds the server key and the lot"
     if e.k == "purchase_search" then sent = sent + 1 end
     if e.k == "purchase_no_answer" then noAnswer = e end
   end
-  T.Eq(sent, 2, "built key, then server key")
+  T.Eq(sent, 1, "only the server key")
   T.Eq(noAnswer.next, "browse")
+  T.Eq(noAnswer.variant, false)
 end)
 
 T.Case("search requests and their answers are traced with the delay", function()
@@ -388,7 +426,8 @@ T.Case("search requests and their answers are traced with the delay", function()
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
-  s.clock.advance(31) -- given up on (the browse fallback starts at 32 s)
+  browseTo(s, 201, 200)
+  s.clock.advance(30) -- 31 s after the search: given up on (the purchase stops waiting at 32 s)
   s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 93 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   local request, answer
@@ -464,6 +503,7 @@ T.Case("an offer found gone leaves the list until fresh data arrives", function(
   s.ns.UI = s.ns.UI or {}
   p:Begin(opportunity, 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 1, buyout = 999, auctionID = 92 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.reason, "lot_gone")
@@ -541,6 +581,12 @@ T.Case("history tables: scans newest first, prices with days and reference", fun
   T.Eq(#scans, 1)
   T.Eq(scans[1].cells[2], s.ns.L.MODE_replicate)
   T.Eq(scans[1].cells[4], "3")
+  -- Every row read, some without item data: complete, with the missing count.
+  local snapshot = s.app.store:Market(s.app:MarketKey(), false).snapshots[1]
+  snapshot.coverage, snapshot.reason, snapshot.counts.incomplete = "partial", "rows_incomplete", 2
+  T.Eq(Panel.ScanRows(s.app)[1].cells[3], string.format(s.ns.L.HIST_RESULT_full_missing, 2))
+  snapshot.counts.valid = snapshot.counts.rows - 1
+  T.Eq(Panel.ScanRows(s.app)[1].cells[3], s.ns.L.HIST_RESULT_partial, "a row not read: partial")
   local prices = Panel.PriceRows(s.app)
   T.Eq(#prices, 1)
   T.Eq(prices[1].cells[1], "Linen")
@@ -818,6 +864,7 @@ T.Case("multi-unit auction: refused while the search price meaning is unverified
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 2, buyout = 200, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected", "a lower PlaceBid could become a bid, not a buyout")
@@ -829,6 +876,7 @@ T.Case("grouped item-search rows are priced per unit and never bought", function
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 2, buyout = 150, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected", "what PlaceBid buys on a grouped row is unknown")
@@ -1041,6 +1089,7 @@ T.Case("a lot found gone is not tried again (through the panel's handler)", func
   local offer = s.find(201)
   p:Begin(offer, 5000)
   p:Prepare(true)
+  browseTo(s, 201, 200)
   s.ah.items[201] = { { quantity = 1, buyout = 600, auctionID = 9 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.reason, "lot_gone")
@@ -1071,7 +1120,40 @@ T.Case("browse fallback: only variants at or under the lot price are searched", 
   s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
   s.clock.advance(2)
   T.Eq(s.ah.searchCalls, searches, "no search: every variant is dearer than the lot")
-  T.Eq(p.current.reason, "lot_gone")
+  T.Eq(p.current.reason, "price_moved", "still listed, only dearer")
+end)
+
+T.Case("still listed but dearer: cheaper lots leave the view, the item is priced again", function()
+  -- In game 2026-11-21: three planned lots 7-17% under the live price.
+  local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 }, { itemID = 201, count = 1, buyout = 250 } } })
+  s.ns.UI.PurchasePanel.Attach(s.app)
+  local p = s.app.purchases
+  local offer = s.find(201)
+  T.Eq(offer.cost, 450, "both lots under the merchant price")
+  p:Begin(offer, 5000)
+  p:Prepare(true)
+  local evaluated = 0
+  for _, e in ipairs(s.app.store.db.diagnostics.timings or {}) do
+    if e.phase == "evaluate" then evaluated = evaluated + 1 end
+  end
+  browseTo(s, 201, 250)
+  T.Eq(p.current.reason, "price_moved")
+  T.Eq(s.app.opportunities.stale[201], nil, "not hidden")
+  s.clock.advance(5)
+  local again = s.find(201)
+  T.Ok(again, "still an offer at the live price")
+  T.Eq(again.cost, 250, "the 200 lot is gone")
+  local full, items = 0, 0
+  for _, e in ipairs(s.app.store.db.diagnostics.timings or {}) do
+    if e.phase == "evaluate" then full = full + 1 end
+    if e.phase == "evaluate_items" then items = items + 1 end
+  end
+  T.Eq(full, evaluated, "no full evaluation after the attempt")
+  T.Ok(items >= 1, "only the item evaluated again")
+  local moved
+  for _, e in ipairs(s.app.store.db.diagnostics.trace) do if e.k == "purchase_price_moved" then moved = e end end
+  T.Eq(moved.floor, 250)
+  T.Eq(moved.dropped, 1)
 end)
 
 T.Case("'To do' screen: a buy action asks the server, then confirms on the second click", function()
@@ -1108,6 +1190,7 @@ T.Case("an item the server answers as a commodity is bought as one next time", f
   T.Eq(offer.commodity, false)
   p:Begin(offer, 5000)
   p:Prepare(true)
+  browseTo(s, 201, 20)
   s.ah.commodity[201] = { { quantity = 2647, unitPrice = 45 } }
   s.app:OnEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 201)
   T.Eq(p.current.reason, "is_commodity")

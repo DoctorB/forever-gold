@@ -287,13 +287,16 @@ function PurchasePanel.Attach(app)
       ns.Print(string.format(L("PB_DONE_CHAT"), plan.quantity, plan.name or plan.itemKey,
         fmt(app.store.db.ledger[current.ledgerIndex].cost)))
       app.opportunities:Consume(plan, current.auction)
-      app:EvaluateChunked()
+      app:EvaluateChunked(nil, nil, { [plan.itemID] = true })
       ns.UI.Main.RefreshPanel("portfolio")
     elseif current and current.state == "uncertain" then
       ns.Print(L("PB_UNCERTAIN"))
     elseif current and current.state == "rejected" and PurchasePanel.STALE_REASONS[current.reason] then
       app.opportunities:MarkStale(current.plan.itemID)
-      app:EvaluateChunked()
+      app:EvaluateChunked(nil, nil, { [current.plan.itemID] = true })
+    elseif current and current.state == "rejected" and current.reason == "price_moved" then
+      -- Priced again at the live lowest price (Purchases:BrowseFallback).
+      app:EvaluateChunked(nil, nil, { [current.plan.itemID] = true })
     end
   end)
   app.bus:Subscribe("batch.state", function(batch)

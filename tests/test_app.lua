@@ -304,6 +304,8 @@ local function craftingApp(bags, extra, saved)
   local globals = { C_TradeSkillUI = trade }
   for key, value in pairs(extra or {}) do globals[key] = value end
   local app, ns, clock, ah = Fakes.App({ rows = rows, items = CRAFT_ITEMS, globals = globals, bags = bags, saved = saved })
+  -- A small budget, so the crafting run needs more than one frame.
+  app.store.db.settings.frameBudgetMs = 1
   ah.commodityItems[102] = true
   ah.commodityItems[301] = false
   app:OnEvent("AUCTION_HOUSE_SHOW")

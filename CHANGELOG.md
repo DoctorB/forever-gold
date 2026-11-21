@@ -141,6 +141,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Much faster after a scan and while buying: after a purchase, a purchase
+  attempt or a price check only that item is priced again, not the whole
+  AH (each time took 16-20 seconds), and scans and pricing use more of each
+  frame (a full pass about 4 times faster).
+- Buying an auction no longer waits 30 seconds for an answer that never
+  comes: the add-on finds the item by name first, as the AH window does.
+- When the cheap auction of an offer is gone but the item is still listed
+  at a higher price, the offer is priced again at what is listed now instead
+  of disappearing until the next scan.
+- A scan that read every auction now shows "read in full" in Advanced >
+  History, with how many auctions came without item data, instead of
+  "partial".
 - "Buy all" no longer stops with a greyed-out button on items sold in
   stacks: the game only lets the add-on ask their price right after a click,
   so the button now reads "Get price" for each of them, then "Buy ... spend"

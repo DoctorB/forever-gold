@@ -20,7 +20,10 @@ Store.DEFAULT_SETTINGS = {
   feeBp = 500, -- AH sale fee, verified in game 2026-10-21 (5.00%)
   feeVerified = true,
   bufferBp = 500, -- prudent resale buffer
-  frameBudgetMs = 2, -- scanner work per frame, to be measured on the client
+  -- Work per frame for scans and evaluation. 2 ms (measured 2026-11-21) made
+  -- every pass 7-8 times slower than its CPU time: 22,354 item keys took
+  -- 16-20 s for 2.2 s of work, a 195,499-row scan read 63 s for 7 s.
+  frameBudgetMs = 8,
   notify = true,
   notifyCooldown = 300,
   sessionOnly = false,
@@ -52,6 +55,8 @@ function Store.New(saved, opts)
   local store = setmetatable({ db = db, report = report }, { __index = Store })
   db.settings = db.settings or {}
   fillDefaults(db.settings, Store.DEFAULT_SETTINGS)
+  -- The old default (never offered in the window) moves to the new one.
+  if db.settings.frameBudgetMs == 2 then db.settings.frameBudgetMs = Store.DEFAULT_SETTINGS.frameBudgetMs end
   db.markets = db.markets or {}
   db.ledger = db.ledger or {}
   db.diagnostics = db.diagnostics or {}
