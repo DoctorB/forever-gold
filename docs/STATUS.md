@@ -235,6 +235,20 @@ To verify in game before relying on it: `GetItemStats` on Forever links
 variant; how the client reports specialization and weapon skills; that
 items not cached yet resolve fast enough for the candidates only.
 
+Checked in game 2026-11-21 ("Equipment test", Warrior 25, rounds 10:14 and
+11:10): only the C_ functions exist (all needed ones are there);
+`GetSpecialization` answers 1, the talent tree comes from C_Traits points
+(protection=16, as Forever One Button reads it); stats come from the exact
+link of each variant (random suffixes differ); `C_PlayerInfo.CanUseItem`
+answers true for mail, leather, cloth, one-hand swords/maces/axes at or under
+the level and false for untrained weapons (two-hand, daggers, staves), plate,
+wands, items above the level and items needing a profession, while
+`C_Item.IsUsableItem` is false for everything (not usable for this);
+16,203 of 18,076 equippable AH keys had no item data yet, and even equipped
+items needed `RequestLoadItemDataByID` (loaded within 2 s): the finder must
+filter locally first (slot, class, subclass from `GetItemInfoInstant`) and
+load only those candidates, a batch at a time.
+
 Steps: (1) read-only list of upgrades with the reason for each; (2) buy from
 the list through the assisted purchase; (3) stat weights per spec reviewed
 with the owner and editable in the settings.
