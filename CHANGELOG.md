@@ -150,6 +150,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 - When the cheap auction of an offer is gone but the item is still listed
   at a higher price, the offer is priced again at what is listed now instead
   of disappearing until the next scan.
+- An auction the server shows grouped with others at the same price is no
+  longer reported as gone: the add-on says it cannot buy it from here yet
+  (buy it in the AH window) and the offer stays in the list.
 - A scan that read every auction now shows "read in full" in Advanced >
   History, with how many auctions came without item data, instead of
   "partial".

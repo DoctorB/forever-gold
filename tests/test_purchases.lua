@@ -880,7 +880,9 @@ T.Case("grouped item-search rows are priced per unit and never bought", function
   s.ah.items[201] = { { quantity = 2, buyout = 150, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected", "what PlaceBid buys on a grouped row is unknown")
+  T.Eq(p.current.reason, "grouped", "said as such, not as gone")
   T.Eq(s.ah.spendCalls, 0)
+  T.Eq(s.ns.UI.PurchasePanel.STALE_REASONS.grouped, nil, "the offer stays in the list")
 end)
 
 T.Case("AH search test: variants and multi-unit lots probed read-only, results saved", function()

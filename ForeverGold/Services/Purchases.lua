@@ -237,11 +237,20 @@ local function blockedByBid(listing)
   return listing.currentBid ~= nil and listing.buyoutTotal ~= nil and listing.currentBid >= listing.buyoutTotal
 end
 
+-- grouped: rows of several single auctions at one price (item search groups
+-- them) whose unit price fits the lot. What PlaceBid buys on such a row is
+-- not verified, so they are never bought; the offer itself is still there
+-- (in game 2026-11-21 09:57: "2 x 370" for a planned lot of 1 at 370).
 local function matchLots(plan, listings)
-  local best, matched, cheapest, blocked = nil, 0, nil, 0
+  local best, matched, cheapest, blocked, grouped = nil, 0, nil, 0, 0
   for _, listing in ipairs(listings) do
     local sameItem = listing.itemKey == plan.itemKey
       or (plan.anyVariant and Schema.ItemIDOf(listing.itemKey) == plan.itemID)
+    if sameItem and not listing.own and listing.complete == false
+      and listing.quantity > 1 and listing.quantity ~= plan.lot.quantity
+      and listing.buyoutTotal and listing.buyoutTotal * plan.lot.quantity <= plan.lot.buyoutTotal * listing.quantity then
+      grouped = grouped + 1
+    end
     local enough = plan.anyVariant and listing.quantity >= plan.lot.quantity or listing.quantity == plan.lot.quantity
     if listing.buyoutTotal and (not cheapest or listing.buyoutTotal < cheapest) then cheapest = listing.buyoutTotal end
     if listing.buyable and listing.auctionID ~= nil and sameItem and enough
@@ -254,7 +263,7 @@ local function matchLots(plan, listings)
       end
     end
   end
-  return best, matched, cheapest, blocked
+  return best, matched, cheapest, blocked, grouped
 end
 
 -- One search row for the trace: "auctionID qty buyout bid minBid".
@@ -306,7 +315,7 @@ function Purchases:Locate(current, key)
       set(self, "rejected", "is_commodity")
       return
     end
-    local best, matched, cheapest, blocked = matchLots(plan, listings)
+    local best, matched, cheapest, blocked, grouped = matchLots(plan, listings)
     current.blocked = (current.blocked or 0) + blocked
     if blocked > 0 then
       -- Every field of the auctions skipped for their bid (at most 3).
@@ -320,7 +329,7 @@ function Purchases:Locate(current, key)
     end
     if self.trace then
       local entry = { rows = #listings, matched = matched, cheapest = cheapest, blocked = blocked,
-        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey,
+        wantQuantity = plan.lot.quantity, wantMax = plan.lot.buyoutTotal, planKey = plan.itemKey, grouped = grouped,
         level = current.itemLevel, suffix = suffix, key = key and keyText(key) or nil,
         firstKey = listings[1] and listings[1].itemKey, firstQuantity = listings[1] and listings[1].quantity,
         best = best and best.auctionID or nil }
@@ -340,6 +349,9 @@ function Purchases:Locate(current, key)
       self:WhenReady(current, function() self:BrowseFallback(current) end)
     elseif current.blocked > 0 then
       set(self, "rejected", "has_bid")
+    elseif grouped > 0 then
+      -- Still on sale, only not buyable one by one from here: not hidden.
+      set(self, "rejected", "grouped")
     else
       set(self, "rejected", "lot_gone")
     end
