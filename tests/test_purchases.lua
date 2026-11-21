@@ -479,7 +479,8 @@ T.Case("vendor purchase accepts any variant of the item; the attempt is traced",
   p:Begin(o, 5000)
   p:Prepare(true)
   -- Variant: browse first; the server key carries no bonus (other key, same item).
-  s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 190 } }
+  s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 },
+    totalQuantity = 1, minPrice = 190 } }
   s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
   s.clock.advance(1)
   s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 91 } }
@@ -1116,7 +1117,8 @@ T.Case("browse fallback: only variants at or under the lot price are searched", 
   T.Eq(s.ah.browseCalls, 1, "variant: browse at once")
   s.ah.browse = {
     { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14308, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 500 },
-    { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14320, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 1600 },
+    { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14320, battlePetSpeciesID = 0 },
+      totalQuantity = 1, minPrice = 1600 },
   }
   local searches = s.ah.searchCalls
   s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
