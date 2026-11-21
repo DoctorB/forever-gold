@@ -120,6 +120,7 @@ function App:Load(saved)
   })
   self.gearProbe = ns.Services.GearProbe.New({
     client = self.client, opportunities = self.opportunities, store = self.store, preciseMs = self.schedulerEnv.preciseMs,
+    after = self.schedulerEnv.after,
   })
   self.feeTest = ns.Services.FeeTest.New({
     client = self.client, ah = self.ah, items = self.items, opportunities = self.opportunities, store = self.store,

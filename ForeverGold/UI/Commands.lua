@@ -50,7 +50,10 @@ function Commands.Handle(input)
   elseif command == "probe" then
     ns.UI.Feedback.StartProbe(app)
   elseif command == "gear" then
-    for _, line in ipairs(ns.Services.GearProbe.Summary(app.gearProbe:Run(app.clock()), ns.L)) do ns.Print(line) end
+    -- Printed once, after the re-read of items without data.
+    app.gearProbe:Run(app.clock(), function(report)
+      for _, line in ipairs(ns.Services.GearProbe.Summary(report, ns.L)) do ns.Print(line) end
+    end)
   elseif command == "lang" then
     local code = ({ it = "itIT", itit = "itIT", en = "enUS", enus = "enUS", auto = "auto" })[rest]
     if not code then

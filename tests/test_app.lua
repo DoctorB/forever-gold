@@ -1589,33 +1589,56 @@ end)
 T.Case("equipment test: read-only answers for the planned upgrade finder", function()
   local LINK_A = "|Hitem:201::::::::20:1486::1:1:12730:::::|h[Green Sword]|h"
   local LINK_B = "|Hitem:201::::::::20:1486::1:1:12745:::::|h[Green Sword]|h"
+  local RING = "|Hitem:300|h[Old Ring]|h"
   local STATS = {
     [LINK_A] = { ITEM_MOD_STRENGTH_SHORT = 3 }, [LINK_B] = { ITEM_MOD_STAMINA_SHORT = 4 },
-    ["item:202"] = { ITEM_MOD_AGILITY_SHORT = 2 }, ["|Hitem:300|h[Old Ring]|h"] = { ITEM_MOD_SPIRIT_SHORT = 1 },
+    ["item:202"] = { ITEM_MOD_AGILITY_SHORT = 2 }, [RING] = { ITEM_MOD_SPIRIT_SHORT = 1 },
+    ["item:203"] = { ITEM_MOD_STRENGTH_SHORT = 9 },
   }
-  local LOC = { [201] = "INVTYPE_WEAPON", [202] = "INVTYPE_FINGER", [300] = "INVTYPE_FINGER" }
+  local LOC = { [201] = "INVTYPE_WEAPON", [202] = "INVTYPE_FINGER", [203] = "INVTYPE_CHEST", [300] = "INVTYPE_FINGER" }
+  local INFO = { [201] = { "Green Sword", 20, "One-Handed Swords" }, [202] = { "Jade Band", 30, "Miscellaneous" },
+    [300] = { "Old Ring", 10, "Miscellaneous" } }
+  local loaded, probing = {}, false
   local function id(item) return type(item) == "number" and item or tonumber(tostring(item):match("item:(%d+)")) end
   local globals = {
     UnitClass = function() return "Warrior", "WARRIOR" end,
     UnitLevel = function() return 24 end,
-    GetNumTalentTabs = function() return 3 end,
-    GetTalentTabInfo = function(tab) return ({ "Arms", "Fury", "Protection" })[tab], "icon", tab == 3 and 10 or 0 end,
-    GetNumSkillLines = function() return 2 end,
-    GetSkillLineInfo = function(i)
-      if i == 1 then return "Weapon Skills", true end
-      return "Swords", false, nil, 110, nil, nil, 120
-    end,
-    GetInventoryItemLink = function(_, slot) if slot == 11 then return "|Hitem:300|h[Old Ring]|h" end end,
-    GetItemStats = function(link) return STATS[link] end,
-    GetItemInfoInstant = function(item)
-      local itemID = id(item)
-      return itemID, "Armor", "Misc", LOC[itemID] or "", 1, 4, 0
-    end,
-    IsEquippableItem = function() return true end,
+    GetInventoryItemLink = function(_, slot) if slot == 11 then return RING end end,
+    C_SpecializationInfo = {
+      GetSpecialization = function() return 1 end, GetSpecializationInfo = function() return 71 end,
+    },
+    C_ClassTalents = { GetActiveConfigID = function() return 5 end, GetTraitTreeForSpec = function() return 9 end },
+    C_Traits = {
+      GetGroupDisplayInfoByTreeID = function()
+        return { { groupID = 1, displayName = "Arms" }, { groupID = 2, displayName = "Protection" } }
+      end,
+      GetGroupCurrencyInfo = function()
+        return { { traitNodeGroupID = 1, currencyInfos = { { spent = 2 } } },
+          { traitNodeGroupID = 2, currencyInfos = { { spent = 14 } } } }
+      end,
+    },
+    C_Item = {
+      GetItemStats = function(link) return STATS[link] end,
+      GetItemInfoInstant = function(item)
+        local itemID = id(item)
+        return itemID, "Armor", "Misc", LOC[itemID] or "", 1, 4, 0
+      end,
+      GetItemInfo = function(item)
+        local itemID = id(item)
+        local info = INFO[itemID] or (loaded[itemID] and { "Chain Vest", 22, "Mail" })
+        if not info then return nil end
+        return info[1], "link", 2, 20, info[2], "Armor", info[3]
+      end,
+      IsUsableItem = function(item) return (INFO[id(item)] or { nil, 99 })[2] <= 24 end,
+      IsEquippableItem = function() return true end,
+      -- Only the probe's requests load (the evaluation asks too).
+      RequestLoadItemDataByID = function(itemID) if probing then loaded[itemID] = true end end,
+    },
   }
   local rows = {
     { itemID = 201, count = 1, buyout = 500, link = LINK_A }, { itemID = 201, count = 1, buyout = 600, link = LINK_B },
-    { itemID = 202, count = 1, buyout = 300 }, { itemID = 101, count = 5, buyout = 50 },
+    { itemID = 202, count = 1, buyout = 300 }, { itemID = 203, count = 1, buyout = 900 },
+    { itemID = 101, count = 5, buyout = 50 },
   }
   local app, ns, clock, ah = Fakes.App({ rows = rows, globals = globals })
   app:OnEvent("AUCTION_HOUSE_SHOW")
@@ -1623,23 +1646,38 @@ T.Case("equipment test: read-only answers for the planned upgrade finder", funct
   ah.delivered = true
   app:OnEvent("REPLICATE_ITEM_LIST_UPDATE")
   clock.advance(30)
-  local report = app.gearProbe:Run(app.clock())
+  local finished
+  probing = true
+  local report = app.gearProbe:Run(app.clock(), function(r) finished = r end)
   T.Eq(report.character.classFile, "WARRIOR")
   T.Eq(report.character.level, 24)
-  T.Eq(#report.character.trees, 3)
-  T.Eq(report.character.skills[1], "Swords 110/120")
+  T.Eq(report.character.trees, "arms=2 protection=14", "points per tree, as One Button reads them")
   T.Eq(report.equippedRead, 1)
   T.Eq(report.equipped[1].stats, "SPIRIT=1")
-  T.Eq(report.market.equippable, 3, "two sword variants and a ring, not the cloth")
-  T.Eq(report.market.byLoc.INVTYPE_FINGER, 1)
-  T.Eq(report.variants.compared, 1)
+  T.Eq(report.equippedUsable, 1)
+  T.Eq(report.market.equippable, 4, "two sword variants, a ring and a vest, not the cloth")
+  T.Eq(report.market.notLoaded, 1, "the vest has no data yet")
   T.Eq(report.variants.differ, 1, "each variant read from its own link")
-  T.Eq(report.apis.GetItemStats, true)
+  local fits, above = 0, 0
+  for _, row in ipairs(report.market.sample) do
+    if row.fits then fits = fits + 1 else above = above + 1 end
+  end
+  T.Eq(fits, 2, "the two swords (level 20)")
+  T.Eq(above, 1, "the ring (level 30)")
   T.Eq(report.apis["C_PlayerInfo.CanUseItem"], false)
-  T.Ok(app.store.db.diagnostics.gear == report, "saved for the analysis")
+  T.Eq(finished, nil, "the re-read comes later")
   local lines = ns.Services.GearProbe.Summary(report, ns.L)
-  T.Ok(lines[1]:find("Warrior", 1, true), lines[1])
-  T.Ok(lines[5]:find("1 of 1", 1, true), lines[5])
+  T.Ok(lines[#lines - 1]:find("2 seconds", 1, true), lines[#lines - 1])
+  clock.advance(3)
+  T.Ok(finished == report, "re-read done")
+  T.Eq(report.reload.asked, 1)
+  T.Eq(report.reload.loaded, 1)
+  T.Eq(report.reload.withStats, 1)
+  for _, row in ipairs(report.market.sample) do T.Eq(row.link, nil, "full links are not saved") end
+  T.Ok(app.store.db.diagnostics.gear == report, "saved for the analysis")
+  lines = ns.Services.GearProbe.Summary(report, ns.L)
+  T.Ok(lines[1]:find("protection=14", 1, true), lines[1])
+  T.Ok(lines[5]:find("2 of 2", 1, true) and lines[5]:find("0 of 1", 1, true), lines[5])
   T.Eq(ah.spendCalls, 0)
   T.Eq(ah.replicateCalls, 1, "no AH request")
 end)

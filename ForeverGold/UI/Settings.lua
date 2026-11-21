@@ -128,8 +128,10 @@ function Settings.Build(panel)
   panel.message:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
   -- Read-only check of the functions an equipment finder needs.
   local gear = W.Button(panel, L("BTN_GEAR"), 180, function()
-    local report = ns.app.gearProbe:Run(ns.app.clock())
-    panel.output:SetText(table.concat(ns.Services.GearProbe.Summary(report, ns.L), "\n"))
+    local function show(report)
+      panel.output:SetText(table.concat(ns.Services.GearProbe.Summary(report, ns.L), "\n"))
+    end
+    show(ns.app.gearProbe:Run(ns.app.clock(), show))
   end)
   gear:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y - 30)
   panel.output = W.ScrollText(panel, false)
