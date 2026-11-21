@@ -46,7 +46,7 @@ function History.SummaryLine(app)
   local bytes = Store.EstimateBytes(store.db.markets)
   local persistence = ns.Core.Capabilities.IsVerified("persistence") and L("VERIFIED") or L("NOT_VERIFIED")
   if store.sessionOnly then persistence = L("SESSION_ONLY") end
-  local fields = app.client:MarketFields()
+  local fields = app.MarketFields and app:MarketFields() or app.client:MarketFields()
   local where = (fields.realm or "?") .. (fields.faction and (" (" .. fields.faction .. ")") or "")
   local line = string.format(L("HIST_SUMMARY"), where, market and market.itemCount or 0, math.floor(bytes / 1024),
     math.floor(Store.RETENTION.budgetBytes / 1024), persistence)

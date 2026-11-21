@@ -12,7 +12,7 @@
 -- are close (a scan that read far fewer rows - 164,639 against 252,483 in
 -- game - would make every missing lot look sold).
 -- Kept in ForeverGoldDB.sellThrough:
---   version = VERSION (older data, counted without the relist check, is dropped)
+--   version = VERSION (older data is dropped: version 1 counted relists, 2 a cut-short scan)
 --   prev  = { t, rows, levels = { [itemKey] = "price:SIZExSTACKS/...,..." } }  last scan, cheapest LEVELS prices
 --   items = { [itemKey] = { h = hours watched, u = units gone, g = value gone,
 --             p = { last KEEP_PRICES unit prices of units gone }, t = last update } }
@@ -26,10 +26,13 @@ SellThrough.MIN_LISTINGS = 5
 SellThrough.LEVELS = 8 -- cheapest price levels compared per item
 SellThrough.MAX_GAP = 1800 -- seconds between the two scans
 SellThrough.MIN_ROWS_RATIO = 0.9 -- this scan's rows / the previous scan's rows
+SellThrough.MIN_READ_RATIO = 0.99 -- rows read / rows announced (Core/App.lua ObserveSales)
 SellThrough.KEEP_PRICES = 20
 SellThrough.MAX_ITEMS = 6000
 SellThrough.MIN_HOURS = 1 -- watched at least this long before showing a rate
-SellThrough.VERSION = 2
+-- 3: data counted from a scan cut short by closing the AH (2026-11-19) is
+-- dropped with everything else (version 2 data cannot tell it apart).
+SellThrough.VERSION = 3
 
 function SellThrough.New(memory, clock)
   if memory.version ~= SellThrough.VERSION then

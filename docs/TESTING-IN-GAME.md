@@ -31,6 +31,7 @@ Copper Bars for Copper Rod).
 | R12 | `/fg` | Open the window | the "To do" screen: title, gold, how fresh the prices are, actions with one button each; "Advanced" shows the old tabs | simple view (D56) |
 | R13 | AH open, auto-scan on, 1-2 h | Leave the AH open; then hover Linen Cloth or Copper Ore in the bags | "sells about N an hour, at about P each (watched H h)"; Advanced > History: "Sales watched: N items" | sell-through (D58) |
 | R14 | after R13 | `/fg` → To do, then Advanced → Opportunities | buy rows marked "(still there since the last scan)" come first; resale rows only for items whose tooltip shows a sales rate; Opportunities footer may count "no sales seen yet" | sales evidence (D59) |
+| R15 | AH open twice within 30 min, both scans left to finish | Log in, open the AH and wait for the scan to end, close, reopen within 30 min and wait again; then `/fg` → Advanced → History | the summary names the realm (not "?"), the price history of earlier days is there; next to it "Sales watched: N items"; closing the AH in the middle of a scan does not add sales | realm fallback and cut-short scans (D60) |
 | R9 | anywhere | `/reload` | — (saves deposit checks, auto-scan and Buy all traces) | evidence |
 
 ## Installing the alpha

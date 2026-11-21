@@ -224,3 +224,22 @@ T.Case("pruning trims old saves: 1 observation per item, 8 prices per day", func
   T.Eq(#bucket.p, 8)
   T.Eq(#bucket.depth, 8)
 end)
+
+T.Case("a market saved under another key merges into the real one", function()
+  local store = Store.New({ schema = 2 })
+  local history = History.New(store, function() return 0 end)
+  record(history, A, "i:2589:0", 100, 10 * DAY + 60)
+  record(history, A, "i:2840:0", 50, 10 * DAY + 60)
+  record(history, UNKNOWN, "i:2840:0", 90, 10 * DAY + 120)
+  record(history, UNKNOWN, "i:2840:0", 70, 11 * DAY + 60)
+  record(history, UNKNOWN, "i:3576:0", 30, 11 * DAY + 60)
+  local into = History.MergeMarket(store:Market(UNKNOWN, false), store:Market(A, false))
+  T.Eq(into.itemCount, 3, "the new item moved")
+  local copper = into.items["i:2840:0"]
+  T.Eq(copper.days[11].price, 70, "a day only in the other market is copied")
+  T.Eq(#copper.days[10].p, 2, "a day in both keeps both interval prices")
+  T.Eq(copper.recent[1].t, 11 * DAY + 60, "the latest detailed observation wins")
+  T.Eq(copper.lastSeen, 11 * DAY + 60)
+  T.Eq(#into.snapshots, 5)
+  for index = 2, #into.snapshots do T.Ok(into.snapshots[index - 1].t <= into.snapshots[index].t) end
+end)

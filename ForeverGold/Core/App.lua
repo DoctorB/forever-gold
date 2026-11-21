@@ -233,9 +233,69 @@ function App:ScannerMemory()
   return memory
 end
 
+-- Market fields with the realm made dependable. On 2026-11-20 the client
+-- gave no realm for a whole evening: every scan went to a market "...|?|..."
+-- and the character got a second record "Name-?", so the evening ran on an
+-- empty history. The last realm read is kept (db.lastRealm) and used when
+-- the client gives none (the account plays one realm); data saved under "?"
+-- is merged into the real realm as soon as it is known.
+function App:MarketFields()
+  local fields = self.client:MarketFields()
+  local db = self.store.db
+  if fields.realm then
+    db.lastRealm = fields.realm
+  elseif type(db.lastRealm) == "string" and db.lastRealm ~= "" then
+    fields.realm = db.lastRealm
+    if not self.realmFallbackTraced and self.diagnostics then
+      self.realmFallbackTraced = true
+      self.diagnostics:Trace("realm_fallback", { realm = db.lastRealm, tried = fields.realmTried })
+    end
+  end
+  if fields.realm then self:MergeUnknownRealm(fields) end
+  return fields
+end
+
+-- Markets and character records saved with realm "?" go into the real realm.
+function App:MergeUnknownRealm(fields)
+  if self.unknownRealmMerged then return end
+  self.unknownRealmMerged = true
+  local Schema, db = ns.Data.Schema, self.store.db
+  local unknown = Schema.MarketKey({ product = fields.product, region = fields.region, faction = fields.faction })
+  local known = Schema.MarketKey(fields)
+  local markets, characters = 0, 0
+  local from = db.markets and db.markets[unknown]
+  if from and unknown ~= known then
+    ns.Data.History.MergeMarket(from, self.store:Market(known, true))
+    db.markets[unknown] = nil
+    markets = 1
+  end
+  for key, data in pairs(db.characters or {}) do
+    local name = key:match("^(.+)%-%?$")
+    if name then
+      local target = name .. "-" .. fields.realm
+      db.characters[target] = db.characters[target] or { migrated = data.migrated, professions = {} }
+      local record = db.characters[target]
+      record.professions = record.professions or {}
+      for profession, observed in pairs(data.professions or {}) do
+        local mine = record.professions[profession]
+        if not mine or (observed.at or 0) > (mine.at or 0) then record.professions[profession] = observed end
+      end
+      db.characters[key] = nil
+      characters = characters + 1
+    end
+  end
+  if (markets > 0 or characters > 0) and self.diagnostics then
+    self.diagnostics:Trace("realm_merged", { markets = markets, characters = characters, realm = fields.realm })
+  end
+end
+
+-- Cached only with a realm: a "?" key is read again at the next call.
 function App:MarketKey()
   if not self.marketKeyCache then
-    self.marketKeyCache = ns.Data.Schema.MarketKey(self.client:MarketFields())
+    local fields = self:MarketFields()
+    local key = ns.Data.Schema.MarketKey(fields)
+    if not fields.realm then return key end
+    self.marketKeyCache = key
   end
   return self.marketKeyCache
 end
@@ -326,7 +386,18 @@ end
 function App:ObserveSales(snapshot, grouped)
   local sales = self.sellThrough
   local counts = snapshot.counts or {}
-  local job = sales:Begin(grouped or {}, snapshot.finished or self.clock(), counts.rows or counts.valid)
+  -- Only a scan read to the end: on 2026-11-19 the AH was closed after
+  -- 218,511 of 340,437 rows and every lot not read yet counted as sold
+  -- (813,456 units in 16 minutes). Such a scan is not kept as the base of
+  -- the next comparison either. `valid` is what was read, `rows` what the
+  -- server announced.
+  local read, announced = counts.valid, counts.rows
+  if snapshot.reason == "ah_closed" or (type(read) == "number" and type(announced) == "number"
+      and read < announced * ns.Services.SellThrough.MIN_READ_RATIO) then
+    self.diagnostics:Trace("sell_through", { reason = "cut_short", read = read, rows = announced })
+    return
+  end
+  local job = sales:Begin(grouped or {}, snapshot.finished or self.clock(), read or announced)
   local work = self.salesWork
   work:Invalidate()
   work:Chunk(1, #job.keys, self.store:Settings().frameBudgetMs, function(index)
@@ -488,10 +559,10 @@ end
 function App:CharacterKey()
   local ok, name = self.client:Call(nil, "UnitName", "player")
   if not ok or self.client:IsSecret(name) or type(name) ~= "string" or name == "" then return nil end
-  -- GetNormalizedRealmName may be empty right after login, and the fallback
-  -- GetRealmName has spaces: in game one Rogue got two records
-  -- ("CAMWOWEU5Realm5PvE" and "CAMWOW EU5 Realm 5 PvE"). Spaces are dropped.
-  local realm = (self.client:MarketFields().realm or "?"):gsub("[%s%-]", "")
+  -- Without a realm there is no record ("Name-?" on 2026-11-20 split the
+  -- Warrior's professions in two): the saved lists load as they are.
+  local realm = self:MarketFields().realm
+  if not realm then return nil end
   return name .. "-" .. realm
 end
 

@@ -111,11 +111,28 @@ function ClientAdapter:MarketFields()
   fields.product = info.projectID and ("p" .. info.projectID) or nil
   local ok, region = self:Call(nil, "GetCurrentRegion")
   if ok and type(region) == "number" then fields.region = region end
-  local okRealm, realm = self:Call(nil, "GetNormalizedRealmName")
-  if not (okRealm and type(realm) == "string" and realm ~= "") then
-    okRealm, realm = self:Call(nil, "GetRealmName")
+  -- Realm: three sources, spaces and dashes dropped ("CAMWOW EU5 Realm 5
+  -- PvE" from GetRealmName is "CAMWOWEU5Realm5PvE"). On 2026-11-20 the
+  -- client gave no realm for a whole evening; realmTried says what each
+  -- source answered, for the trace.
+  local tried = {}
+  local function try(label, name, ...)
+    local ok, first, second = self:Call(nil, name, ...)
+    local value = first
+    if name == "UnitFullName" then value = second end
+    if not ok then tried[#tried + 1] = label .. "=error"
+    elseif self:IsSecret(value) then tried[#tried + 1] = label .. "=secret"
+    elseif type(value) ~= "string" then tried[#tried + 1] = label .. "=" .. type(value)
+    else
+      local realm = value:gsub("[%s%-]", "")
+      if realm ~= "" then return realm end
+      tried[#tried + 1] = label .. "=blank"
+    end
+    return nil
   end
-  if okRealm and type(realm) == "string" and realm ~= "" then fields.realm = realm end
+  fields.realm = try("normalized", "GetNormalizedRealmName") or try("name", "GetRealmName")
+    or try("full", "UnitFullName", "player")
+  if not fields.realm then fields.realmTried = table.concat(tried, " ") end
   local okFaction, faction = self:Call(nil, "UnitFactionGroup", "player")
   if okFaction and type(faction) == "string" then fields.faction = faction end
   return fields

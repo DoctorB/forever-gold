@@ -1471,3 +1471,72 @@ T.Case("sell-through runs after each full scan of the app", function()
   T.Ok(prev and prev.levels["i:101:0"], "levels of the first scan kept")
   T.Eq(app.store.db.sellThrough.lastRun.reason, "first")
 end)
+
+T.Case("realm: data saved under '?' is merged once the realm is read", function()
+  local unknown = "m1|p18|3|?|Alliance"
+  local saved = { schema = 2,
+    markets = { [unknown] = { itemCount = 1, snapshots = { { id = "s", t = 5 } },
+      items = { ["i:2840:0"] = { lastSeen = 5, recent = { { t = 5, price = 70 } }, days = { [0] = { p = { 70 }, depth = { 3 }, partial = 0, price = 70 } } } } } },
+    characters = {
+      ["Dolcissimo-?"] = { migrated = 2, professions = { Blacksmithing = { at = 20, skill = 87, learned = {} } } },
+      ["Dolcissimo-ClassicBetaPvE"] = { migrated = 2, professions = { Blacksmithing = { at = 10, skill = 86, learned = {} },
+        Mining = { at = 10, skill = 92, learned = {} } } },
+    } }
+  local app = Fakes.App({ saved = saved, clock = Fakes.Clock(1000), globals = { UnitName = function() return "Dolcissimo" end } })
+  local key = app:MarketKey()
+  T.Eq(key, "m1|p18|3|ClassicBetaPvE|Alliance")
+  local db = app.store.db
+  T.Eq(db.markets[unknown], nil, "the '?' market is gone")
+  T.Eq(db.markets[key].items["i:2840:0"].recent[1].price, 70, "its history moved")
+  T.Eq(db.characters["Dolcissimo-?"], nil)
+  local mine = db.characters["Dolcissimo-ClassicBetaPvE"].professions
+  T.Eq(mine.Blacksmithing.skill, 87, "the latest observation wins")
+  T.Eq(mine.Mining.skill, 92)
+  T.Eq(db.lastRealm, "ClassicBetaPvE")
+end)
+
+T.Case("realm: when the client gives none, the last realm read is used", function()
+  local blank = function() return "" end
+  local app = Fakes.App({ saved = { schema = 2, lastRealm = "ClassicBetaPvE" }, globals = {
+    UnitName = function() return "Dolcissimo" end, GetNormalizedRealmName = blank, GetRealmName = blank,
+  } })
+  T.Eq(app:MarketKey(), "m1|p18|3|ClassicBetaPvE|Alliance")
+  T.Eq(app:CharacterKey(), "Dolcissimo-ClassicBetaPvE")
+  local traced
+  for _, entry in ipairs(app.store.db.diagnostics.trace or {}) do
+    if entry.k == "realm_fallback" then traced = entry end
+  end
+  T.Ok(traced, "fallback traced")
+  T.Eq(traced.tried, "normalized=blank name=blank full=error")
+end)
+
+T.Case("realm: never read at all, no '?' character record and no cached '?' market", function()
+  local realm = ""
+  local app = Fakes.App({ saved = { schema = 2 }, globals = {
+    UnitName = function() return "Dolcissimo" end, GetNormalizedRealmName = function() return realm end,
+  } })
+  T.Eq(app:CharacterKey(), nil)
+  T.Eq(app:MarketKey(), "m1|p18|3|?|Alliance")
+  realm = "ClassicBetaPvE"
+  T.Eq(app:MarketKey(), "m1|p18|3|ClassicBetaPvE|Alliance", "read again, not cached")
+  T.Eq(app:CharacterKey(), "Dolcissimo-ClassicBetaPvE")
+end)
+
+T.Case("sell-through: a scan cut short by closing the AH is not compared", function()
+  local app = Fakes.App({ saved = { schema = 2 } })
+  local lots = {}
+  for i = 1, 6 do lots[i] = { quantity = 1, buyoutTotal = 10, buyable = true } end
+  local memory = app.store.db.sellThrough
+  memory.prev = { t = 0, rows = 340437, levels = { ["i:2589:0"] = "10:1x20" } }
+  app:ObserveSales({ finished = 900, reason = "ah_closed", counts = { rows = 340437, valid = 218511 } },
+    { ["i:2589:0"] = lots })
+  app:ObserveSales({ finished = 900, reason = "rows_incomplete", counts = { rows = 340437, valid = 218511 } },
+    { ["i:2589:0"] = lots })
+  T.Eq(memory.prev.t, 0, "not kept as the next base either")
+  T.Eq(next(memory.items), nil, "nothing counted as sold")
+  local cut = 0
+  for _, entry in ipairs(app.store.db.diagnostics.trace or {}) do
+    if entry.k == "sell_through" and entry.reason == "cut_short" then cut = cut + 1 end
+  end
+  T.Eq(cut, 2)
+end)

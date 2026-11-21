@@ -108,6 +108,49 @@ function History:Record(snapshot, listings)
   return History.FinishRecord(job)
 end
 
+-- Moves everything of market `from` into market `into` (the same market
+-- saved under another key, e.g. realm "?"): new item keys move as they are;
+-- for a known item a day missing in `into` is copied, a day in both gets the
+-- interval prices of both (bounded, median recomputed); the latest detailed
+-- observations and the snapshots are kept by time.
+function History.MergeMarket(from, into)
+  for itemKey, item in pairs(from.items or {}) do
+    local mine = into.items[itemKey]
+    if not mine then
+      into.items[itemKey] = item
+      into.itemCount = (into.itemCount or 0) + 1
+    else
+      mine.lastSeen = math.max(mine.lastSeen or 0, item.lastSeen or 0)
+      for day, bucket in pairs(item.days or {}) do
+        local kept = mine.days[day]
+        if not kept then
+          mine.days[day] = bucket
+        else
+          for index, price in ipairs(bucket.p or {}) do
+            kept.p[#kept.p + 1] = price
+            kept.depth[#kept.depth + 1] = bucket.depth and bucket.depth[index] or 0
+          end
+          while #kept.p > History.MAX_INTERVALS_PER_DAY do
+            table.remove(kept.p, 1)
+            table.remove(kept.depth, 1)
+          end
+          kept.partial = (kept.partial or 0) + (bucket.partial or 0)
+          kept.price = lowerMedian(kept.p)
+          kept.depthMedian = lowerMedian(kept.depth)
+          if bucket.min then kept.min = math.min(kept.min or bucket.min, bucket.min) end
+        end
+      end
+      for _, entry in ipairs(item.recent or {}) do mine.recent[#mine.recent + 1] = entry end
+      table.sort(mine.recent, function(a, b) return (a.t or 0) < (b.t or 0) end)
+      while #mine.recent > History.MAX_RECENT_PER_ITEM do table.remove(mine.recent, 1) end
+    end
+  end
+  for _, snapshot in ipairs(from.snapshots or {}) do into.snapshots[#into.snapshots + 1] = snapshot end
+  table.sort(into.snapshots, function(a, b) return (a.t or 0) < (b.t or 0) end)
+  while #into.snapshots > 50 do table.remove(into.snapshots, 1) end
+  return into
+end
+
 -- Daily series for MarketValue.EstimateSeries.
 function History:Series(marketKey, itemKey)
   local market = self.store:Market(marketKey, false)

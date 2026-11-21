@@ -141,6 +141,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), SemVer version
 
 ### Fixed
 
+- Prices and sales now stay together when the game does not say which realm
+  you are on (it happened for a whole evening): the add-on uses the realm it
+  read last time, and prices and professions saved under an unknown realm
+  are moved back to the right one.
+- Closing the AH while a scan is still being read no longer counts the
+  auctions not read yet as sold. Sales data is reset once, because the
+  numbers saved so far may include such a scan.
+
 - An item the scan took for a single auction but the server answers as a
   commodity is now bought by the unit on the next click.
 - A purchase started from "To do" closes the details window of another
