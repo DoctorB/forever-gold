@@ -1540,3 +1540,16 @@ T.Case("sell-through: a scan cut short by closing the AH is not compared", funct
   end
   T.Eq(cut, 2)
 end)
+
+T.Case("realm: saved data without lastRealm takes the realm of its only market", function()
+  local blank = function() return "" end
+  local saved = { schema = 2, markets = {
+    ["m1|p18|3|CAMWOWEU5Realm5PvE|Alliance"] = { itemCount = 0, items = {}, snapshots = {} },
+    ["m1|p18|3|?|Alliance"] = { itemCount = 0, items = {}, snapshots = {} },
+  } }
+  local app = Fakes.App({ saved = saved, globals = {
+    UnitName = function() return "Dolcissimo" end, GetNormalizedRealmName = blank, GetRealmName = blank,
+  } })
+  T.Eq(app:MarketKey(), "m1|p18|3|CAMWOWEU5Realm5PvE|Alliance")
+  T.Eq(app.store.db.markets["m1|p18|3|?|Alliance"], nil, "merged")
+end)

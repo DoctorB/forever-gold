@@ -242,6 +242,16 @@ end
 function App:MarketFields()
   local fields = self.client:MarketFields()
   local db = self.store.db
+  if not db.lastRealm then
+    -- Saved before lastRealm existed: the realm of the saved markets, when
+    -- there is exactly one.
+    local found, count = nil, 0
+    for key in pairs(db.markets or {}) do
+      local realm = key:match("^m%d+|[^|]*|[^|]*|([^|]*)|")
+      if realm and realm ~= ns.Data.Schema.UNKNOWN and realm ~= found then found, count = realm, count + 1 end
+    end
+    if count == 1 then db.lastRealm = found end
+  end
   if fields.realm then
     db.lastRealm = fields.realm
   elseif type(db.lastRealm) == "string" and db.lastRealm ~= "" then
