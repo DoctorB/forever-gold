@@ -59,14 +59,15 @@ function Batch:Start(list, cap)
   if #queue == 0 then return false, "nothing" end
   self.active, self.queue, self.index, self.cap = true, queue, 0, cap
   self.spent, self.expected, self.bought, self.skipped = 0, 0, 0, 0
-  self.ready, self.stopReason, self.silent = false, nil, 0
-  self:Next()
+  self.ready, self.stopReason, self.silent, self.needsClick = false, nil, 0, false
+  self:Next(true)
   return true
 end
 
--- Prepares the next affordable offer (spends nothing).
-function Batch:Next()
-  self.ready = false
+-- Prepares the next affordable offer (spends nothing). click: called from
+-- the player's click (a commodity quote can only go out then).
+function Batch:Next(click)
+  self.ready, self.needsClick = false, false
   while self.active do
     self.index = self.index + 1
     local opportunity = self.queue[self.index]
@@ -87,7 +88,7 @@ function Batch:Next()
         publish(self)
         -- Any outcome, an immediate refusal included, arrives through
         -- OnPurchase, which moves on: this call must not move on again.
-        self.purchases:Prepare()
+        self.purchases:Prepare(click)
         return
       end
     end
@@ -110,6 +111,12 @@ function Batch:OnPurchase(current)
   elseif state == "quoted" or state == "located" or state == "rejected" or state == "failed" then
     self.silent = 0 -- the server answered (a refusal is an answer too)
   end
+  if state == "needs_click" then
+    self.ready, self.needsClick = false, true
+    publish(self)
+    return
+  end
+  self.needsClick = false
   if state == "quoted" or state == "located" then
     self.ready = true
     self.amount = current.quote and current.quote.total or (current.auction and current.auction.amount)
@@ -133,9 +140,15 @@ function Batch:OnPurchase(current)
   end
 end
 
+-- The button click that asks the server for the price of a commodity.
+function Batch:Quote()
+  if not (self.active and self.needsClick) then return false end
+  return self.purchases:Prepare(true)
+end
+
 function Batch:Stop(reason)
   if not self.active then return end
-  self.active, self.ready, self.stopReason = false, false, reason
+  self.active, self.ready, self.needsClick, self.stopReason = false, false, false, reason
   if reason == "cancelled" or reason == "user" then self.purchases:Cancel("user") end
   publish(self)
 end

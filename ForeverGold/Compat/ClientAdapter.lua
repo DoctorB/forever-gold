@@ -111,28 +111,33 @@ function ClientAdapter:MarketFields()
   fields.product = info.projectID and ("p" .. info.projectID) or nil
   local ok, region = self:Call(nil, "GetCurrentRegion")
   if ok and type(region) == "number" then fields.region = region end
-  -- Realm: three sources, spaces and dashes dropped ("CAMWOW EU5 Realm 5
-  -- PvE" from GetRealmName is "CAMWOWEU5Realm5PvE"). On 2026-11-20 the
-  -- client gave no realm for a whole evening; realmTried says what each
-  -- source answered, for the trace.
-  local tried = {}
+  -- Realm: what each source answers (fields.realmAnswers, for the trace)
+  -- and the first usable one, spaces and dashes dropped ("CAMWOW EU5 Realm 5
+  -- PvE" from GetRealmName is "CAMWOWEU5Realm5PvE"). Since 2026-11-20 the
+  -- names are not dependable on Forever (none for a whole evening, then
+  -- "Cacao", the suffix of the character's own WTF folder): Core/App keeps
+  -- the market realm fixed and uses this only on a first install.
+  local answers = {}
   local function try(label, name, ...)
     local ok, first, second = self:Call(nil, name, ...)
     local value = first
     if name == "UnitFullName" then value = second end
-    if not ok then tried[#tried + 1] = label .. "=error"
-    elseif self:IsSecret(value) then tried[#tried + 1] = label .. "=secret"
-    elseif type(value) ~= "string" then tried[#tried + 1] = label .. "=" .. type(value)
+    if not ok then answers[label] = "error"
+    elseif self:IsSecret(value) then answers[label] = "secret"
+    elseif type(value) ~= "string" then answers[label] = type(value)
     else
       local realm = value:gsub("[%s%-]", "")
+      answers[label] = realm ~= "" and realm:sub(1, 40) or "blank"
       if realm ~= "" then return realm end
-      tried[#tried + 1] = label .. "=blank"
     end
     return nil
   end
-  fields.realm = try("normalized", "GetNormalizedRealmName") or try("name", "GetRealmName")
-    or try("full", "UnitFullName", "player")
-  if not fields.realm then fields.realmTried = table.concat(tried, " ") end
+  local normalized, plain, full = try("normalized", "GetNormalizedRealmName"), try("name", "GetRealmName"),
+    try("full", "UnitFullName", "player")
+  local okID, realmID = self:Call(nil, "GetRealmID")
+  if okID and type(realmID) == "number" and not self:IsSecret(realmID) then fields.realmID = realmID end
+  fields.realm = normalized or plain or full
+  fields.realmAnswers = answers
   local okFaction, faction = self:Call(nil, "UnitFactionGroup", "player")
   if okFaction and type(faction) == "string" then fields.faction = faction end
   return fields

@@ -233,56 +233,65 @@ function App:ScannerMemory()
   return memory
 end
 
--- Market fields with the realm made dependable. On 2026-11-20 the client
--- gave no realm for a whole evening: every scan went to a market "...|?|..."
--- and the character got a second record "Name-?", so the evening ran on an
--- empty history. The last realm read is kept (db.lastRealm) and used when
--- the client gives none (the account plays one realm); data saved under "?"
--- is merged into the real realm as soon as it is known.
+-- Market fields with a fixed realm (D61). The client's realm names are not
+-- dependable on Forever: on 2026-11-20 none for a whole evening (scans went
+-- to a market "?" and the character got a record "Name-?"), on 2026-11-21
+-- "Cacao", the suffix of the character's WTF folder (another character's is
+-- "Lafava"), while all of them share one AH. So the realm is chosen once
+-- (db.realm): the realm of the saved history, else the first name read on a
+-- new install. What the client answers is traced once per session.
+-- Markets and character records saved under any other realm are merged into
+-- it (the account plays one realm; Forever Gold is not published).
 function App:MarketFields()
   local fields = self.client:MarketFields()
   local db = self.store.db
-  if not db.lastRealm then
-    -- Saved before lastRealm existed: the realm of the saved markets, when
-    -- there is exactly one.
-    local found, count = nil, 0
-    for key in pairs(db.markets or {}) do
-      local realm = key:match("^m%d+|[^|]*|[^|]*|([^|]*)|")
-      if realm and realm ~= ns.Data.Schema.UNKNOWN and realm ~= found then found, count = realm, count + 1 end
-    end
-    if count == 1 then db.lastRealm = found end
+  local answered = fields.realm
+  if not db.realm then db.realm = App.HistoryRealm(db) or answered end
+  db.lastRealm = nil -- replaced by db.realm
+  fields.realm = db.realm
+  if self.diagnostics and not self.realmTraced then
+    self.realmTraced = true
+    local answers = fields.realmAnswers or {}
+    self.diagnostics:Trace("realm_read", { realm = fields.realm or "none", realmID = fields.realmID,
+      normalized = answers.normalized, name = answers.name, full = answers.full })
   end
-  if fields.realm then
-    db.lastRealm = fields.realm
-  elseif type(db.lastRealm) == "string" and db.lastRealm ~= "" then
-    fields.realm = db.lastRealm
-    if not self.realmFallbackTraced and self.diagnostics then
-      self.realmFallbackTraced = true
-      self.diagnostics:Trace("realm_fallback", { realm = db.lastRealm, tried = fields.realmTried })
-    end
-  end
-  if fields.realm then self:MergeUnknownRealm(fields) end
+  if fields.realm then self:MergeOtherRealms(fields) end
   return fields
 end
 
--- Markets and character records saved with realm "?" go into the real realm.
-function App:MergeUnknownRealm(fields)
-  if self.unknownRealmMerged then return end
-  self.unknownRealmMerged = true
+-- The realm of the saved markets with the most snapshots ("?" left out).
+function App.HistoryRealm(db)
+  local best, most = nil, -1
+  for key, market in pairs(db.markets or {}) do
+    local realm = key:match("^m%d+|[^|]*|[^|]*|([^|]*)|")
+    local count = market.snapshots and #market.snapshots or 0
+    if realm and realm ~= ns.Data.Schema.UNKNOWN and count > most then best, most = realm, count end
+  end
+  return best
+end
+
+-- Markets (same product, region and faction) and character records saved
+-- under another realm go into db.realm; per profession the latest wins.
+function App:MergeOtherRealms(fields)
+  if self.otherRealmsMerged then return end
+  self.otherRealmsMerged = true
   local Schema, db = ns.Data.Schema, self.store.db
-  local unknown = Schema.MarketKey({ product = fields.product, region = fields.region, faction = fields.faction })
   local known = Schema.MarketKey(fields)
   local markets, characters = 0, 0
-  local from = db.markets and db.markets[unknown]
-  if from and unknown ~= known then
-    ns.Data.History.MergeMarket(from, self.store:Market(known, true))
-    db.markets[unknown] = nil
-    markets = 1
+  for key, market in pairs(db.markets or {}) do
+    local probe = { product = fields.product, region = fields.region, faction = fields.faction,
+      realm = key:match("^m%d+|[^|]*|[^|]*|([^|]*)|") }
+    if key ~= known and probe.realm and Schema.MarketKey(probe) == key then
+      ns.Data.History.MergeMarket(market, self.store:Market(known, true))
+      db.markets[key] = nil
+      markets = markets + 1
+    end
   end
+  local suffix = "-" .. fields.realm
   for key, data in pairs(db.characters or {}) do
-    local name = key:match("^(.+)%-%?$")
-    if name then
-      local target = name .. "-" .. fields.realm
+    local name = key:match("^([^%-]+)%-")
+    if name and key ~= name .. suffix then
+      local target = name .. suffix
       db.characters[target] = db.characters[target] or { migrated = data.migrated, professions = {} }
       local record = db.characters[target]
       record.professions = record.professions or {}
@@ -930,6 +939,7 @@ function App:OnEvent(event, ...)
     if event ~= "TRADE_SKILL_CLOSE" then self:ObserveProfessionSoon(event == "TRADE_SKILL_SHOW") end
   elseif event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
     self.autoScan:OnBlocked(event, ...)
+    self.purchases:OnBlocked(...)
   elseif event == "NEW_RECIPE_LEARNED" then
     self:OnRecipeLearned(...)
   else

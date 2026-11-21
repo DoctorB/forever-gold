@@ -1492,22 +1492,25 @@ T.Case("realm: data saved under '?' is merged once the realm is read", function(
   local mine = db.characters["Dolcissimo-ClassicBetaPvE"].professions
   T.Eq(mine.Blacksmithing.skill, 87, "the latest observation wins")
   T.Eq(mine.Mining.skill, 92)
-  T.Eq(db.lastRealm, "ClassicBetaPvE")
+  T.Eq(db.realm, "ClassicBetaPvE")
 end)
 
-T.Case("realm: when the client gives none, the last realm read is used", function()
+T.Case("realm: when the client gives none, the chosen realm is used", function()
   local blank = function() return "" end
-  local app = Fakes.App({ saved = { schema = 2, lastRealm = "ClassicBetaPvE" }, globals = {
+  local app = Fakes.App({ saved = { schema = 2, realm = "ClassicBetaPvE" }, globals = {
     UnitName = function() return "Dolcissimo" end, GetNormalizedRealmName = blank, GetRealmName = blank,
   } })
   T.Eq(app:MarketKey(), "m1|p18|3|ClassicBetaPvE|Alliance")
   T.Eq(app:CharacterKey(), "Dolcissimo-ClassicBetaPvE")
   local traced
   for _, entry in ipairs(app.store.db.diagnostics.trace or {}) do
-    if entry.k == "realm_fallback" then traced = entry end
+    if entry.k == "realm_read" then traced = entry end
   end
-  T.Ok(traced, "fallback traced")
-  T.Eq(traced.tried, "normalized=blank name=blank full=error")
+  T.Ok(traced, "client answers traced")
+  T.Eq(traced.normalized, "blank")
+  T.Eq(traced.name, "blank")
+  T.Eq(traced.full, "error")
+  T.Eq(traced.realm, "ClassicBetaPvE")
 end)
 
 T.Case("realm: never read at all, no '?' character record and no cached '?' market", function()
@@ -1541,7 +1544,7 @@ T.Case("sell-through: a scan cut short by closing the AH is not compared", funct
   T.Eq(cut, 2)
 end)
 
-T.Case("realm: saved data without lastRealm takes the realm of its only market", function()
+T.Case("realm: saved data without a chosen realm takes the realm of its history", function()
   local blank = function() return "" end
   local saved = { schema = 2, markets = {
     ["m1|p18|3|CAMWOWEU5Realm5PvE|Alliance"] = { itemCount = 0, items = {}, snapshots = {} },
@@ -1552,4 +1555,31 @@ T.Case("realm: saved data without lastRealm takes the realm of its only market",
   } })
   T.Eq(app:MarketKey(), "m1|p18|3|CAMWOWEU5Realm5PvE|Alliance")
   T.Eq(app.store.db.markets["m1|p18|3|?|Alliance"], nil, "merged")
+end)
+
+T.Case("realm: a per-character name from the client does not split the market", function()
+  -- 2026-11-21: the client answered "Cacao" (the character's WTF folder
+  -- suffix) while the history lives under CAMWOWEU5Realm5PvE.
+  local camwow, cacao = "m1|p18|3|CAMWOWEU5Realm5PvE|Alliance", "m1|p18|3|Cacao|Alliance"
+  local saved = { schema = 2, lastRealm = "Cacao", markets = {
+    [camwow] = { itemCount = 0, items = {}, snapshots = { { id = "a", t = 1 }, { id = "b", t = 2 } } },
+    [cacao] = { itemCount = 1, snapshots = { { id = "c", t = 3 } },
+      items = { ["i:2840:0"] = { lastSeen = 3, recent = { { t = 3, price = 70 } }, days = {} } } },
+  }, characters = {
+    ["Dolcissimo-CAMWOWEU5Realm5PvE"] = { migrated = 2, professions = { Mining = { at = 1, skill = 92, learned = {} } } },
+    ["Dolcissimo-Cacao"] = { migrated = 2, professions = { Mining = { at = 5, skill = 95, learned = {} } } },
+  } }
+  local app = Fakes.App({ saved = saved, clock = Fakes.Clock(1000), globals = {
+    UnitName = function() return "Dolcissimo" end, GetNormalizedRealmName = function() return "Cacao" end,
+  } })
+  T.Eq(app:MarketKey(), camwow)
+  T.Eq(app:CharacterKey(), "Dolcissimo-CAMWOWEU5Realm5PvE")
+  local db = app.store.db
+  T.Eq(db.realm, "CAMWOWEU5Realm5PvE", "the realm of the history, not the client's name")
+  T.Eq(db.lastRealm, nil)
+  T.Eq(db.markets[cacao], nil, "merged")
+  T.Eq(#db.markets[camwow].snapshots, 3)
+  T.Eq(db.markets[camwow].items["i:2840:0"].recent[1].price, 70)
+  T.Eq(db.characters["Dolcissimo-Cacao"], nil)
+  T.Eq(db.characters["Dolcissimo-CAMWOWEU5Realm5PvE"].professions.Mining.skill, 95)
 end)

@@ -79,7 +79,7 @@ T.Case("commodity: quote within plan, one click spends, ledger records the real 
   local s = setup()
   local p = s.app.purchases
   T.Ok(p:Begin(s.find(101), 5000))
-  T.Ok(p:Prepare())
+  T.Ok(p:Prepare(true))
   T.Eq(s.ah.calls.StartCommoditiesPurchase, 1)
   T.Eq(s.ah.args.StartCommoditiesPurchase[2], 30)
   T.Eq(s.ah.spendCalls, 0, "a quote spends nothing")
@@ -111,7 +111,7 @@ T.Case("a higher quote is refused and cancelled; nothing can be confirmed", func
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 40, 1200)
   T.Eq(p.current.state, "rejected")
   T.Eq(p.current.reason, "price_up")
@@ -124,14 +124,14 @@ T.Case("expired quote or missing gold blocks the click", function()
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   s.ah.quoteLeft = 0
   T.NotOk(p:Confirm())
   T.Eq(p.current.reason, "quote_expired")
   s.ah.quoteLeft = 30
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   s.wallet.money = 500
   T.NotOk(p:Confirm())
@@ -143,7 +143,7 @@ T.Case("no answer after the click: uncertain, recorded, never retried", function
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   p:Confirm()
   s.clock.advance(60)
@@ -156,14 +156,14 @@ T.Case("server refusal and AH closing stop the purchase", function()
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   p:Confirm()
   s.app:OnEvent("COMMODITY_PURCHASE_FAILED")
   T.Eq(p.current.state, "failed")
   T.Eq(#s.app.store.db.ledger, 0)
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   s.app:OnEvent("AUCTION_HOUSE_CLOSED")
   T.Eq(p.current.state, "cancelled")
@@ -178,7 +178,7 @@ T.Case("individual auction: read-only search locates it, one click buys it", fun
   local p = s.app.purchases
   p:Begin(o, 5000)
   T.Eq(p.current.plan.kind, "auction")
-  T.Ok(p:Prepare())
+  T.Ok(p:Prepare(true))
   T.Eq(p.current.state, "locating")
   s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
@@ -197,7 +197,7 @@ T.Case("individual auction refused: the window shows the client's reason", funct
     s.app.client.env.Enum = enum
     local p = s.app.purchases
     p:Begin(s.find(201), 5000)
-    p:Prepare()
+    p:Prepare(true)
     s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 77 } }
     s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
     T.Ok(p:Confirm())
@@ -224,7 +224,7 @@ T.Case("individual auction with a bid at its buyout: skipped, every field traced
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 1, buyout = 200, bid = 200, minBid = 150, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected")
@@ -244,7 +244,7 @@ T.Case("individual auction with a bid at its buyout: skipped, every field traced
   s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 1, buyout = 200, bid = 120, minBid = 130, auctionID = 78 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "located")
@@ -266,7 +266,7 @@ T.Case("individual auction gone or dearer: rejected, nothing bought", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 1, buyout = 250, auctionID = 78 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected")
@@ -277,7 +277,7 @@ end)
 local function buyLinen(s)
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   p:Confirm()
   s.wallet.money = s.wallet.money - 1100
@@ -343,7 +343,7 @@ T.Case("individual auction: no answer to the search stops waiting", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   T.Eq(p.current.state, "locating")
   s.clock.advance(25)
   T.Eq(p.current.state, "locating", "still waiting past the old 10 s timeout")
@@ -362,7 +362,7 @@ T.Case("no answer to the built key: the browse finds the server key and the lot"
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.clock.advance(40)
   T.Eq(s.ah.browseCalls, 1)
   s.ah.items[201] = { { quantity = 1, buyout = 200, auctionID = 601, level = 13 } }
@@ -387,7 +387,7 @@ T.Case("search requests and their answers are traced with the delay", function()
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.clock.advance(31) -- given up on (the browse fallback starts at 32 s)
   s.ah.items[201] = { { quantity = 1, buyout = 190, auctionID = 93 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
@@ -409,7 +409,7 @@ T.Case("a quote request is traced and its answer carries the delay", function()
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.clock.advance(12)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 35, 700)
   T.Eq(p.current.state, "quoted", "a quote after 12 s is still accepted")
@@ -438,7 +438,7 @@ T.Case("vendor purchase accepts any variant of the item; the attempt is traced",
   T.Eq(o.itemKey, "i:201:0:b12730")
   local p = s.app.purchases
   p:Begin(o, 5000)
-  p:Prepare()
+  p:Prepare(true)
   -- Variant: browse first; the server key carries no bonus (other key, same item).
   s.ah.browse = { { itemKey = { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 190 } }
   s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
@@ -463,7 +463,7 @@ T.Case("an offer found gone leaves the list until fresh data arrives", function(
   local opportunity = s.find(201)
   s.ns.UI = s.ns.UI or {}
   p:Begin(opportunity, 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 1, buyout = 999, auctionID = 92 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.reason, "lot_gone")
@@ -502,7 +502,7 @@ T.Case("portfolio table: cards and rows after a purchase and a merchant visit", 
   local Panel = s.ns.UI.Panels.portfolio
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 37, 1100)
   p:Confirm()
   s.wallet.money = s.wallet.money - 1100
@@ -563,6 +563,12 @@ local function quoteAndClick(s, unit, total)
   s.app:OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
 end
 
+-- The player's click on "Get price": the next commodity quote goes out only then.
+local function priceClick(s)
+  T.Ok(s.app.batch.needsClick, "the button asks for a click")
+  T.Ok(s.app.batch:Quote(), "price click")
+end
+
 T.Case("batch queue: vendor offers only, best profit first", function()
   local s = setup({ rows = BATCH_ROWS })
   local queue = s.ns.Services.Batch.Queue(s.app.opportunities.results.list)
@@ -581,9 +587,16 @@ T.Case("buy all: prepares each purchase by itself, spends only on clicks", funct
   s.clock.advance(5)
   T.Eq(s.ah.spendCalls, 0, "nothing spent without a click")
   quoteAndClick(s, 35, 700)
-  T.Eq(s.ah.calls.StartCommoditiesPurchase, 2, "next quote requested automatically")
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 1, "no quote from an event: the client would block it")
+  T.Eq(s.app.purchases.current.state, "needs_click")
+  local text, enabled = s.ns.UI.PurchasePanel.BatchModel(batch, 3, 5000, true)
+  T.Eq(text, "Get price 2/3")
+  T.Eq(enabled, true, "the button stays usable")
+  priceClick(s)
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, 2)
   T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
   quoteAndClick(s, 15, 450)
+  priceClick(s)
   T.Eq(s.ah.args.StartCommoditiesPurchase[1], 102)
   quoteAndClick(s, 30, 300)
   T.NotOk(batch.active)
@@ -600,6 +613,7 @@ T.Case("buy all: the total limit caps the run", function()
   local batch = s.app.batch
   batch:Start(s.app.opportunities.results.list, 1000)
   quoteAndClick(s, 35, 700) -- Linen 700, 300 left
+  priceClick(s)
   -- Eye: 30 x 15 = 450 does not fit: the plan shrinks to 20 units (300).
   T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
   T.Eq(s.ah.args.StartCommoditiesPurchase[2], 20)
@@ -615,6 +629,7 @@ T.Case("buy all: a dearer offer is skipped, an uncertain outcome stops everythin
   batch:Start(s.app.opportunities.results.list, 5000)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 40, 800) -- Linen dearer than planned
   T.Eq(batch.skipped, 1)
+  priceClick(s)
   T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103, "moved on to the next offer")
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 15, 450)
   s.app.purchases:Confirm()
@@ -631,6 +646,7 @@ T.Case("buy all: two requests in a row without an answer stop the run", function
   batch:Start(s.app.opportunities.results.list, 5000)
   s.clock.advance(35) -- Linen: no quote
   T.Ok(batch.active, "one silence is not enough")
+  priceClick(s)
   T.Eq(s.ah.args.StartCommoditiesPurchase[1], 103)
   s.clock.advance(35) -- Eye: no quote
   T.NotOk(batch.active)
@@ -645,9 +661,11 @@ T.Case("buy all: an answer between silences resets the count", function()
   local batch = s.app.batch
   batch:Start(s.app.opportunities.results.list, 5000)
   s.clock.advance(35) -- Linen: no quote
+  priceClick(s)
   s.app:OnEvent("COMMODITY_PRICE_UPDATED", 30, 900) -- Eye dearer: an answer
   T.Ok(batch.active)
   T.Eq(batch.silent, 0)
+  priceClick(s)
   s.clock.advance(35) -- Ore: no quote, end of the queue
   T.NotOk(batch.active)
   T.Eq(batch.stopReason, "done")
@@ -663,29 +681,52 @@ T.Case("buy all: closing the AH stops the run", function()
   T.Eq(s.ah.spendCalls, 0)
 end)
 
-T.Case("purchase waits for the AH throttle instead of failing", function()
+T.Case("a commodity quote with the AH busy waits for another click", function()
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
   s.ah.ready = false
-  T.Ok(p:Prepare())
-  T.Eq(p.current.state, "waiting")
+  T.Ok(p:Prepare(true))
+  T.Eq(p.current.state, "needs_click")
+  T.Eq(p.current.reason, "busy")
   T.Eq(s.ah.calls.StartCommoditiesPurchase, nil, "nothing sent while throttled")
   s.ah.ready = true
   s.app:OnEvent("AUCTION_HOUSE_THROTTLED_SYSTEM_READY")
+  T.Eq(p.current.state, "needs_click", "not sent from the event: the client would block it")
+  T.Ok(p:Prepare(true))
   T.Eq(p.current.state, "quoting")
   T.Eq(s.ah.calls.StartCommoditiesPurchase, 1)
 end)
 
-T.Case("purchase gives up after waiting too long for the throttle", function()
+T.Case("a commodity quote is never sent outside a click", function()
+  local s = setup()
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  T.Ok(p:Prepare())
+  T.Eq(p.current.state, "needs_click")
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, nil)
+end)
+
+T.Case("a quote blocked by the client stops at once, without the 30 s wait", function()
+  local s = setup()
+  local p = s.app.purchases
+  p:Begin(s.find(101), 5000)
+  p:Prepare(true)
+  s.clock.advance(1)
+  s.app:OnEvent("ADDON_ACTION_BLOCKED", "ForeverGold", "UNKNOWN()")
+  T.Eq(p.current.state, "rejected")
+  T.Eq(p.current.reason, "blocked")
+end)
+
+T.Case("a busy commodity purchase does not time out by itself", function()
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
   s.ah.ready = false
-  p:Prepare()
+  p:Prepare(true)
   s.clock.advance(20)
-  T.Eq(p.current.state, "rejected")
-  T.Eq(p.current.reason, "throttled")
+  T.Eq(p.current.state, "needs_click", "waits for the player, no request went out")
+  T.Eq(s.ah.calls.StartCommoditiesPurchase, nil)
 end)
 
 T.Case("buy all: an immediate refusal skips once and never cancels the next quote", function()
@@ -700,13 +741,16 @@ T.Case("buy all: an immediate refusal skips once and never cancels the next quot
   batch:Start(s.app.opportunities.results.list, 5000)
   T.Eq(batch.skipped, 1)
   T.Eq(s.app.purchases.current.plan.itemID, 103)
+  T.Eq(s.app.purchases.current.state, "needs_click")
+  priceClick(s)
   T.Eq(s.app.purchases.current.state, "quoting")
   T.Eq(s.ah.calls.CancelCommoditiesPurchase, nil, "no quote cancelled by the batch")
   quoteAndClick(s, 15, 450)
+  priceClick(s)
   T.Eq(s.app.purchases.current.plan.itemID, 102, "then the next one")
 end)
 
-T.Case("buy all: a busy AH between purchases waits, it does not skip", function()
+T.Case("buy all: a busy AH between purchases waits for the click, it does not skip", function()
   local s = setup({ rows = BATCH_ROWS })
   local batch = s.app.batch
   batch:Start(s.app.opportunities.results.list, 5000)
@@ -714,10 +758,12 @@ T.Case("buy all: a busy AH between purchases waits, it does not skip", function(
   s.app.purchases:Confirm()
   s.ah.ready = false
   s.app:OnEvent("COMMODITY_PURCHASE_SUCCEEDED")
-  T.Eq(s.app.purchases.current.state, "waiting")
+  T.Eq(s.app.purchases.current.state, "needs_click")
   T.Eq(batch.skipped, 0)
+  T.Eq(s.ns.UI.PurchasePanel.BatchModel(batch, 3, 5000, true), "AH busy: get price 2/3")
   s.ah.ready = true
   s.clock.advance(2)
+  priceClick(s)
   T.Eq(s.app.purchases.current.state, "quoting")
   T.Eq(s.app.purchases.current.plan.itemID, 103)
 end)
@@ -736,7 +782,7 @@ T.Case("variant items start with a browse by name, not with a built key", functi
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
   local searches = s.ah.searchCalls
-  p:Prepare()
+  p:Prepare(true)
   T.Eq(s.ah.browseCalls, 1, "browse sent at once")
   T.Eq(s.ah.lastBrowse.searchString, "Green Sword")
   T.Eq(s.ah.searchCalls, searches, "no built-key search")
@@ -753,7 +799,7 @@ T.Case("variant auction: the browse finds the server key", function()
     { itemKey = { itemID = 999, itemLevel = 5, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 10 },
     { itemKey = { itemID = 201, itemLevel = 22, itemSuffix = 0, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 200 },
   }
-  p:Prepare()
+  p:Prepare(true)
   T.Eq(s.ah.browseCalls, 1, "browse by name")
   s.app:OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
   s.clock.advance(1)
@@ -771,7 +817,7 @@ T.Case("multi-unit auction: refused while the search price meaning is unverified
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 2, buyout = 200, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected", "a lower PlaceBid could become a bid, not a buyout")
@@ -782,7 +828,7 @@ T.Case("grouped item-search rows are priced per unit and never bought", function
   local s = setup({ rows = { { itemID = 201, count = 1, buyout = 200 } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 2, buyout = 150, auctionID = 77 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.state, "rejected", "what PlaceBid buys on a grouped row is unknown")
@@ -840,7 +886,7 @@ T.Case("variant items: the lot's own variant (bonus ID + 1580) is searched first
     link = "|Hitem:201::::::::20:1486::1:1:12742:::::|h[Green Sword]|h" } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.browse = {
     { itemKey = { itemID = 201, itemLevel = 25, itemSuffix = 14300, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 100 },
     { itemKey = { itemID = 201, itemLevel = 25, itemSuffix = 14322, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 200 },
@@ -887,7 +933,7 @@ T.Case("purchase events are traced while a purchase is in progress", function()
   local s = setup()
   local p = s.app.purchases
   p:Begin(s.find(101), 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.app:OnEvent("AUCTION_HOUSE_SHOW_ERROR", 7)
   local found
   for _, e in ipairs(s.app.store.db.diagnostics.trace) do
@@ -994,7 +1040,7 @@ T.Case("a lot found gone is not tried again (through the panel's handler)", func
   local p = s.app.purchases
   local offer = s.find(201)
   p:Begin(offer, 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.items[201] = { { quantity = 1, buyout = 600, auctionID = 9 } }
   s.app:OnEvent("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 201, itemLevel = 0, itemSuffix = 0, battlePetSpeciesID = 0 })
   T.Eq(p.current.reason, "lot_gone")
@@ -1015,7 +1061,7 @@ T.Case("browse fallback: only variants at or under the lot price are searched", 
     link = "|Hitem:201::::::::20:1486::1:1:12725:::::|h[Green Sword]|h" } } })
   local p = s.app.purchases
   p:Begin(s.find(201), 5000)
-  p:Prepare()
+  p:Prepare(true)
   T.Eq(s.ah.browseCalls, 1, "variant: browse at once")
   s.ah.browse = {
     { itemKey = { itemID = 201, itemLevel = 10, itemSuffix = 14308, battlePetSpeciesID = 0 }, totalQuantity = 1, minPrice = 500 },
@@ -1061,7 +1107,7 @@ T.Case("an item the server answers as a commodity is bought as one next time", f
   local offer = s.find(201)
   T.Eq(offer.commodity, false)
   p:Begin(offer, 5000)
-  p:Prepare()
+  p:Prepare(true)
   s.ah.commodity[201] = { { quantity = 2647, unitPrice = 45 } }
   s.app:OnEvent("COMMODITY_SEARCH_RESULTS_UPDATED", 201)
   T.Eq(p.current.reason, "is_commodity")

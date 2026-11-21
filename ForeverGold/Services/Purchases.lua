@@ -1,6 +1,7 @@
 -- Purchases: assisted buying, one user click per purchase (spec 6 and 12).
 --
 --   planned -> quoting -> quoted --click--> confirming -> done
+--   planned -> needs_click --click--> quoting (commodities, see Prepare)
 --   planned -> locating -> located --click--> confirming -> done
 --   any step -> rejected | cancelled | failed ; confirming -> uncertain
 --
@@ -139,10 +140,23 @@ end
 -- individual auctions.
 -- Step 2 entry point: waits (spending nothing) while the AH throttle system
 -- is not ready, instead of failing; the request goes out once it is.
-function Purchases:Prepare()
+-- click: called from the player's button click. The commodity quote
+-- (StartCommoditiesPurchase) is a protected call: from a timer or an event
+-- the client blocks it (ADDON_ACTION_BLOCKED, 2026-11-21: "Buy all" waited
+-- 30 s twice for quotes never sent, its button greyed out). A commodity
+-- therefore goes out only from a click with the AH ready; otherwise it
+-- waits in "needs_click" and the button asks for that click.
+function Purchases:Prepare(click)
   local current = self.current
-  if not current or (current.state ~= "planned" and current.state ~= "waiting") then return false, "not_planned" end
-  if self.isReady and self.isReady() == false or (self.scanner and self.scanner:IsActive()) then
+  if not current or (current.state ~= "planned" and current.state ~= "waiting" and current.state ~= "needs_click") then
+    return false, "not_planned"
+  end
+  local busy = self.isReady and self.isReady() == false or (self.scanner and self.scanner:IsActive())
+  if current.plan.kind == "commodity" and (not click or busy) then
+    set(self, "needs_click", busy and "busy" or nil)
+    return true, "needs_click"
+  end
+  if busy then
     current.waited = (current.waited or 0) + 1
     if current.waited > Purchases.READY_TRIES then
       set(self, "rejected", "throttled")
@@ -155,6 +169,16 @@ function Purchases:Prepare()
     return true
   end
   return self:Send(current)
+end
+
+-- ADDON_ACTION_BLOCKED for this add-on while a quote is out: the client
+-- refused the request, no answer will come.
+function Purchases:OnBlocked(addon)
+  local current = self.current
+  if addon ~= "ForeverGold" or not current or current.state ~= "quoting" then return false end
+  if current.sentAt and self.clock() - current.sentAt > 5 then return false end
+  set(self, "rejected", "blocked")
+  return true
 end
 
 -- The AH signals readiness: resume a waiting purchase at once.

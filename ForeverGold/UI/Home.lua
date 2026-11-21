@@ -65,6 +65,9 @@ local function buyButton(app, opportunity, money)
     or current.state == "confirming") then
     return L("HOME_BTN_CHECKING"), false, "wait"
   end
+  if mine and current.state == "needs_click" then
+    return L(current.reason == "busy" and "HOME_BTN_PRICE_BUSY" or "HOME_BTN_PRICE"), true, "quote"
+  end
   if mine and (current.state == "located" or current.state == "quoted") then
     local amount = current.quote and current.quote.total or (current.auction and current.auction.amount)
     return string.format(L("HOME_BTN_CONFIRM"), fmt(amount or 0)), true, "confirm"
@@ -125,10 +128,12 @@ function Home.Model(app)
           if details and details:IsShown() and ns.UI.Details.current ~= opportunity then details:Hide() end
           if state == "confirm" then
             app.purchases:Confirm()
+          elseif state == "quote" then
+            app.purchases:Prepare(true)
           else
             local started, reason = app.purchases:Begin(opportunity, settings.maxPurchase)
             if started then
-              app.purchases:Prepare()
+              app.purchases:Prepare(true)
             else
               ns.Print(L("PB_CANNOT") .. " " .. (ns.L["PR_" .. tostring(reason)] or tostring(reason)))
             end

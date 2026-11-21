@@ -80,6 +80,9 @@ function PurchasePanel.Model(view)
   local state = current.state
   if state == "planned" then
     model.quote, model.cancel = true, true
+  elseif state == "needs_click" then
+    lines[#lines + 1] = L(current.reason == "busy" and "PB_NEEDS_CLICK_BUSY" or "PB_NEEDS_CLICK")
+    model.quote, model.cancel = true, true
   elseif state == "quoting" or state == "locating" or state == "waiting" then
     lines[#lines + 1] = L("PB_WAIT")
     model.cancel = true
@@ -172,13 +175,14 @@ function PurchasePanel.Primary()
     ns.UI.Main.RefreshTable()
     return
   end
-  app.purchases:Prepare()
+  app.purchases:Prepare(true)
 end
 
 -- "Buy all" button: starts a batch, then becomes the spending button of
--- each prepared purchase (one click per purchase, as the game requires).
+-- each prepared purchase (one click per purchase, as the game requires) and,
+-- for a commodity, first the "Get price" button (the quote needs a click).
 function PurchasePanel.BuildBatchButton(parent)
-  return W.Button(parent, L("BATCH_IDLE"), 220, function() if ns.app.batch.ready then ns.app.purchases:Confirm() else PurchasePanel.BatchStart() end end)
+  return W.Button(parent, L("BATCH_IDLE"), 220, function() local b = ns.app.batch if b.ready then ns.app.purchases:Confirm() elseif b.active and b.needsClick then b:Quote() elseif not b.active then PurchasePanel.BatchStart() end end)
 end
 
 -- Label and enabled state of the batch button. Pure.
@@ -187,6 +191,11 @@ function PurchasePanel.BatchModel(batch, offers, cap, canStart)
     local total = #batch.queue
     if batch.ready then
       return string.format(L("BATCH_READY"), batch.index, total, fmt(batch.amount)), true
+    end
+    if batch.needsClick then
+      local current = ns.app and ns.app.purchases.current
+      local busy = current and current.reason == "busy"
+      return string.format(L(busy and "BATCH_QUOTE_BUSY" or "BATCH_QUOTE"), batch.index, total), true
     end
     local current = ns.app and ns.app.purchases.current
     if current and current.state == "confirming" then
